@@ -10,6 +10,9 @@
 - 移植者：Lotus
 - 上游项目：<https://github.com/Etern-34520/MusicHud>
 - 测试环境：Minecraft 1.21.11 + Leaves
+- 其他分支状态：
+  - `1.21.6-1.21.8` 已适配，但尚未完成实际测试
+  - `1.21.9-1.21.10` 已适配，但尚未完成实际测试
 
 ## 相关链接
 [上游 GitHub](https://github.com/Etern-34520/MusicHud)
