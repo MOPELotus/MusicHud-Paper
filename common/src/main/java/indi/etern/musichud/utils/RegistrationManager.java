@@ -63,11 +63,15 @@ public class RegistrationManager {
 
         // 根据环境注册特定接口
         if (envType == EnvType.CLIENT) {
-            registerClassesFromList(CLIENT_REGISTRIES, "client");
+            performClientRegistration();
         } else {
             registerClassesFromList(SERVER_REGISTRIES, "server");
         }
         registerClassesFromList(COMMON_REGISTRIES, "common");
+    }
+
+    public static void performClientRegistration() {
+        registerClassesFromList(CLIENT_REGISTRIES, "client");
     }
 
     private static void registerClassesFromList(String[] classNames, String typeName) {
