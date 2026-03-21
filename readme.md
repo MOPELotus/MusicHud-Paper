@@ -21,7 +21,6 @@
 ## 反馈
 - QQ 群：`702211431`
 - 有问题建议加群反馈，GitHub Issues 不一定会及时查看
-- 加群可以使用本人部署的公共 API
 
 ![img](https://cdn-alt.modrinth.com/data/7Rnb6oJr/images/96714cbb6621950e3daceee1ab2f7343836e9bbb.png)
 ![img](https://cdn-alt.modrinth.com/data/7Rnb6oJr/images/49fdedf9f26ec05930035f9f79ba388502f0f62d.png)
