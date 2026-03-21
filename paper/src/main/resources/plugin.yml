@@ -1,0 +1,6 @@
+name: MusicHud
+version: '${version}'
+main: indi.etern.musichud.paper.MusicHudPaper
+api-version: '1.21'
+description: MusicHud server port for Paper and Leaves
+authors: [Lotus, Antigravity]

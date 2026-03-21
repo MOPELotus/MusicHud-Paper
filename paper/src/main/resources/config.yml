@@ -1,0 +1,3 @@
+serverApiBaseUrl: "http://localhost:3000"
+pusherVoteAdditionalRate: 0.5
+useRandomCnIp: true

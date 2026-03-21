@@ -1,0 +1,89 @@
+plugins {
+    id 'java-library'
+    id 'maven-publish'
+    id 'io.papermc.paperweight.userdev'
+}
+
+base {
+    archivesName = "$rootProject.archives_name-$project.name"
+}
+
+repositories {
+    mavenCentral()
+    maven {
+        name = 'PaperMC'
+        url = 'https://repo.papermc.io/repository/maven-public/'
+    }
+}
+
+dependencies {
+    paperweight.paperDevBundle("${rootProject.minecraft_version}-R0.1-SNAPSHOT")
+
+    compileOnly "org.projectlombok:lombok:$rootProject.lombok_version"
+    annotationProcessor "org.projectlombok:lombok:$rootProject.lombok_version"
+    testCompileOnly "org.projectlombok:lombok:$rootProject.lombok_version"
+    testAnnotationProcessor "org.projectlombok:lombok:$rootProject.lombok_version"
+    testImplementation "org.junit.jupiter:junit-jupiter:$rootProject.junit_version"
+    testRuntimeOnly "org.junit.platform:junit-platform-launcher"
+}
+
+def commonJavaDir = file("$rootDir/common/src/main/java")
+
+sourceSets {
+    main {
+        java {
+            srcDir commonJavaDir
+            srcDir "$projectDir/src/main/java"
+            exclude { details ->
+                String absolutePath = details.file.absolutePath.replace('\\', '/')
+                String commonClientPath = new File(commonJavaDir, 'indi/etern/musichud/client').absolutePath.replace('\\', '/')
+                String commonMixinPath = new File(commonJavaDir, 'indi/etern/musichud/mixin').absolutePath.replace('\\', '/')
+                absolutePath.startsWith(commonClientPath) || absolutePath.startsWith(commonMixinPath)
+            }
+        }
+        resources {
+            srcDir "$projectDir/src/main/resources"
+        }
+    }
+}
+
+java {
+    withSourcesJar()
+    sourceCompatibility = JavaVersion.VERSION_21
+    targetCompatibility = JavaVersion.VERSION_21
+}
+
+tasks.withType(JavaCompile).configureEach {
+    options.release = 21
+    options.encoding = 'UTF-8'
+}
+
+tasks.withType(Test).configureEach {
+    useJUnitPlatform()
+}
+
+tasks.processResources {
+    duplicatesStrategy = DuplicatesStrategy.EXCLUDE
+    filesMatching('plugin.yml') {
+        expand(
+                version: project.version
+        )
+    }
+}
+
+tasks.named('sourcesJar') {
+    duplicatesStrategy = DuplicatesStrategy.EXCLUDE
+}
+
+tasks.assemble {
+    dependsOn tasks.reobfJar
+}
+
+publishing {
+    publications {
+        mavenJava(MavenPublication) {
+            artifactId = base.archivesName.get()
+            from components.java
+        }
+    }
+}
