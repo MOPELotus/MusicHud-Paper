@@ -97,7 +97,7 @@ public class LoginService {
         LoginCookieInfo loginCookieInfo = LoginCookieInfo.clientCurrentCookie();
         return loginCookieInfo.type() != LoginType.UNLOGGED &&
                 loginCookieInfo.type() != LoginType.ANONYMOUS &&
-                MusicHud.getStatus() ==  MusicHud.ConnectStatus.CONNECTED;
+                MusicHud.getStatus() == MusicHud.ConnectStatus.CONNECTED;
     }
 
     public void logout() {
