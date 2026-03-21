@@ -1,18 +1,27 @@
-# Music Hud
-![Static Badge](https://img.shields.io/badge/Java-21-red?style=for-the-badge)
-![Static Badge](https://img.shields.io/badge/Minecraft-1.21.8-blue?style=for-the-badge)
-![Static Badge](https://img.shields.io/badge/Platform-Fabric-green?style=for-the-badge)
-![Static Badge](https://img.shields.io/badge/Platform-Neoforge-orange?style=for-the-badge)
-![Static Badge](https://img.shields.io/badge/License-LGPLv3-brightgreen?style=for-the-badge)
+# MusicHud-Paper
+![Java 21](https://img.shields.io/badge/Java-21-red?style=for-the-badge)
+![Server Paper / Leaves](https://img.shields.io/badge/Server-Paper%20%2F%20Leaves-brightgreen?style=for-the-badge)
+![Client Fabric](https://img.shields.io/badge/Client-Fabric-green?style=for-the-badge)
+![License LGPLv3](https://img.shields.io/badge/License-LGPLv3-brightgreen?style=for-the-badge)
 
-#### 一个 GUI 化的全服点歌模组
+#### MusicHud 的 Paper 服务端适配版本
+
+- 原作者：Etern-34520
+- 移植者：Lotus
+- 上游项目：<https://github.com/Etern-34520/MusicHud>
+- 测试环境：Minecraft 1.21.11 + Leaves
 
 ## 相关链接
-[ModRinth](https://modrinth.com/mod/music-hud)
+[上游 GitHub](https://github.com/Etern-34520/MusicHud)
 
-[MC 百科](https://www.mcmod.cn/class/23688.html)
+[上游 ModRinth](https://modrinth.com/mod/music-hud)
 
-[第三方bukkit插件实现](https://github.com/Shiroiame-Kusu/MusicHud-Bukkit)
+[上游 MC 百科](https://www.mcmod.cn/class/23688.html)
+
+## 反馈
+- QQ 群：`702211431`
+- 有问题建议加群反馈，GitHub Issues 不一定会及时查看
+- 加群可以使用本人部署的公共 API
 
 ![img](https://cdn-alt.modrinth.com/data/7Rnb6oJr/images/96714cbb6621950e3daceee1ab2f7343836e9bbb.png)
 ![img](https://cdn-alt.modrinth.com/data/7Rnb6oJr/images/49fdedf9f26ec05930035f9f79ba388502f0f62d.png)
@@ -40,23 +49,21 @@
 ### 客户端
 > 目前不支持在单人游戏中使用
 
+请使用**本仓库 Release** 中配套的 Fabric 客户端 mod，不要和上游 Release 混用。
+
 在 mods 文件夹中放入 Architectury API, ModernUI 和 Forge Config API Port (仅Fabric需要) 这几个前置 mod 和 MusicHud 的 jar 文件即可
 ### 服务端
 1. 部署 Netease Cloud Music API Enhanced (https://github.com/neteasecloudmusicapienhanced/api-enhanced)
-2. 如果不使用 NCM API Enhanced 的默认端口 ( 3000 ) 或在其他服务器上部署，需要修改配置文件的 serverApiBaseUrl 属性
+2. 使用本仓库 Release 中的 `music_hud-paper-*-reobf.jar`
+3. 如果不使用 NCM API Enhanced 的默认端口 ( 3000 ) 或在其他服务器上部署，需要修改配置文件的 serverApiBaseUrl 属性
 
-配置文件位置 `/config/music_hud-server.toml`
+配置文件位置 `/plugins/MusicHud/config.yml`
 
 配置文件默认内容
-```toml
-#Server API Base URL configuration
-serverApiBaseUrl = "http://localhost:3000"
-#Music Pusher's vote additional rate when voting for skip music configuration (0.0 ~ 1.0, total rate larger than or equals to 0.5 means to skip)
-# Default: 0.5
-# Range: 0.0 ~ 1.0
-pusherVoteAdditionalRate = 0.5
-#Use random Chinese IP provided by api server
-useRandomCnIp = true
+```yml
+serverApiBaseUrl: "http://localhost:3000"
+pusherVoteAdditionalRate: 0.5
+useRandomCnIp: true
 
 ```
 
