@@ -23,8 +23,8 @@ jobs:
       - name: Grant execute permission for Gradle wrapper
         run: chmod +x gradlew
 
-      - name: Build Fabric and Paper
-        run: ./gradlew :paper:test :paper:build :fabric:build --console=plain --no-daemon
+      - name: Build Fabric, NeoForge and Paper
+        run: ./gradlew :paper:test :paper:build :fabric:build :neoforge:build --console=plain --no-daemon
 
       - name: Collect release jars
         id: package
@@ -34,14 +34,17 @@ jobs:
           mkdir -p out
           PAPER_JAR="$(find paper/build/libs -maxdepth 1 -type f -name 'music_hud-paper-*-reobf.jar' | sort | tail -n 1)"
           FABRIC_JAR="$(find fabric/build/libs -maxdepth 1 -type f -name 'music_hud-fabric-*.jar' ! -name '*-sources.jar' ! -name '*-dev-shadow.jar' | sort | tail -n 1)"
+          NEOFORGE_JAR="$(find neoforge/build/libs -maxdepth 1 -type f -name 'music_hud-neoforge-*.jar' ! -name '*-sources.jar' ! -name '*-dev-shadow.jar' | sort | tail -n 1)"
           test -n "$PAPER_JAR"
           test -n "$FABRIC_JAR"
+          test -n "$NEOFORGE_JAR"
           VERSION="${PAPER_JAR##*music_hud-paper-}"
           VERSION="${VERSION%-reobf.jar}"
           PACKAGE_NAME="MusicHud-Paper-${VERSION}"
           mkdir -p "out/${PACKAGE_NAME}"
           cp "$PAPER_JAR" "out/${PACKAGE_NAME}/"
           cp "$FABRIC_JAR" "out/${PACKAGE_NAME}/"
+          cp "$NEOFORGE_JAR" "out/${PACKAGE_NAME}/"
           (
             cd out
             zip -r "${PACKAGE_NAME}.zip" "${PACKAGE_NAME}"

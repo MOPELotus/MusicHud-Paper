@@ -9,7 +9,7 @@
 - 原作者：Etern-34520
 - 移植者：Lotus
 - 上游项目：<https://github.com/Etern-34520/MusicHud>
-- 测试环境：Minecraft 1.21.11 + Leaves
+- 测试环境：仅 Minecraft 1.21.11 + Leaves 服务端 + 1.21.11 Fabric 客户端
 - 其他分支状态：
   - `1.21.6-1.21.8` 已适配，但尚未完成实际测试
   - `1.21.9-1.21.10` 已适配，但尚未完成实际测试
@@ -51,7 +51,7 @@
 ### 客户端
 > 目前不支持在单人游戏中使用
 
-请使用**本仓库 Release** 中配套的 Fabric 客户端 mod，不要和上游 Release 混用。
+推荐使用**本仓库 Release** 中配套的 Fabric 客户端 mod；目前也已经可以与上游 Release 互相兼容。
 
 在 mods 文件夹中放入 Architectury API, ModernUI 和 Forge Config API Port (仅Fabric需要) 这几个前置 mod 和 MusicHud 的 jar 文件即可
 ### 服务端
