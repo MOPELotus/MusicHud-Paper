@@ -31,6 +31,10 @@ public final class LoginService {
         return qrLoginResponseReceiver;
     }
 
+    public boolean isLogined() {
+        return false;
+    }
+
     public void loginToServer() {
     }
 

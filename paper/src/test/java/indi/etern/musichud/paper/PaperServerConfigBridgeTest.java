@@ -1,6 +1,5 @@
 package indi.etern.musichud.paper;
 
-import indi.etern.musichud.server.api.ServerApiMeta;
 import indi.etern.musichud.server.config.ServerConfigDefinition;
 import org.bukkit.configuration.MemoryConfiguration;
 import org.junit.jupiter.api.Test;
@@ -17,7 +16,7 @@ class PaperServerConfigBridgeTest {
         boolean changed = PaperServerConfigBridge.apply(config);
 
         assertTrue(changed);
-        assertEquals(ServerApiMeta.DEFAULT_API_BASE_URL, config.getString("serverApiBaseUrl"));
+        assertEquals(ServerConfigDefinition.serverApiBaseUrl.getDefaultValue(), config.getString("serverApiBaseUrl"));
         assertEquals(0.5D, config.getDouble("pusherVoteAdditionalRate"));
         assertTrue(config.getBoolean("useRandomCnIp"));
     }
@@ -26,6 +25,8 @@ class PaperServerConfigBridgeTest {
     void applyLoadsExistingValuesIntoSharedConfigValues() {
         MemoryConfiguration config = new MemoryConfiguration();
         config.set("serverApiBaseUrl", "https://unit.test/api");
+        config.set("startupBinaryApiServerWhenLaunch", false);
+        config.set("serverApiBinaryExecutablePath", "unit-test/api");
         config.set("pusherVoteAdditionalRate", 0.75D);
         config.set("useRandomCnIp", false);
 
@@ -42,6 +43,8 @@ class PaperServerConfigBridgeTest {
     void applyFallsBackToDefaultsWhenExistingValuesAreInvalid() {
         MemoryConfiguration config = new MemoryConfiguration();
         config.set("serverApiBaseUrl", 114514);
+        config.set("startupBinaryApiServerWhenLaunch", true);
+        config.set("serverApiBinaryExecutablePath", "unit-test/api");
         config.set("pusherVoteAdditionalRate", 10D);
         config.set("useRandomCnIp", "nope");
 
@@ -49,7 +52,7 @@ class PaperServerConfigBridgeTest {
         ServerConfigDefinition definition = ServerConfigDefinition.configure.getLeft();
 
         assertFalse(changed);
-        assertEquals(ServerApiMeta.DEFAULT_API_BASE_URL, definition.serverApiBaseUrl.get());
+        assertEquals(ServerConfigDefinition.serverApiBaseUrl.getDefaultValue(), definition.serverApiBaseUrl.get());
         assertEquals(0.5D, definition.pusherVoteAdditionalRate.get());
         assertTrue(definition.useRandomCnIp.get());
     }

@@ -1,5 +1,6 @@
 package net.neoforged.neoforge.common;
 
+import net.neoforged.fml.config.IConfigSpec;
 import org.apache.commons.lang3.tuple.Pair;
 
 import java.util.LinkedHashMap;
@@ -11,7 +12,7 @@ import java.util.function.Predicate;
 /**
  * Minimal Paper-side subset of NeoForge's config API used by shared config definitions.
  */
-public class ModConfigSpec {
+public class ModConfigSpec implements IConfigSpec {
     private final Map<String, ConfigValue<?>> values = new LinkedHashMap<>();
 
     public Map<String, ConfigValue<?>> getValues() {

@@ -4,6 +4,7 @@ import dev.architectury.event.events.common.PlayerEvent;
 import dev.architectury.networking.NetworkManager;
 import indi.etern.musichud.MusicHud;
 import indi.etern.musichud.server.api.ServerApiMeta;
+import indi.etern.musichud.server.config.ServerConfigDefinition;
 import net.minecraft.network.RegistryFriendlyByteBuf;
 import net.minecraft.network.codec.StreamCodec;
 import net.minecraft.network.protocol.common.custom.CustomPacketPayload;
@@ -36,14 +37,14 @@ public final class MusicHudPaper extends JavaPlugin implements Listener {
         if (PaperServerConfigBridge.apply(getConfig())) {
             saveConfig();
         }
-        ServerApiMeta.reload();
         getServer().getPluginManager().registerEvents(this, this);
-        MusicHud.init();
+        MusicHud.checkConfigAndInit(ServerConfigDefinition.configure.getRight());
         logger.info("MusicHud Paper bridge enabled");
     }
 
     @Override
     public void onDisable() {
+        ServerApiMeta.Register.stopApiServer();
         if (networkBridge != null) {
             networkBridge.close();
             networkBridge = null;
