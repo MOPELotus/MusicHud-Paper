@@ -23,10 +23,8 @@ import indi.etern.musichud.beans.music.MusicDetail;
 import indi.etern.musichud.client.music.NowPlayingInfo;
 import indi.etern.musichud.client.music.StreamAudioPlayer;
 import indi.etern.musichud.client.services.MusicService;
-import indi.etern.musichud.client.services.ServerManagementService;
 import indi.etern.musichud.client.ui.Theme;
 import indi.etern.musichud.client.ui.components.*;
-import indi.etern.musichud.client.ui.ToastUtil;
 import indi.etern.musichud.client.ui.pages.AccountBaseView;
 import indi.etern.musichud.client.ui.pages.ConfigView;
 import indi.etern.musichud.client.ui.pages.HomeView;
@@ -63,7 +61,6 @@ public class MainFragment extends Fragment {
     private ProgressBar progressBar;
     private TextView progressText;
     private Button skipCurrentButton;
-    private Button adminSkipCurrentButton;
 
     public MainFragment() {
     }
@@ -115,9 +112,6 @@ public class MainFragment extends Fragment {
                 instance.progressBar.setVisibility(View.GONE);
                 instance.progressText.setText("");
                 instance.skipCurrentButton.setVisibility(View.GONE);
-                if (instance.adminSkipCurrentButton != null) {
-                    instance.adminSkipCurrentButton.setVisibility(View.GONE);
-                }
             } else {
                 instance.titleText.setTextColor(Theme.NORMAL_TEXT_COLOR);
                 instance.albumImage.loadUrl(musicDetail.getAlbum().getThumbnailPicUrl(200));
@@ -194,7 +188,7 @@ public class MainFragment extends Fragment {
                 instance.skipCurrentButton.setEnabled(true);
                 instance.skipCurrentButton.setVisibility(clientConfig.getEnable() ? View.VISIBLE : View.GONE);
                 instance.progressBar.setVisibility(View.VISIBLE);
-                instance.updateAdminSkipButtonVisibility();
+                instance.skipCurrentButton.setVisibility(View.VISIBLE);
                 startProgressUpdater(musicDetail);
             }
             HomeView homeView = HomeView.getInstance();
@@ -377,27 +371,6 @@ public class MainFragment extends Fragment {
                 params1.setMargins(side.dp(8), side.dp(4), side.dp(8), side.dp(24));
 
                 musicInfo.addView(skipCurrentButton, buttonParams);
-
-                adminSkipCurrentButton = new Button(context);
-                adminSkipCurrentButton.setFocusable(true);
-                adminSkipCurrentButton.setClickable(true);
-                adminSkipCurrentButton.setTextSize(Theme.TEXT_SIZE_NORMAL);
-                adminSkipCurrentButton.setTextColor(Theme.NORMAL_TEXT_COLOR);
-                adminSkipCurrentButton.setGravity(Gravity.CENTER);
-                adminSkipCurrentButton.setText(I18n.get(MusicHud.MOD_ID + ".button.forceSkip"));
-                adminSkipCurrentButton.setHeight(adminSkipCurrentButton.dp(40));
-                adminSkipCurrentButton.setBackground(ButtonInsetBackground.builder()
-                        .padding(new ButtonInsetBackground.Padding(adminSkipCurrentButton.dp(2), adminSkipCurrentButton.dp(1), adminSkipCurrentButton.dp(2), adminSkipCurrentButton.dp(1)))
-                        .cornerRadius(adminSkipCurrentButton.dp(4))
-                        .build().get());
-                adminSkipCurrentButton.setVisibility(View.GONE);
-                adminSkipCurrentButton.setOnClickListener(v -> {
-                    MusicService.getInstance().forceSkipCurrent();
-                    ToastUtil.show(Toast.makeText(context, I18n.get(MusicHud.MOD_ID + ".text.forceSkipSent"), Toast.LENGTH_SHORT));
-                });
-                LinearLayout.LayoutParams adminButtonParams = new LinearLayout.LayoutParams(MATCH_PARENT, WRAP_CONTENT);
-                adminButtonParams.setMargins(0, side.dp(8), 0, 0);
-                musicInfo.addView(adminSkipCurrentButton, adminButtonParams);
                 musicInfo.setMinimumHeight(side.dp(128));
 
                 side.addView(musicInfo, params1);
@@ -421,19 +394,6 @@ public class MainFragment extends Fragment {
                 side.setLayoutTransition(transition2);
 
                 switchMusic(currentlyPlayingMusicDetail, nextToPlayMusicDetail, playingInfo.getLyricLines());
-
-                Consumer<indi.etern.musichud.beans.server.ServerStatusInfo> serverStatusListener = statusInfo -> MuiModApi.postToUiThread(this::updateAdminSkipButtonVisibility);
-                ServerManagementService.getInstance().getStatusListeners().add(serverStatusListener);
-                base.addOnAttachStateChangeListener(new View.OnAttachStateChangeListener() {
-                    @Override
-                    public void onViewAttachedToWindow(View v) {
-                    }
-
-                    @Override
-                    public void onViewDetachedFromWindow(View v) {
-                        ServerManagementService.getInstance().getStatusListeners().remove(serverStatusListener);
-                    }
-                });
             }
             var params = new LinearLayout.LayoutParams(MATCH_PARENT, MATCH_PARENT, 0);
             params.setMargins(routerContainer.dp(80), 0, routerContainer.dp(64), 0);
@@ -448,18 +408,6 @@ public class MainFragment extends Fragment {
 
     private void checkAudioPlayerStatus(StreamAudioPlayer.Status status) {
         progressBar.setIndeterminate(status == StreamAudioPlayer.Status.BUFFERING || status == StreamAudioPlayer.Status.RETRYING);
-    }
-
-    private void updateAdminSkipButtonVisibility() {
-        if (adminSkipCurrentButton == null) {
-            return;
-        }
-        MusicDetail currentMusic = NowPlayingInfo.getInstance().getCurrentlyPlayingMusicDetail();
-        boolean visible = clientConfig.getEnable()
-                && currentMusic != null
-                && !currentMusic.equals(MusicDetail.NONE)
-                && ServerManagementService.getInstance().canManagePlayback();
-        adminSkipCurrentButton.setVisibility(visible ? View.VISIBLE : View.GONE);
     }
 
     @Override

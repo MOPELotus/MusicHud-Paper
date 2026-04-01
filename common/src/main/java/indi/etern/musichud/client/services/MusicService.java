@@ -243,10 +243,6 @@ public class MusicService {
         clientNetworkService.sendToServer(new ClientRemoveMusicFromQueueMessage(index, musicDetail.getId()));
     }
 
-    public void sendForceRemoveMusicFromQueue(int index, MusicDetail musicDetail) {
-        ServerManagementService.getInstance().adminRemoveMusicFromQueue(index, musicDetail);
-    }
-
     public synchronized void switchMusic(MusicDetail musicDetail, MusicDetail nextIdleMusicDetail, ZonedDateTime serverStartTime, String message) {
         if (clientConfig.getEnable()) {
             if (!message.isEmpty()) {
@@ -294,12 +290,6 @@ public class MusicService {
     public void voteForSkipCurrent() {
         if (NowPlayingInfo.getInstance().getCurrentlyPlayingMusicDetail() != null) {
             clientNetworkService.sendToServer(new VoteSkipCurrentMusicMessage(NowPlayingInfo.getInstance().getCurrentlyPlayingMusicDetail().getId()));
-        }
-    }
-
-    public void forceSkipCurrent() {
-        if (NowPlayingInfo.getInstance().getCurrentlyPlayingMusicDetail() != null) {
-            ServerManagementService.getInstance().forceSkipCurrent();
         }
     }
 
@@ -352,10 +342,6 @@ public class MusicService {
         }
         this.serverIdlePlaySources.removeAll(toRemove);
         this.serverIdlePlaySources.addAll(toAdd);
-    }
-
-    public void forceRemoveServerIdlePlaySource(MusicCollection musicCollection) {
-        ServerManagementService.getInstance().adminRemoveIdlePlaySource(musicCollection);
     }
 
     public CompletableFuture<List<Playlist>> loadUserPlaylists() {

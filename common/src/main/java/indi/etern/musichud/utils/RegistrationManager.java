@@ -12,15 +12,13 @@ public class RegistrationManager {
     private static final String[] CLIENT_REGISTRIES = new String[]{
             "indi.etern.musichud.client.config.Keybinds",
             "indi.etern.musichud.client.services.LoginService$RegisterImpl",
-            "indi.etern.musichud.client.services.MusicService$RegisterImpl",
-            "indi.etern.musichud.client.services.ServerManagementService$RegisterImpl"
+            "indi.etern.musichud.client.services.MusicService$RegisterImpl"
     };
 
     private static final String[] SERVER_REGISTRIES = new String[]{
             "indi.etern.musichud.server.api.ILoginApiService$Register",
             "indi.etern.musichud.server.api.MusicPlayerServerService$Register",
             "indi.etern.musichud.server.api.ApiServerManager",
-            "indi.etern.musichud.server.ServerManagementServerService$Register",
     };
 
     private static final String[] COMMON_REGISTRIES = new String[]{
@@ -41,14 +39,6 @@ public class RegistrationManager {
             "indi.etern.musichud.network.payloads.requestResponseCycle.StartQRLoginResponse$RegisterImpl",
             "indi.etern.musichud.network.payloads.requestResponseCycle.ConnectRequest$RegisterImpl",
             "indi.etern.musichud.network.payloads.requestResponseCycle.ConnectResponse$RegisterImpl",
-            "indi.etern.musichud.network.payloads.requestResponseCycle.GetServerStatusRequest$RegisterImpl",
-            "indi.etern.musichud.network.payloads.requestResponseCycle.GetServerStatusResponse$RegisterImpl",
-            "indi.etern.musichud.network.payloads.requestResponseCycle.UpdateServerConfigRequest$RegisterImpl",
-            "indi.etern.musichud.network.payloads.requestResponseCycle.UpdateServerConfigResponse$RegisterImpl",
-            "indi.etern.musichud.network.payloads.requestResponseCycle.ReloadServerConfigRequest$RegisterImpl",
-            "indi.etern.musichud.network.payloads.requestResponseCycle.ReloadServerConfigResponse$RegisterImpl",
-            "indi.etern.musichud.network.payloads.requestResponseCycle.QueryPlayerStatusRequest$RegisterImpl",
-            "indi.etern.musichud.network.payloads.requestResponseCycle.QueryPlayerStatusResponse$RegisterImpl",
             "indi.etern.musichud.network.payloads.requestResponseCycle.CancelQRLoginRequest$RegisterImpl",
             "indi.etern.musichud.network.payloads.requestResponseCycle.AnonymousLoginRequest$RegisterImpl",
             "indi.etern.musichud.network.payloads.requestResponseCycle.CookieLoginRequest$RegisterImpl",
@@ -69,9 +59,6 @@ public class RegistrationManager {
             "indi.etern.musichud.network.payloads.pushMessages.c2s.RemoveFromIdlePlaySourceMessage$RegisterImpl",
             "indi.etern.musichud.network.payloads.pushMessages.c2s.ClientPushMusicToQueueMessage$RegisterImpl",
             "indi.etern.musichud.network.payloads.pushMessages.c2s.ClientRemoveMusicFromQueueMessage$RegisterImpl",
-            "indi.etern.musichud.network.payloads.pushMessages.c2s.AdminRemoveMusicFromQueueMessage$RegisterImpl",
-            "indi.etern.musichud.network.payloads.pushMessages.c2s.AdminRemoveIdlePlaySourceMessage$RegisterImpl",
-            "indi.etern.musichud.network.payloads.pushMessages.c2s.ForceSkipCurrentMusicMessage$RegisterImpl",
             "indi.etern.musichud.network.payloads.pushMessages.c2s.LogoutMessage$RegisterImpl",
             "indi.etern.musichud.network.payloads.pushMessages.c2s.VoteSkipCurrentMusicMessage$RegisterImpl"
     };

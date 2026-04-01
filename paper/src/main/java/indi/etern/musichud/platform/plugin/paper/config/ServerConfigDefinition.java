@@ -42,15 +42,6 @@ public final class ServerConfigDefinition implements ServerConfig {
     public void initialize(JavaPlugin plugin) {
         this.plugin = plugin;
         plugin.reloadConfig();
-        loadFromPluginConfig(plugin);
-    }
-
-    public void reloadFromPluginConfig(JavaPlugin plugin) {
-        this.plugin = plugin;
-        loadFromPluginConfig(plugin);
-    }
-
-    private void loadFromPluginConfig(JavaPlugin plugin) {
         FileConfiguration config = plugin.getConfig();
         boolean changed = applyDefaults(config);
         load(config);
@@ -147,11 +138,6 @@ public final class ServerConfigDefinition implements ServerConfig {
         }
         JavaPlugin initializedPlugin = Objects.requireNonNull(plugin, "Paper server config is not initialized");
         return initializedPlugin.getDataFolder().toPath().resolve(configuredPath).normalize().toString();
-    }
-
-    @Override
-    public String getConfiguredServerApiBinaryExecutablePath() {
-        return serverApiBinaryExecutablePath;
     }
 
     @Override

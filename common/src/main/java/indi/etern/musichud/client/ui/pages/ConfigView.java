@@ -14,10 +14,8 @@ import indi.etern.musichud.client.music.NowPlayingInfo;
 import indi.etern.musichud.client.music.StreamAudioPlayer;
 import indi.etern.musichud.client.services.LoginService;
 import indi.etern.musichud.client.services.MusicService;
-import indi.etern.musichud.client.services.ServerManagementService;
 import indi.etern.musichud.client.ui.Theme;
 import indi.etern.musichud.client.ui.components.DynamicIntegerOption;
-import indi.etern.musichud.client.ui.components.ServerManagementView;
 import indi.etern.musichud.client.ui.hud.HudRendererManager;
 import indi.etern.musichud.client.ui.hud.metadata.HorizontalAlign;
 import indi.etern.musichud.client.ui.hud.metadata.VerticalAlign;
@@ -80,7 +78,6 @@ public class ConfigView extends LinearLayout {
                     LoginService.getInstance().sendConnectMessageToServer();
                 } else {
                     MusicService.RegisterImpl.reset();
-                    ServerManagementService.getInstance().reset();
                     NowPlayingInfo.getInstance().stop();
                     StreamAudioPlayer.getInstance().stop();
                     LoginService.getInstance().logout();
@@ -208,10 +205,6 @@ public class ConfigView extends LinearLayout {
             heightOption.create(positionCategory);
             cornerRadiusOption.create(positionCategory);
             view.addView(positionCategory);
-
-            LayoutParams remoteManagementParams = new LayoutParams(MATCH_PARENT, WRAP_CONTENT);
-            remoteManagementParams.setMargins(0, dp(6), 0, 0);
-            view.addView(new ServerManagementView(context), remoteManagementParams);
 
             var embeddedServerCategory = PreferencesFragment.createCategoryList(view, I18n.get(MusicHud.MOD_ID + ".config.category.embeddedServer"));
 

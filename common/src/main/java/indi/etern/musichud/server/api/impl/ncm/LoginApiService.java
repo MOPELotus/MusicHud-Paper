@@ -9,7 +9,6 @@ import indi.etern.musichud.beans.user.VipType;
 import indi.etern.musichud.interfaces.IntegerCodeEnum;
 import indi.etern.musichud.network.IServerNetworkService;
 import indi.etern.musichud.network.payloads.pushMessages.s2c.LoginResultMessage;
-import indi.etern.musichud.server.ServerManagementServerService;
 import indi.etern.musichud.server.api.ILoginApiService;
 import indi.etern.musichud.server.api.MusicPlayerServerService;
 import indi.etern.musichud.utils.http.ApiClient;
@@ -96,12 +95,6 @@ public class LoginApiService implements ILoginApiService {
     @Override
     public void joinUnlogged(ServerPlayer serverPlayer) {
         loginedPlayerInfoMap.put(serverPlayer, PlayerLoginInfo.UNLOGGED);
-        ServerManagementServerService.getInstance().markLoginState(
-                serverPlayer,
-                LoginCookieInfo.UNLOGGED,
-                Profile.ANONYMOUS,
-                VipType.NORMAL
-        );
         loginStateChangeListeners.forEach(mapConsumer -> mapConsumer.accept(loginedPlayerInfoMap));
         MusicPlayerServerService.getInstance().sendUpdateAllIdlePlaySourcesMessageTo(Collections.singleton(serverPlayer));
     }
@@ -110,7 +103,6 @@ public class LoginApiService implements ILoginApiService {
     public void logout(ServerPlayer player) {
         Runnable remove = pollingMap.remove(player);
         loginedPlayerInfoMap.remove(player);
-        ServerManagementServerService.getInstance().markLogout(player);
         loginStateChangeListeners.forEach(mapConsumer -> mapConsumer.accept(loginedPlayerInfoMap));
         if (remove != null) {
             logger.warn("Polling v-thread stopped as player {} quit", player.getName());
@@ -130,7 +122,6 @@ public class LoginApiService implements ILoginApiService {
         if (response.code == 200) {
             loginCookieInfo = new LoginCookieInfo(LoginType.ANONYMOUS, response.cookie, ZonedDateTime.now());
             Profile profile = loadUserProfile(player, loginCookieInfo);
-            ServerManagementServerService.getInstance().markLoginState(player, loginCookieInfo, profile, VipType.NORMAL);
             serverNetworkService.sendToPlayer(player, new LoginResultMessage(true, "", loginCookieInfo, profile));
             MusicPlayerServerService.getInstance().sendUpdateAllIdlePlaySourcesMessageTo(Collections.singleton(player));
         } else if (sendFail) {
@@ -146,11 +137,9 @@ public class LoginApiService implements ILoginApiService {
         if (cookieResponse.code == 200) {
             refreshedLoginCookieInfo = new LoginCookieInfo(loginCookieInfo.type(), cookieResponse.cookie, ZonedDateTime.now());
             Profile profile = loadUserProfile(player, refreshedLoginCookieInfo);
-            ServerManagementServerService.getInstance().markLoginState(player, refreshedLoginCookieInfo, profile, profile.getVipType());
             serverNetworkService.sendToPlayer(player, new LoginResultMessage(true, "", refreshedLoginCookieInfo, profile));
         } else {
             Profile profile = loadUserProfile(player, loginCookieInfo);
-            ServerManagementServerService.getInstance().markLoginState(player, loginCookieInfo, profile, profile.getVipType());
             serverNetworkService.sendToPlayer(player, new LoginResultMessage(true, "warning: refresh cookie failed", loginCookieInfo, profile));
             logger.warn("refresh for player \"{}\" failed, response code: {}", player.getName(), cookieResponse.code);
         }
@@ -210,7 +199,6 @@ public class LoginApiService implements ILoginApiService {
                         logger.info("QR login polling v-thread pushing successful result to player: {}", player.getName());
                         LoginCookieInfo loginCookieInfo = new LoginCookieInfo(LoginType.QR_CODE, qrLoginStatus.cookie, ZonedDateTime.now());
                         Profile profile = loadUserProfile(player, loginCookieInfo);
-                        ServerManagementServerService.getInstance().markLoginState(player, loginCookieInfo, profile, profile.getVipType());
                         serverNetworkService.sendToPlayer(player, new LoginResultMessage(true, "", loginCookieInfo, profile));
                         MusicPlayerServerService.getInstance().sendUpdateAllIdlePlaySourcesMessageTo(Collections.singleton(player));
                     }
@@ -231,8 +219,6 @@ public class LoginApiService implements ILoginApiService {
         Profile profile = accountDetail.profile();
         if (profile == null) {
             if (accountDetail.account().anonymous) {
-                loginedPlayerInfoMap.put(player, PlayerLoginInfo.of(loginCookieInfo).withAnonymousProfile());
-                loginStateChangeListeners.forEach(mapConsumer -> mapConsumer.accept(loginedPlayerInfoMap));
                 return Profile.ANONYMOUS;
             } else {
                 throw new IllegalStateException("accountDetail.profile is null but the account is not anonymous");
@@ -241,7 +227,6 @@ public class LoginApiService implements ILoginApiService {
         PlayerLoginInfo playerLoginInfo = PlayerLoginInfo.of(loginCookieInfo);
         playerLoginInfo.appendAccountDetail(accountDetail);
         loginedPlayerInfoMap.put(player, playerLoginInfo);
-        ServerManagementServerService.getInstance().markLoginState(player, loginCookieInfo, profile, accountDetail.account.vipType);
         loginStateChangeListeners.forEach(mapConsumer -> mapConsumer.accept(loginedPlayerInfoMap));
         profile.setVipType(accountDetail.account.vipType);
         return profile;
@@ -267,12 +252,6 @@ public class LoginApiService implements ILoginApiService {
 
         public static PlayerLoginInfo of(LoginCookieInfo loginCookieInfo) {
             return new PlayerLoginInfo(loginCookieInfo, null, null);
-        }
-
-        public PlayerLoginInfo withAnonymousProfile() {
-            this.profile = Profile.ANONYMOUS;
-            this.vipType = VipType.NORMAL;
-            return this;
         }
 
         public void appendAccountDetail(AccountDetail accountDetail) {
