@@ -219,16 +219,15 @@ public class LoginApiService implements ILoginApiService {
         Profile profile = accountDetail.profile();
         if (profile == null) {
             if (accountDetail.account().anonymous) {
-                return Profile.ANONYMOUS;
+                profile = Profile.ANONYMOUS;
             } else {
                 throw new IllegalStateException("accountDetail.profile is null but the account is not anonymous");
             }
         }
         PlayerLoginInfo playerLoginInfo = PlayerLoginInfo.of(loginCookieInfo);
-        playerLoginInfo.appendAccountDetail(accountDetail);
+        playerLoginInfo.appendAccountDetail(new AccountDetail(accountDetail.account(), profile));
         loginedPlayerInfoMap.put(player, playerLoginInfo);
         loginStateChangeListeners.forEach(mapConsumer -> mapConsumer.accept(loginedPlayerInfoMap));
-        profile.setVipType(accountDetail.account.vipType);
         return profile;
     }
 
@@ -256,7 +255,10 @@ public class LoginApiService implements ILoginApiService {
 
         public void appendAccountDetail(AccountDetail accountDetail) {
             this.profile = accountDetail.profile();
-            vipType = accountDetail.profile().getVipType();
+            vipType = accountDetail.account().vipType;
+            if (profile != null) {
+                profile.setVipType(vipType);
+            }
         }
     }
 
