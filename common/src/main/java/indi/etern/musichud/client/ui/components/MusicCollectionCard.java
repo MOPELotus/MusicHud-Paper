@@ -16,6 +16,7 @@ import indi.etern.musichud.beans.music.Privacy;
 import indi.etern.musichud.beans.music.PusherInfo;
 import indi.etern.musichud.client.config.ProfileConfigData;
 import indi.etern.musichud.client.services.MusicService;
+import indi.etern.musichud.client.services.ServerManagementService;
 import indi.etern.musichud.client.ui.Theme;
 import indi.etern.musichud.client.ui.ToastUtil;
 import indi.etern.musichud.client.ui.utils.ButtonInsetBackground;
@@ -120,6 +121,25 @@ public class MusicCollectionCard extends LinearLayout {
             LayoutParams pusherParams = new LayoutParams(MATCH_PARENT, WRAP_CONTENT);
             pusherParams.setMargins(dp(4), 0, 0, dp(8));
             addView(pusherText, pusherParams);
+
+            if (ServerManagementService.getInstance().canManagePlayback()) {
+                Button forceRemoveButton = new Button(context);
+                forceRemoveButton.setText(I18n.get(MusicHud.MOD_ID + ".button.forceRemove"));
+                forceRemoveButton.setTextColor(Theme.SECONDARY_TEXT_COLOR);
+                forceRemoveButton.setTextSize(Theme.TEXT_SIZE_SMALL);
+                forceRemoveButton.setBackground(ButtonInsetBackground.builder()
+                        .inset(0)
+                        .cornerRadius(dp(8))
+                        .padding(new ButtonInsetBackground.Padding(dp(4), dp(8), dp(4), dp(8)))
+                        .build().get());
+                forceRemoveButton.setOnClickListener(v -> {
+                    musicService.forceRemoveServerIdlePlaySource(musicCollection);
+                    ToastUtil.show(Toast.makeText(context,
+                            I18n.get(MusicHud.MOD_ID + ".text.forceRemovedIdlePlaySource") + "\n" + musicCollection.getName(),
+                            Toast.LENGTH_SHORT));
+                });
+                addView(forceRemoveButton, new LayoutParams(MATCH_PARENT, WRAP_CONTENT));
+            }
         }
 
         if (!isPrivatePlaylistToUser) {

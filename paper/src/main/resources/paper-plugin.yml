@@ -7,3 +7,12 @@ website: https://github.com/Etern-34520/MusicHud
 authors: [Etern]
 contributors: [Lotus (Paper adapter)]
 folia-supported: true
+permissions:
+  musichud.admin:
+    description: Allows managing MusicHud server configuration, playback and player diagnostics.
+    default: false
+    children:
+      musichud.reload: true
+  musichud.reload:
+    description: Allows reloading MusicHud Paper configuration from disk.
+    default: op

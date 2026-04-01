@@ -17,12 +17,14 @@ import indi.etern.musichud.beans.music.MusicCollection;
 import indi.etern.musichud.beans.music.MusicDetail;
 import indi.etern.musichud.client.music.NowPlayingInfo;
 import indi.etern.musichud.client.services.MusicService;
+import indi.etern.musichud.client.services.ServerManagementService;
 import indi.etern.musichud.client.ui.Theme;
 import indi.etern.musichud.client.ui.components.AutoFlowGridLayout;
 import indi.etern.musichud.client.ui.components.MusicCollectionCard;
 import indi.etern.musichud.client.ui.components.MusicListItem;
 import indi.etern.musichud.client.ui.components.StaggeredLyricScrollView;
 import indi.etern.musichud.client.ui.utils.ButtonInsetBackground;
+import indi.etern.musichud.beans.server.ServerStatusInfo;
 import indi.etern.musichud.interfaces.ClientConfig;
 import lombok.Getter;
 import lombok.extern.slf4j.Slf4j;
@@ -53,10 +55,22 @@ public class HomeView extends LinearLayout {
     private LinearLayout playQueueListView;
     private LinearLayout clientIdlePlaySourceView;
     private LinearLayout serverIdlePlaySourceView;
+    private final Consumer<ServerStatusInfo> serverStatusListener = status -> MuiModApi.postToUiThread(this::refresh);
 
     public HomeView(Context context) {
         super(context);
         refresh();
+        addOnAttachStateChangeListener(new OnAttachStateChangeListener() {
+            @Override
+            public void onViewAttachedToWindow(View v) {
+                ServerManagementService.getInstance().getStatusListeners().add(serverStatusListener);
+            }
+
+            @Override
+            public void onViewDetachedFromWindow(View v) {
+                ServerManagementService.getInstance().getStatusListeners().remove(serverStatusListener);
+            }
+        });
     }
 
     public void refresh() {
@@ -344,9 +358,11 @@ public class HomeView extends LinearLayout {
         LinearLayout actions = new LinearLayout(getContext());
 
         assert Minecraft.getInstance().player != null;
-        if (musicDetail.getPusherInfo().playerUUID().equals(Minecraft.getInstance().player.getUUID())) {
+        boolean isOwner = musicDetail.getPusherInfo().playerUUID().equals(Minecraft.getInstance().player.getUUID());
+        boolean canManagePlayback = ServerManagementService.getInstance().canManagePlayback();
+        if (isOwner || canManagePlayback) {
             Button removeButton = new Button(getContext());
-            removeButton.setText(I18n.get(MusicHud.MOD_ID + ".button.remove"));
+            removeButton.setText(I18n.get(isOwner ? MusicHud.MOD_ID + ".button.remove" : MusicHud.MOD_ID + ".button.forceRemove"));
             removeButton.setTextSize(Theme.TEXT_SIZE_NORMAL);
             removeButton.setTextColor(Theme.SECONDARY_TEXT_COLOR);
             Drawable background = ButtonInsetBackground.builder()
@@ -356,7 +372,11 @@ public class HomeView extends LinearLayout {
                     .build().get();
             removeButton.setBackground(background);
             removeButton.setOnClickListener(v -> {
-                MusicService.getInstance().sendRemoveMusicFromQueue(playQueueView.indexOfChild(musicListItem), musicDetail);
+                if (isOwner) {
+                    MusicService.getInstance().sendRemoveMusicFromQueue(playQueueView.indexOfChild(musicListItem), musicDetail);
+                } else {
+                    MusicService.getInstance().sendForceRemoveMusicFromQueue(playQueueView.indexOfChild(musicListItem), musicDetail);
+                }
             });
             actions.addView(removeButton, new LayoutParams(WRAP_CONTENT, dp(MusicListItem.imageSize)));
         }

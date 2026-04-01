@@ -28,6 +28,10 @@ public interface ServerConfig {
 
     String getServerApiBinaryExecutablePath();
 
+    default String getConfiguredServerApiBinaryExecutablePath() {
+        return getServerApiBinaryExecutablePath();
+    }
+
     void setServerApiBinaryExecutablePath(String serverApiBinaryExecutablePath);
 
     double getPusherVoteAdditionalRate();

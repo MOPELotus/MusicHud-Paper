@@ -3,6 +3,7 @@ package indi.etern.musichud.network.payloads.requestResponseCycle;
 import indi.etern.musichud.MusicHud;
 import indi.etern.musichud.Version;
 import indi.etern.musichud.client.services.LoginService;
+import indi.etern.musichud.client.services.ServerManagementService;
 import indi.etern.musichud.interfaces.CommonRegister;
 import indi.etern.musichud.interfaces.RegisterMark;
 import indi.etern.musichud.network.Codecs;
@@ -41,6 +42,7 @@ public record ConnectResponse(boolean accepted, Version serverVersion, List<ApiP
                     if (payload.accepted()) {
                         if (Version.capableWith(payload.serverVersion)) {
                             MusicHud.setStatus(MusicHud.ConnectStatus.CONNECTED);
+                            ServerManagementService.getInstance().refreshServerStatus();
                             LoginService.getInstance().loginToServer();
                         } else {
                             LoginService.getInstance().logout();

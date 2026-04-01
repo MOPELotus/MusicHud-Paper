@@ -32,7 +32,8 @@ public class Environment {
                 () -> load("indi.etern.musichud.platform.mod.architectury.network.ModNetworkManager", IClientNetworkService.class),
                 () -> load("indi.etern.musichud.platform.mod.architectury.event.ModServerEventService", IServerEventService.class),
                 () -> load("indi.etern.musichud.platform.mod.architectury.event.ModClientEventService", IClientEventService.class),
-                () -> load("indi.etern.musichud.platform.mod.architectury.registry.ModKeyRegistryService", IKeyRegistryService.class)
+                () -> load("indi.etern.musichud.platform.mod.architectury.registry.ModKeyRegistryService", IKeyRegistryService.class),
+                () -> load("indi.etern.musichud.platform.mod.architectury.admin.ModServerAdminService", IServerAdminService.class)
         ),
         NEOFORGE(
                 () -> load("indi.etern.musichud.platform.mod.forgeConfig.config.ServerConfigDefinition", ServerConfig.class),
@@ -41,7 +42,8 @@ public class Environment {
                 () -> load("indi.etern.musichud.platform.mod.architectury.network.ModNetworkManager", IClientNetworkService.class),
                 () -> load("indi.etern.musichud.platform.mod.architectury.event.ModServerEventService", IServerEventService.class),
                 () -> load("indi.etern.musichud.platform.mod.architectury.event.ModClientEventService", IClientEventService.class),
-                () -> load("indi.etern.musichud.platform.mod.architectury.registry.ModKeyRegistryService", IKeyRegistryService.class)
+                () -> load("indi.etern.musichud.platform.mod.architectury.registry.ModKeyRegistryService", IKeyRegistryService.class),
+                () -> load("indi.etern.musichud.platform.mod.architectury.admin.ModServerAdminService", IServerAdminService.class)
         ),
         PAPER(
                 () -> load("indi.etern.musichud.platform.plugin.paper.config.ServerConfigDefinition", ServerConfig.class),
@@ -50,7 +52,8 @@ public class Environment {
                 null,
                 () -> load("indi.etern.musichud.platform.plugin.paper.event.PaperEventService", IServerEventService.class),
                 null,
-                null
+                null,
+                () -> load("indi.etern.musichud.platform.plugin.paper.admin.PaperServerAdminService", IServerAdminService.class)
         );
 
         private final Supplier<ServerConfig> serverConfigSupplier;
@@ -60,6 +63,7 @@ public class Environment {
         private final Supplier<IServerEventService> serverEventServiceSupplier;
         private final Supplier<IClientEventService> clientEventServiceSupplier;
         private final Supplier<IKeyRegistryService> keyRegistryServiceSupplier;
+        private final Supplier<IServerAdminService> serverAdminServiceSupplier;
         Platform(
                 Supplier<ServerConfig> serverConfigSupplier,
                 Supplier<ClientConfig> clientConfigSupplier,
@@ -67,7 +71,8 @@ public class Environment {
                 Supplier<IClientNetworkService> clientNetworkServiceSupplier,
                 Supplier<IServerEventService> serverEventServiceSupplier,
                 Supplier<IClientEventService> clientEventServiceSupplier,
-                Supplier<IKeyRegistryService> keyRegistryServiceSupplier
+                Supplier<IKeyRegistryService> keyRegistryServiceSupplier,
+                Supplier<IServerAdminService> serverAdminServiceSupplier
         ) {
             this.serverConfigSupplier = serverConfigSupplier;
             this.clientConfigSupplier = clientConfigSupplier;
@@ -76,6 +81,7 @@ public class Environment {
             this.serverEventServiceSupplier = serverEventServiceSupplier;
             this.clientEventServiceSupplier = clientEventServiceSupplier;
             this.keyRegistryServiceSupplier = keyRegistryServiceSupplier;
+            this.serverAdminServiceSupplier = serverAdminServiceSupplier;
         }
 
         @SneakyThrows

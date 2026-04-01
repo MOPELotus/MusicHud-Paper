@@ -15,6 +15,7 @@ import indi.etern.musichud.network.payloads.pushMessages.s2c.RefreshMusicQueueMe
 import indi.etern.musichud.network.payloads.pushMessages.s2c.SwitchMusicMessage;
 import indi.etern.musichud.network.payloads.pushMessages.s2c.SyncCurrentPlayingMessage;
 import indi.etern.musichud.network.payloads.pushMessages.s2c.UpdateAllIdlePlaySourcesMessage;
+import indi.etern.musichud.server.ServerManagementServerService;
 import indi.etern.musichud.server.api.impl.ncm.LoginApiService;
 import lombok.Getter;
 import lombok.Setter;
@@ -287,7 +288,10 @@ public class MusicPlayerServerService {
 
         Map<ServerPlayer, LoginApiService.PlayerLoginInfo> loginedPlayerInfoMap = ILoginApiService.getInstance(ApiProvider.NCM).getLoginedPlayerInfoMap();
         for (ServerPlayer player : players) {
-            Profile playerProfile = loginedPlayerInfoMap.get(player).getProfile();
+            LoginApiService.PlayerLoginInfo playerLoginInfo = loginedPlayerInfoMap.get(player);
+            Profile playerProfile = playerLoginInfo != null && playerLoginInfo.getProfile() != null
+                    ? playerLoginInfo.getProfile()
+                    : Profile.ANONYMOUS;
             List<Playlist> processedPrivatePlaylists = new ArrayList<>();
             for (Playlist playlist : privatePlaylists) {
                 if (playlist.getCreator().equals(playerProfile)) {
@@ -398,6 +402,41 @@ public class MusicPlayerServerService {
         currentVoteInfo.vote(id, player);
     }
 
+    public void forceSkipCurrent() {
+        if (pusherThread != null) {
+            pusherThread.interrupt();
+        }
+        currentVoteInfo.resetTo(MusicDetail.NONE);
+    }
+
+    public void forceRemoveMusicDetailFromQueue(int index, long id) {
+        ArrayList<MusicDetail> list = new ArrayList<>(musicQueue);
+        if (index < 0 || index >= list.size()) {
+            return;
+        }
+        MusicDetail target = list.get(index);
+        if (target.getId() != id) {
+            return;
+        }
+        AtomicInteger currentIndex = new AtomicInteger(0);
+        musicQueue.removeIf(musicDetail -> currentIndex.getAndIncrement() == index && musicDetail.equals(target));
+        serverNetworkService.sendToPlayers(
+                ILoginApiService.getInstance(ApiProvider.NCM).getLoginedPlayerInfoMap().keySet(),
+                new RefreshMusicQueueMessage(musicQueue)
+        );
+    }
+
+    public void forceRemoveIdlePlaySource(UUID ownerUuid, long id, Class<?> musicCollectionClass) {
+        ServerPlayer owner = idlePlaySources.keySet().stream()
+                .filter(player -> player.getUUID().equals(ownerUuid))
+                .findFirst()
+                .orElse(null);
+        if (owner == null) {
+            return;
+        }
+        removeIdlePlaySource(id, musicCollectionClass, owner);
+    }
+
     public MusicResourceInfo getMusicResourceInfo(long id, Quality quality, String retryFor, ServerPlayer serverPlayer) {
         try {
             List<MusicDetail> musicDetails = indi.etern.musichud.server.api.IMusicApiService.getInstance(ApiProvider.NCM).getMusicDetailByIds(List.of(id));
@@ -464,6 +503,7 @@ public class MusicPlayerServerService {
                     instance.updateContinuable(!map.isEmpty());
                 }
             });
+            ServerManagementServerService.getInstance();
         }
     }
 

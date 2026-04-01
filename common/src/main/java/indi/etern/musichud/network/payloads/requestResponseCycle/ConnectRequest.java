@@ -9,6 +9,7 @@ import indi.etern.musichud.network.IServerNetworkService;
 import indi.etern.musichud.server.api.ApiProvider;
 import indi.etern.musichud.server.api.ILoginApiService;
 import indi.etern.musichud.server.api.MusicPlayerServerService;
+import indi.etern.musichud.server.ServerManagementServerService;
 import indi.etern.musichud.utils.ServerDataPacketVThreadExecutor;
 import net.minecraft.network.RegistryFriendlyByteBuf;
 import net.minecraft.network.codec.StreamCodec;
@@ -26,6 +27,7 @@ public record ConnectRequest(Version clientVersion) implements C2SPayload {
                     ConnectRequest.class, CODEC,
                     ServerDataPacketVThreadExecutor.execute((startQRLoginRequest, serverPlayer) -> {
                         boolean compatible = Version.capableWith(startQRLoginRequest.clientVersion());
+                        ServerManagementServerService.getInstance().markConnect(serverPlayer, startQRLoginRequest.clientVersion(), compatible);
                         ConnectResponse response = new ConnectResponse(compatible, Version.current, List.of(ApiProvider.NCM));
                         IServerNetworkService.getInstance().sendToPlayer(serverPlayer, response);
                         if (compatible) {
