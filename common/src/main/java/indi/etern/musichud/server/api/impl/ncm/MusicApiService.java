@@ -68,7 +68,7 @@ public class MusicApiService implements IMusicApiService {
         GetArtistMusicResponse response = ApiClient.post(ServerApiMeta.Artist.ALL_SONGS, new ArtistAllMusicRequest(artist.getId(), 50, offset, "time"), rawCookie);
         List<Long> musicDetailIds = response.songs.stream().map(MusicDetail::getId).toList();
         artist.setTotalMusicCount(response.total);
-        List<MusicDetail> musicDetails = getMusicDetailByIds(musicDetailIds);
+        List<MusicDetail> musicDetails = getMusicDetailByIds(musicDetailIds, serverPlayer);
         artist.getMusicDetails().addAll(musicDetails);
         return musicDetails;
     }
@@ -179,6 +179,11 @@ public class MusicApiService implements IMusicApiService {
 
     @Override
     public List<MusicDetail> getMusicDetailByIds(List<Long> ids) {
+        return getMusicDetailByIds(ids, null);
+    }
+
+    @Override
+    public List<MusicDetail> getMusicDetailByIds(List<Long> ids, @Nullable ServerPlayer sourcePlayer) {
         List<Long> uncachedIds = new ArrayList<>();
         List<MusicDetail> result = new ArrayList<>(ids.size());
         for (long id : ids) {
@@ -199,7 +204,7 @@ public class MusicApiService implements IMusicApiService {
                 } else {
                     return List.of();
                 }
-                String userCookie = loginApiService.randomVipCookieOr(null);
+                String userCookie = sourcePlayer != null ? getRawCookie(sourcePlayer) : loginApiService.randomVipCookieOr(null);
                 var response = ApiClient.post(ServerApiMeta.Music.DETAIL, requestBody, userCookie);
                 List<MusicDetail> musicDetails = response.getMusicDetails();
                 result.addAll(musicDetails);

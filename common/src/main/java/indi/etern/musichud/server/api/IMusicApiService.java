@@ -32,6 +32,10 @@ public interface IMusicApiService {
 
     List<MusicDetail> getMusicDetailByIds(List<Long> ids);
 
+    default List<MusicDetail> getMusicDetailByIds(List<Long> ids, @Nullable ServerPlayer sourcePlayer) {
+        return getMusicDetailByIds(ids);
+    }
+
     Album getAlbumInfoDetail(long id, ServerPlayer serverPlayer);
 
     Artist getArtistDetail(long id, ServerPlayer serverPlayer);
