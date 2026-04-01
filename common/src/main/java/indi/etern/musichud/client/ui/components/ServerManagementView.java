@@ -8,11 +8,14 @@ import icyllis.modernui.view.Gravity;
 import icyllis.modernui.view.View;
 import icyllis.modernui.widget.Button;
 import icyllis.modernui.widget.EditText;
+import icyllis.modernui.widget.FrameLayout;
 import icyllis.modernui.widget.LinearLayout;
+import icyllis.modernui.widget.ScrollView;
 import icyllis.modernui.widget.TextView;
 import icyllis.modernui.widget.Toast;
 import indi.etern.musichud.MusicHud;
 import indi.etern.musichud.Version;
+import indi.etern.musichud.beans.server.ConnectionState;
 import indi.etern.musichud.beans.server.PlayerQueryResult;
 import indi.etern.musichud.beans.server.PlayerStatusInfo;
 import indi.etern.musichud.beans.server.ServerStatusInfo;
@@ -61,12 +64,6 @@ public class ServerManagementView extends LinearLayout {
 
     public void refresh() {
         removeAllViews();
-        if (serverManagementService.isSingleplayerContext()) {
-            setVisibility(GONE);
-            return;
-        }
-        setVisibility(VISIBLE);
-
         Context context = getContext();
         ServerStatusInfo serverStatusInfo = serverManagementService.getServerStatusInfo();
 
@@ -75,41 +72,51 @@ public class ServerManagementView extends LinearLayout {
                 I18n.get(MusicHud.MOD_ID + ".config.category.remoteServer")
         );
 
-        remoteCategory.addView(createSectionTitle(context, I18n.get(MusicHud.MOD_ID + ".text.statusSectionTitle")));
-        addInfoLine(remoteCategory, I18n.get(MusicHud.MOD_ID + ".text.version.client"), Version.current.toString());
         addInfoLine(remoteCategory,
-                I18n.get(MusicHud.MOD_ID + ".text.version.server"),
-                serverStatusInfo.serverVersion().isBlank() ? I18n.get(MusicHud.MOD_ID + ".text.unknown") : serverStatusInfo.serverVersion());
-        addInfoLine(remoteCategory,
-                I18n.get(MusicHud.MOD_ID + ".text.connectionStatus"),
-                I18n.get(MusicHud.MOD_ID + ".text.connectionState." + MusicHud.getStatus().name()));
+                I18n.get(MusicHud.MOD_ID + ".text.version.client"),
+                Version.current.toString()
+        );
 
-        if (!serverStatusInfo.serverApiBaseUrl().isBlank()) {
+        if (!serverManagementService.isSingleplayerContext()) {
+            String serverVersion = serverStatusInfo.serverVersion().isBlank()
+                    ? I18n.get(MusicHud.MOD_ID + ".text.unknown")
+                    : serverStatusInfo.serverVersion();
             addInfoLine(remoteCategory,
-                    I18n.get(MusicHud.MOD_ID + ".text.serverApiBaseUrl"),
-                    serverStatusInfo.serverApiBaseUrl());
-        }
-        if (serverStatusInfo.serverApiBaseUrlMasked()) {
-            addSecondaryInfoLine(remoteCategory, I18n.get(MusicHud.MOD_ID + ".text.serverApiMasked"));
-        }
-
-        if (!serverStatusInfo.binaryApiServerStatusI18nKey().isBlank() || serverStatusInfo.canReloadConfig()) {
-            String statusText = serverStatusInfo.binaryApiServerStatusI18nKey().isBlank()
-                    ? I18n.get(MusicHud.MOD_ID + ".text.serverConfigActions")
-                    : I18n.get(MusicHud.MOD_ID + ".text.binaryApiStatus")
-                    .replace("{}", I18n.get(serverStatusInfo.binaryApiServerStatusI18nKey()));
-            LinearLayout statusRow = createControlRow(context, statusText);
-            if (serverStatusInfo.canReloadConfig() && !serverStatusInfo.canManageServerConfig()) {
-                Button reloadButton = createActionButton(context, I18n.get(MusicHud.MOD_ID + ".button.reloadServerConfig"));
-                reloadButton.setOnClickListener(v -> serverManagementService.reloadRemoteServerConfig()
-                        .thenAccept(result -> MuiModApi.postToUiThread(() -> showToast(serverManagementService.translateMessage(result.message())))));
-                statusRow.addView(reloadButton);
+                    I18n.get(MusicHud.MOD_ID + ".text.version.server"),
+                    serverVersion
+            );
+            addInfoLine(remoteCategory,
+                    I18n.get(MusicHud.MOD_ID + ".text.connectionStatus"),
+                    I18n.get((MusicHud.MOD_ID + ".text.connectionState." + MusicHud.getStatus().name()))
+            );
+            if (!serverStatusInfo.serverApiBaseUrl().isBlank()) {
+                addInfoLine(remoteCategory,
+                        I18n.get(MusicHud.MOD_ID + ".text.serverApiBaseUrl"),
+                        serverStatusInfo.serverApiBaseUrl()
+                );
             }
-            remoteCategory.addView(statusRow);
+            if (serverStatusInfo.serverApiBaseUrlMasked()) {
+                addSecondaryInfoLine(remoteCategory, I18n.get(MusicHud.MOD_ID + ".text.serverApiMasked"));
+            }
+            if (!serverStatusInfo.binaryApiServerStatusI18nKey().isBlank()) {
+                addInfoLine(remoteCategory,
+                        I18n.get(MusicHud.MOD_ID + ".text.binaryApiStatusLabel"),
+                        I18n.get(serverStatusInfo.binaryApiServerStatusI18nKey())
+                );
+            }
         }
 
         if (MusicHud.getStatus() != MusicHud.ConnectStatus.CONNECTED) {
             addSecondaryInfoLine(remoteCategory, I18n.get(MusicHud.MOD_ID + ".text.remoteServerUnavailable"));
+        }
+
+        if (serverStatusInfo.canReloadConfig()) {
+            Button reloadButton = createActionButton(context, I18n.get(MusicHud.MOD_ID + ".button.reloadServerConfig"));
+            reloadButton.setOnClickListener(v -> serverManagementService.reloadRemoteServerConfig()
+                    .thenAccept(result -> MuiModApi.postToUiThread(() -> {
+                        showToast(serverManagementService.translateMessage(result.message()));
+                    })));
+            remoteCategory.addView(reloadButton, new LayoutParams(WRAP_CONTENT, WRAP_CONTENT));
         }
 
         if (serverStatusInfo.canManageServerConfig()) {
@@ -159,24 +166,16 @@ public class ServerManagementView extends LinearLayout {
                     binaryPathInput == null ? draft.serverApiBinaryExecutablePath : binaryPathInput.getText().toString(),
                     draft.pusherVoteAdditionalRate,
                     draft.useRandomCnIp
-            ).thenAccept(result -> MuiModApi.postToUiThread(() -> showToast(serverManagementService.translateMessage(result.message())))));
-
-            LinearLayout actionRow = createControlRow(context, I18n.get(MusicHud.MOD_ID + ".text.serverConfigActions"));
-            if (serverStatusInfo.canReloadConfig()) {
-                Button reloadButton = createActionButton(context, I18n.get(MusicHud.MOD_ID + ".button.reloadServerConfig"));
-                reloadButton.setOnClickListener(v -> serverManagementService.reloadRemoteServerConfig()
-                        .thenAccept(result -> MuiModApi.postToUiThread(() -> showToast(serverManagementService.translateMessage(result.message())))));
-                actionRow.addView(reloadButton);
-            }
-            actionRow.addView(saveButton);
-            LayoutParams actionParams = new LayoutParams(MATCH_PARENT, WRAP_CONTENT);
-            actionParams.setMargins(0, dp(8), 0, 0);
-            remoteCategory.addView(actionRow, actionParams);
+            ).thenAccept(result -> MuiModApi.postToUiThread(() -> {
+                showToast(serverManagementService.translateMessage(result.message()));
+            })));
+            LayoutParams saveParams = new LayoutParams(WRAP_CONTENT, WRAP_CONTENT);
+            saveParams.setMargins(0, dp(8), 0, 0);
+            remoteCategory.addView(saveButton, saveParams);
         }
 
         if (serverStatusInfo.canQueryPlayerInfo()) {
             addSecondaryInfoLine(remoteCategory, I18n.get(MusicHud.MOD_ID + ".text.playerQueryDescription"));
-
             LinearLayout queryInputBox = createInputBox(
                     context,
                     I18n.get(MusicHud.MOD_ID + ".text.playerQuery"),
@@ -195,12 +194,9 @@ public class ServerManagementView extends LinearLayout {
                             refresh();
                         }));
             });
-
-            LinearLayout queryRow = createControlRow(context, I18n.get(MusicHud.MOD_ID + ".text.playerQuerySectionTitle"));
-            queryRow.addView(queryButton);
-            LayoutParams queryParams = new LayoutParams(MATCH_PARENT, WRAP_CONTENT);
+            LayoutParams queryParams = new LayoutParams(WRAP_CONTENT, WRAP_CONTENT);
             queryParams.setMargins(0, dp(8), 0, 0);
-            remoteCategory.addView(queryRow, queryParams);
+            remoteCategory.addView(queryButton, queryParams);
 
             if (!lastPlayerQueryResult.isBlank()) {
                 TextView resultView = new TextView(context);
@@ -216,17 +212,6 @@ public class ServerManagementView extends LinearLayout {
         LayoutParams categoryParams = new LayoutParams(MATCH_PARENT, WRAP_CONTENT);
         categoryParams.setMargins(0, dp(6), 0, dp(24));
         addView(remoteCategory, categoryParams);
-    }
-
-    private TextView createSectionTitle(Context context, String text) {
-        TextView textView = new TextView(context);
-        textView.setText(text);
-        textView.setTextSize(Theme.TEXT_SIZE_LARGE);
-        textView.setTextColor(Theme.NORMAL_TEXT_COLOR);
-        LayoutParams params = new LayoutParams(MATCH_PARENT, WRAP_CONTENT);
-        params.setMargins(dp(6), dp(8), dp(6), dp(4));
-        textView.setLayoutParams(params);
-        return textView;
     }
 
     private LinearLayout createInputBox(Context context, String title, String value) {
@@ -247,31 +232,16 @@ public class ServerManagementView extends LinearLayout {
         return inputBox;
     }
 
-    private LinearLayout createControlRow(Context context, String label) {
-        LinearLayout layout = new LinearLayout(context);
-        layout.setOrientation(HORIZONTAL);
-        layout.setGravity(Gravity.LEFT);
-        layout.setVerticalGravity(Gravity.CENTER);
-        LayoutParams params = new LayoutParams(MATCH_PARENT, dp(44));
-        params.setMargins(dp(6), 0, dp(6), 0);
-        layout.setLayoutParams(params);
-
-        TextView labelView = new TextView(context);
-        labelView.setTextSize(14);
-        labelView.setTextColor(Theme.NORMAL_TEXT_COLOR);
-        labelView.setText(label);
-        layout.addView(labelView, new LayoutParams(MATCH_PARENT, WRAP_CONTENT, 1));
-        return layout;
-    }
-
     private Button createActionButton(Context context, String text) {
         Button button = new Button(context);
         button.setText(text);
         button.setTextColor(Theme.PRIMARY_COLOR);
-        button.setTextSize(14);
+        button.setTextSize(Theme.TEXT_SIZE_NORMAL);
+        button.setGravity(Gravity.CENTER);
         button.setBackground(ButtonInsetBackground.builder()
                 .inset(0)
-                .padding(new ButtonInsetBackground.Padding(dp(8), dp(4), dp(8), dp(4)))
+                .cornerRadius(dp(8))
+                .padding(new ButtonInsetBackground.Padding(dp(12), dp(4), dp(12), dp(4)))
                 .build().get());
         return button;
     }
@@ -279,7 +249,7 @@ public class ServerManagementView extends LinearLayout {
     private void addInfoLine(LinearLayout target, String label, String value) {
         TextView textView = new TextView(getContext());
         textView.setTextSize(Theme.TEXT_SIZE_NORMAL);
-        textView.setTextColor(Theme.NORMAL_TEXT_COLOR);
+        textView.setTextColor(Theme.EMPHASIZE_TEXT_COLOR);
         textView.setText(label + ": " + value);
         LayoutParams params = new LayoutParams(MATCH_PARENT, WRAP_CONTENT);
         params.setMargins(0, 0, 0, dp(8));
