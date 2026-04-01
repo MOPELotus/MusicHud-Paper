@@ -131,13 +131,15 @@ public final class ServerManagementServerService {
                     buildServerStatusInfo(player)
             );
         }
+        boolean previousStartupBinaryApiServerWhenLaunch = serverConfig.getStartupBinaryApiServerWhenLaunch();
+        String previousServerApiBinaryExecutablePath = serverConfig.getConfiguredServerApiBinaryExecutablePath();
         serverConfig.setServerApiBaseUrl(serverApiBaseUrl.trim());
         serverConfig.setStartupBinaryApiServerWhenLaunch(startupBinaryApiServerWhenLaunch);
         serverConfig.setServerApiBinaryExecutablePath(serverApiBinaryExecutablePath.trim());
         serverConfig.setPusherVoteAdditionalRate(pusherVoteAdditionalRate);
         serverConfig.setUseRandomCnIp(useRandomCnIp);
         serverConfig.save();
-        syncEmbeddedApiServer();
+        syncEmbeddedApiServerIfNecessary(previousStartupBinaryApiServerWhenLaunch, previousServerApiBinaryExecutablePath);
         return new ServerActionResult(
                 true,
                 MusicHud.MOD_ID + ".text.serverConfigSaved",
@@ -153,8 +155,10 @@ public final class ServerManagementServerService {
                     buildServerStatusInfo(player)
             );
         }
+        boolean previousStartupBinaryApiServerWhenLaunch = serverConfig.getStartupBinaryApiServerWhenLaunch();
+        String previousServerApiBinaryExecutablePath = serverConfig.getConfiguredServerApiBinaryExecutablePath();
         serverAdminService.reloadConfig();
-        syncEmbeddedApiServer();
+        syncEmbeddedApiServerIfNecessary(previousStartupBinaryApiServerWhenLaunch, previousServerApiBinaryExecutablePath);
         return new ServerActionResult(
                 true,
                 MusicHud.MOD_ID + ".text.serverConfigReloaded",
@@ -248,6 +252,20 @@ public final class ServerManagementServerService {
             ApiServerManager.restartApiServer();
         } else {
             ApiServerManager.stopApiServer();
+        }
+    }
+
+    private void syncEmbeddedApiServerIfNecessary(boolean previousStartupBinaryApiServerWhenLaunch,
+                                                  String previousServerApiBinaryExecutablePath) {
+        boolean startupBinaryApiServerWhenLaunch = serverConfig.getStartupBinaryApiServerWhenLaunch();
+        String currentServerApiBinaryExecutablePath = serverConfig.getConfiguredServerApiBinaryExecutablePath();
+        if (previousStartupBinaryApiServerWhenLaunch != startupBinaryApiServerWhenLaunch) {
+            syncEmbeddedApiServer();
+            return;
+        }
+        if (startupBinaryApiServerWhenLaunch
+                && !Objects.equals(previousServerApiBinaryExecutablePath, currentServerApiBinaryExecutablePath)) {
+            ApiServerManager.restartApiServer();
         }
     }
 

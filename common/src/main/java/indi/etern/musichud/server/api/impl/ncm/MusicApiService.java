@@ -3,6 +3,7 @@ package indi.etern.musichud.server.api.impl.ncm;
 import com.google.common.cache.Cache;
 import com.google.common.cache.CacheBuilder;
 import com.google.gson.Gson;
+import com.google.gson.JsonElement;
 import com.google.gson.annotations.SerializedName;
 import indi.etern.musichud.MusicHud;
 import indi.etern.musichud.beans.api.MusicDetailsResponse;
@@ -302,7 +303,11 @@ public class MusicApiService implements IMusicApiService {
     private @NotNull MusicResourceInfo getMusicResourceInfoFromMatcher(MusicDetail musicDetail) {
         var unblockRequest = new GetMatchResourceUrlRequest(musicDetail.getId(), null);
         var unblockResponse = ApiClient.post(ServerApiMeta.Music.UNBLOCK, unblockRequest, loginApiService.randomVipCookieOr(null));
-        return MusicResourceInfo.from(unblockResponse.data, musicDetail);
+        String matchedUrl = unblockResponse.data();
+        if (unblockResponse.code() != 200 || matchedUrl == null || matchedUrl.isBlank()) {
+            return MusicResourceInfo.NONE;
+        }
+        return MusicResourceInfo.from(matchedUrl, musicDetail);
     }
 
     @Override
@@ -425,7 +430,13 @@ public class MusicApiService implements IMusicApiService {
     public record GetDirectResourceUrlResponse(int code, List<MusicResourceInfo> data) {
     }
 
-    public record GetMatchResourceUrlResponse(int code, String data) {
+    public record GetMatchResourceUrlResponse(int code, JsonElement rawData) {
+        public String data() {
+            if (rawData != null && rawData.isJsonPrimitive() && rawData.getAsJsonPrimitive().isString()) {
+                return rawData.getAsString();
+            }
+            return "";
+        }
     }
 
     public record PagedRequestDataWithUID(long uid, int limit, int offset) {
