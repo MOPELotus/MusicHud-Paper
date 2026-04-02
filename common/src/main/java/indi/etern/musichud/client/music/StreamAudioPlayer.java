@@ -83,15 +83,18 @@ public class StreamAudioPlayer {
         BufferedInputStream bufferedStream = new BufferedInputStream(inputStream, 8192);
 
         if (formatType != FormatType.AUTO) {
-            FormatType detectedFormatType = AudioFormatDetector.detectFormat(bufferedStream);
-            if (detectedFormatType != formatType) {
-                LOGGER.warn("Detected format type is not equals to resource format type, using detected");
+            try {
+                FormatType detectedFormatType = AudioFormatDetector.detectFormat(bufferedStream);
+                if (detectedFormatType != FormatType.GENERIC && detectedFormatType != formatType) {
+                    LOGGER.warn("Detected format type {} does not match resource format type {}, using detected", detectedFormatType, formatType);
+                    return detectedFormatType.newDecoder(bufferedStream);
+                }
+            } catch (IOException e) {
+                LOGGER.warn("Failed to detect audio format from stream, using declared resource format {}", formatType, e);
             }
-
-            return detectedFormatType.newDecoder(bufferedStream);
-        } else {
             return formatType.newDecoder(bufferedStream);
         }
+        return formatType.newDecoder(bufferedStream);
     }
 
     public Status getStatus() {

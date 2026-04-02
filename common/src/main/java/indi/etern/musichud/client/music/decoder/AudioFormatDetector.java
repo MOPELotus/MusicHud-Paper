@@ -4,10 +4,20 @@ import indi.etern.musichud.beans.music.FormatType;
 
 import java.io.IOException;
 import java.io.InputStream;
+import java.nio.charset.StandardCharsets;
 
 public class AudioFormatDetector {
     private static final byte[] ID3_HEADER = {0x49, 0x44, 0x33};
     private static final byte[] FLAC_HEADER = {0x66, 0x4C, 0x61, 0x43};
+    private static final byte[] RIFF_HEADER = {0x52, 0x49, 0x46, 0x46};
+    private static final byte[] WAVE_HEADER = {0x57, 0x41, 0x56, 0x45};
+    private static final byte[] OGG_HEADER = {0x4F, 0x67, 0x67, 0x53};
+    private static final byte[] OPUS_HEADER = {0x4F, 0x70, 0x75, 0x73, 0x48, 0x65, 0x61, 0x64};
+    private static final byte[] VORBIS_HEADER = {0x76, 0x6F, 0x72, 0x62, 0x69, 0x73};
+    private static final byte[] FORM_HEADER = {0x46, 0x4F, 0x52, 0x4D};
+    private static final byte[] AIFF_HEADER = {0x41, 0x49, 0x46, 0x46};
+    private static final byte[] AIFC_HEADER = {0x41, 0x49, 0x46, 0x43};
+    private static final byte[] AU_HEADER = {0x2E, 0x73, 0x6E, 0x64};
 
     public static FormatType detectFormat(InputStream inputStream) throws IOException {
         if (!inputStream.markSupported()) {
@@ -20,13 +30,41 @@ public class AudioFormatDetector {
         inputStream.reset();
 
         if (bytesRead < 4) {
-            throw new IOException("Insufficient data to determine format");
+            return FormatType.GENERIC;
         }
 
         // 检测FLAC格式
         if (header[0] == FLAC_HEADER[0] && header[1] == FLAC_HEADER[1] &&
                 header[2] == FLAC_HEADER[2] && header[3] == FLAC_HEADER[3]) {
             return FormatType.FLAC;
+        }
+
+        // 检测WAV格式
+        if (matches(header, RIFF_HEADER, 0) && bytesRead >= 12 && matches(header, WAVE_HEADER, 8)) {
+            return FormatType.WAV;
+        }
+
+        // 检测OGG/Opus格式
+        if (matches(header, OGG_HEADER, 0)) {
+            if (contains(header, bytesRead, OPUS_HEADER)) {
+                return FormatType.OPUS;
+            }
+            if (contains(header, bytesRead, VORBIS_HEADER)) {
+                return FormatType.OGG;
+            }
+            return FormatType.GENERIC;
+        }
+
+        // 检测AIFF/AIFC格式
+        if (matches(header, FORM_HEADER, 0) && bytesRead >= 12) {
+            if (matches(header, AIFF_HEADER, 8) || matches(header, AIFC_HEADER, 8)) {
+                return FormatType.AIFF;
+            }
+        }
+
+        // 检测AU格式
+        if (matches(header, AU_HEADER, 0)) {
+            return FormatType.AU;
         }
 
         // 检测MP3格式（通过ID3标签）
@@ -40,7 +78,17 @@ public class AudioFormatDetector {
             return FormatType.MP3;
         }
 
-        throw new IOException("Unsupported audio format");
+        // 常见AAC ADTS头
+        if (detectAacAdtsHeader(header, bytesRead)) {
+            return FormatType.AAC;
+        }
+
+        // 常见MP4/M4A容器
+        if (detectMp4Family(header, bytesRead)) {
+            return FormatType.M4A;
+        }
+
+        return FormatType.GENERIC;
     }
 
     private static boolean detectMP3FrameHeader(byte[] header, int length) {
@@ -62,6 +110,51 @@ public class AudioFormatDetector {
                         }
                     }
                 }
+            }
+        }
+        return false;
+    }
+
+    private static boolean detectAacAdtsHeader(byte[] header, int length) {
+        if (length < 2) {
+            return false;
+        }
+        return (header[0] & 0xFF) == 0xFF && (header[1] & 0xF6) == 0xF0;
+    }
+
+    private static boolean detectMp4Family(byte[] header, int length) {
+        if (length < 12) {
+            return false;
+        }
+        if (header[4] == 0x66 && header[5] == 0x74 && header[6] == 0x79 && header[7] == 0x70) {
+            String brand = new String(header, 8, 4, StandardCharsets.US_ASCII);
+            return brand.startsWith("M4A")
+                    || brand.startsWith("isom")
+                    || brand.startsWith("mp4")
+                    || brand.startsWith("qt");
+        }
+        return false;
+    }
+
+    private static boolean matches(byte[] source, byte[] target, int offset) {
+        if (offset + target.length > source.length) {
+            return false;
+        }
+        for (int i = 0; i < target.length; i++) {
+            if (source[offset + i] != target[i]) {
+                return false;
+            }
+        }
+        return true;
+    }
+
+    private static boolean contains(byte[] source, int length, byte[] pattern) {
+        if (pattern.length == 0 || length < pattern.length) {
+            return false;
+        }
+        for (int i = 0; i <= length - pattern.length; i++) {
+            if (matches(source, pattern, i)) {
+                return true;
             }
         }
         return false;
