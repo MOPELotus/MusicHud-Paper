@@ -2,9 +2,19 @@ package indi.etern.musichud.client.music.decoder;
 
 import indi.etern.musichud.beans.music.FormatType;
 
+import java.io.BufferedInputStream;
+import java.io.FileInputStream;
 import java.io.IOException;
 import java.io.InputStream;
+import java.net.URI;
+import java.net.URL;
+import java.net.URLConnection;
+import java.nio.file.Files;
+import java.nio.file.InvalidPathException;
+import java.nio.file.Path;
+import java.nio.file.Paths;
 import java.nio.charset.StandardCharsets;
+import java.util.Locale;
 
 public class AudioFormatDetector {
     private static final byte[] ID3_HEADER = {0x49, 0x44, 0x33};
@@ -18,6 +28,47 @@ public class AudioFormatDetector {
     private static final byte[] AIFF_HEADER = {0x41, 0x49, 0x46, 0x46};
     private static final byte[] AIFC_HEADER = {0x41, 0x49, 0x46, 0x43};
     private static final byte[] AU_HEADER = {0x2E, 0x73, 0x6E, 0x64};
+
+    private AudioFormatDetector() {
+    }
+
+    public static FormatType detectFormat(String identifier) throws IOException {
+        String normalizedIdentifier = normalizeIdentifier(identifier);
+        try (InputStream inputStream = openStream(normalizedIdentifier);
+             BufferedInputStream bufferedInputStream = new BufferedInputStream(inputStream, 2048)) {
+            return detectFormat(bufferedInputStream);
+        } catch (IOException e) {
+            return detectFormatFromName(normalizedIdentifier);
+        }
+    }
+
+    public static String normalizeIdentifier(String identifier) {
+        if (identifier == null || identifier.isBlank()) {
+            throw new IllegalArgumentException("Audio identifier cannot be blank");
+        }
+        String trimmed = identifier.trim();
+        if (looksLikeWindowsAbsolutePath(trimmed)) {
+            return Paths.get(trimmed).toAbsolutePath().normalize().toString();
+        }
+        try {
+            Path directPath = Paths.get(trimmed);
+            if (Files.exists(directPath)) {
+                return directPath.toAbsolutePath().normalize().toString();
+            }
+        } catch (InvalidPathException ignored) {
+        }
+        try {
+            URI uri = URI.create(trimmed);
+            if ("file".equalsIgnoreCase(uri.getScheme())) {
+                return Paths.get(uri).toAbsolutePath().normalize().toString();
+            }
+            if (uri.getScheme() != null) {
+                return uri.toString();
+            }
+        } catch (Exception ignored) {
+        }
+        return Paths.get(trimmed).toAbsolutePath().normalize().toString();
+    }
 
     public static FormatType detectFormat(InputStream inputStream) throws IOException {
         if (!inputStream.markSupported()) {
@@ -158,5 +209,54 @@ public class AudioFormatDetector {
             }
         }
         return false;
+    }
+
+    private static InputStream openStream(String identifier) throws IOException {
+        if (identifier.startsWith("http://") || identifier.startsWith("https://")) {
+            URLConnection connection = URI.create(identifier).toURL().openConnection();
+            connection.setConnectTimeout(5000);
+            connection.setReadTimeout(10000);
+            return connection.getInputStream();
+        }
+        return new FileInputStream(identifier);
+    }
+
+    private static FormatType detectFormatFromName(String identifier) {
+        String lowerCase = identifier.toLowerCase(Locale.ROOT);
+        if (lowerCase.endsWith(".flac")) {
+            return FormatType.FLAC;
+        }
+        if (lowerCase.endsWith(".mp3")) {
+            return FormatType.MP3;
+        }
+        if (lowerCase.endsWith(".wav") || lowerCase.endsWith(".wave")) {
+            return FormatType.WAV;
+        }
+        if (lowerCase.endsWith(".ogg") || lowerCase.endsWith(".oga")) {
+            return FormatType.OGG;
+        }
+        if (lowerCase.endsWith(".opus")) {
+            return FormatType.OPUS;
+        }
+        if (lowerCase.endsWith(".aiff") || lowerCase.endsWith(".aif") || lowerCase.endsWith(".aifc")) {
+            return FormatType.AIFF;
+        }
+        if (lowerCase.endsWith(".au") || lowerCase.endsWith(".snd")) {
+            return FormatType.AU;
+        }
+        if (lowerCase.endsWith(".aac")) {
+            return FormatType.AAC;
+        }
+        if (lowerCase.endsWith(".m4a") || lowerCase.endsWith(".mp4") || lowerCase.endsWith(".alac")) {
+            return FormatType.M4A;
+        }
+        return FormatType.GENERIC;
+    }
+
+    private static boolean looksLikeWindowsAbsolutePath(String value) {
+        return value.length() >= 3
+                && Character.isLetter(value.charAt(0))
+                && value.charAt(1) == ':'
+                && (value.charAt(2) == '\\' || value.charAt(2) == '/');
     }
 }

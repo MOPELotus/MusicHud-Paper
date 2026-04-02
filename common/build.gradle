@@ -7,6 +7,10 @@ repositories {
         name = 'NeoForged'
         url = 'https://maven.neoforged.net/releases'
     }
+    maven {
+        name = 'dv8tion'
+        url = 'https://m2.dv8tion.net/releases'
+    }
 }
 
 processResources {
@@ -34,8 +38,7 @@ dependencies {
     testRuntimeOnly "org.junit.platform:junit-platform-launcher"
     api "fuzs.forgeconfigapiport:forgeconfigapiport-common-neoforgeapi:$rootProject.forge_config_api_port_version"
 
-    implementation "com.github.umjammer:jlayer:$rootProject.jlayer_version"
-    implementation "org.jflac:jflac-codec:$rootProject.jflac_version"
+    implementation "com.sedmelluq:lavaplayer:$rootProject.lavaplayer_version"
     compileOnly "icyllis.modernui:ModernUI-NeoForge:1.21.8-${rootProject.modernui_version}.+"
 }
 

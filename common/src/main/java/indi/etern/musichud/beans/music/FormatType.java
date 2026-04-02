@@ -1,95 +1,19 @@
 package indi.etern.musichud.beans.music;
 
-import indi.etern.musichud.client.music.decoder.AudioDecoder;
-import indi.etern.musichud.client.music.decoder.AudioFormatDetector;
-import indi.etern.musichud.client.music.decoder.FLACStreamDecoder;
-import indi.etern.musichud.client.music.decoder.JavaSoundStreamDecoder;
-import indi.etern.musichud.client.music.decoder.MP3StreamDecoder;
-import indi.etern.musichud.client.music.decoder.OGGStreamDecoder;
-import lombok.SneakyThrows;
-
-import java.io.BufferedInputStream;
 import java.util.Locale;
 
 public enum FormatType {
-    FLAC {
-        @Override
-        @SneakyThrows
-        public AudioDecoder newDecoder(BufferedInputStream inputStream) {
-            return new FLACStreamDecoder(inputStream);
-        }
-    },
-    MP3 {
-        @Override
-        public AudioDecoder newDecoder(BufferedInputStream inputStream) {
-            return new MP3StreamDecoder(inputStream);
-        }
-    },
-    AUTO {
-        @Override
-        @SneakyThrows
-        public AudioDecoder newDecoder(BufferedInputStream inputStream) {
-            return AudioFormatDetector.detectFormat(inputStream).newDecoder(inputStream);
-        }
-    },
-    WAV {
-        @Override
-        @SneakyThrows
-        public AudioDecoder newDecoder(BufferedInputStream inputStream) {
-            return new JavaSoundStreamDecoder(inputStream);
-        }
-    },
-    OGG {
-        @Override
-        @SneakyThrows
-        public AudioDecoder newDecoder(BufferedInputStream inputStream) {
-            return new OGGStreamDecoder(inputStream);
-        }
-    },
-    AIFF {
-        @Override
-        @SneakyThrows
-        public AudioDecoder newDecoder(BufferedInputStream inputStream) {
-            return new JavaSoundStreamDecoder(inputStream);
-        }
-    },
-    AU {
-        @Override
-        @SneakyThrows
-        public AudioDecoder newDecoder(BufferedInputStream inputStream) {
-            return new JavaSoundStreamDecoder(inputStream);
-        }
-    },
-    AAC {
-        @Override
-        @SneakyThrows
-        public AudioDecoder newDecoder(BufferedInputStream inputStream) {
-            return new JavaSoundStreamDecoder(inputStream);
-        }
-    },
-    M4A {
-        @Override
-        @SneakyThrows
-        public AudioDecoder newDecoder(BufferedInputStream inputStream) {
-            return new JavaSoundStreamDecoder(inputStream);
-        }
-    },
-    OPUS {
-        @Override
-        @SneakyThrows
-        public AudioDecoder newDecoder(BufferedInputStream inputStream) {
-            return new JavaSoundStreamDecoder(inputStream);
-        }
-    },
-    GENERIC {
-        @Override
-        @SneakyThrows
-        public AudioDecoder newDecoder(BufferedInputStream inputStream) {
-            return new JavaSoundStreamDecoder(inputStream);
-        }
-    };
-
-    public abstract AudioDecoder newDecoder(BufferedInputStream inputStream);
+    FLAC,
+    MP3,
+    AUTO,
+    WAV,
+    OGG,
+    AIFF,
+    AU,
+    AAC,
+    M4A,
+    OPUS,
+    GENERIC;
 
     public static FormatType fromSerializedName(String input) {
         if (input == null || input.isBlank()) {

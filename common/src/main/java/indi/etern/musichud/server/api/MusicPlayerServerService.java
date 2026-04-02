@@ -448,6 +448,41 @@ public class MusicPlayerServerService {
         currentVoteInfo.vote(id, player);
     }
 
+    public void forceSkipCurrent() {
+        if (pusherThread != null) {
+            pusherThread.interrupt();
+        }
+        currentVoteInfo.resetTo(MusicDetail.NONE);
+    }
+
+    public void forceRemoveMusicDetailFromQueue(int index, long id) {
+        ArrayList<MusicDetail> list = new ArrayList<>(musicQueue);
+        if (index < 0 || index >= list.size()) {
+            return;
+        }
+        MusicDetail target = list.get(index);
+        if (target.getId() != id) {
+            return;
+        }
+        AtomicInteger currentIndex = new AtomicInteger(0);
+        musicQueue.removeIf(musicDetail -> currentIndex.getAndIncrement() == index && musicDetail.equals(target));
+        serverNetworkService.sendToPlayers(
+                ILoginApiService.getInstance(ApiProvider.NCM).getLoginedPlayerInfoMap().keySet(),
+                new RefreshMusicQueueMessage(musicQueue)
+        );
+    }
+
+    public void forceRemoveIdlePlaySource(UUID ownerUuid, long id, Class<?> musicCollectionClass) {
+        ServerPlayer owner = idlePlaySources.keySet().stream()
+                .filter(player -> player.getUUID().equals(ownerUuid))
+                .findFirst()
+                .orElse(null);
+        if (owner == null) {
+            return;
+        }
+        removeIdlePlaySource(id, musicCollectionClass, owner);
+    }
+
     public MusicResourceInfo getMusicResourceInfo(long id, Quality quality, String retryFor, ServerPlayer serverPlayer) {
         try {
             ServerPlayer sourcePlayer = findSourcePlayer(id);
@@ -511,6 +546,12 @@ public class MusicPlayerServerService {
     public void removeAllIdlePlaySource(ServerPlayer player) {
         idlePlaySources.remove(player);
         sendUpdateAllIdlePlaySourcesMessageTo(ILoginApiService.getInstance(ApiProvider.NCM).getLoginedPlayerInfoMap().keySet());
+    }
+
+    public Map<ServerPlayer, Set<IdlePlaySource>> getIdlePlaySourcesSnapshot() {
+        Map<ServerPlayer, Set<IdlePlaySource>> snapshot = new LinkedHashMap<>();
+        idlePlaySources.forEach((player, sources) -> snapshot.put(player, new LinkedHashSet<>(sources)));
+        return snapshot;
     }
 
     private record CacheKey(long musicId, Quality quality, UUID pusherPlayerUUID) {

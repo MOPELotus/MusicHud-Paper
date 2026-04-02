@@ -2,6 +2,7 @@ package indi.etern.musichud.paper;
 
 import indi.etern.musichud.MusicHud;
 import indi.etern.musichud.platform.Environment;
+import indi.etern.musichud.platform.plugin.paper.command.PaperServerAdminCommand;
 import indi.etern.musichud.platform.plugin.paper.config.ServerConfigDefinition;
 import indi.etern.musichud.platform.plugin.paper.event.PaperEventService;
 import indi.etern.musichud.platform.plugin.paper.network.PaperNetworkManager;
@@ -12,6 +13,7 @@ import org.bukkit.plugin.java.JavaPlugin;
 public final class CommonInitializer extends JavaPlugin {
     private PaperEventService eventService;
     private PaperNetworkManager networkManager;
+    private PaperServerAdminCommand serverAdminCommand;
 
     @Override
     public void onEnable() {
@@ -26,6 +28,8 @@ public final class CommonInitializer extends JavaPlugin {
 
         ServerConfigDefinition serverConfig = ServerConfigDefinition.getInstance();
         serverConfig.initialize(this);
+        serverAdminCommand = new PaperServerAdminCommand(this);
+        serverAdminCommand.register();
 
         try {
             MusicHud.init();
@@ -49,6 +53,7 @@ public final class CommonInitializer extends JavaPlugin {
             networkManager.close();
             networkManager = null;
         }
+        serverAdminCommand = null;
         eventService = null;
     }
 }

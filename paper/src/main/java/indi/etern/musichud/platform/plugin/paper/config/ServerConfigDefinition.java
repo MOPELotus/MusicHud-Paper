@@ -41,14 +41,23 @@ public final class ServerConfigDefinition implements ServerConfig {
 
     public void initialize(JavaPlugin plugin) {
         this.plugin = plugin;
-        plugin.reloadConfig();
-        FileConfiguration config = plugin.getConfig();
+        reloadFromDisk();
+    }
+
+    public void reloadFromDisk() {
+        JavaPlugin initializedPlugin = Objects.requireNonNull(plugin, "Paper server config is not initialized");
+        initializedPlugin.reloadConfig();
+        FileConfiguration config = initializedPlugin.getConfig();
         boolean changed = applyDefaults(config);
         load(config);
         configured = true;
         if (changed) {
-            plugin.saveConfig();
+            initializedPlugin.saveConfig();
         }
+    }
+
+    public String getConfiguredServerApiBinaryExecutablePath() {
+        return serverApiBinaryExecutablePath;
     }
 
     private boolean applyDefaults(FileConfiguration config) {

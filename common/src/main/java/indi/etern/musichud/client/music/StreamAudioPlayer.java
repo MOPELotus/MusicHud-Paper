@@ -6,7 +6,7 @@ import indi.etern.musichud.beans.music.MusicDetail;
 import indi.etern.musichud.beans.music.MusicResourceInfo;
 import indi.etern.musichud.beans.music.Quality;
 import indi.etern.musichud.client.music.decoder.AudioDecoder;
-import indi.etern.musichud.client.music.decoder.AudioFormatDetector;
+import indi.etern.musichud.client.music.decoder.AudioDecoderFactory;
 import indi.etern.musichud.client.services.MusicService;
 import indi.etern.musichud.interfaces.ClientConfig;
 import indi.etern.musichud.network.IClientNetworkService;
@@ -20,10 +20,8 @@ import net.minecraft.sounds.SoundSource;
 import org.apache.logging.log4j.Logger;
 import org.lwjgl.openal.AL10;
 
-import java.io.BufferedInputStream;
 import java.io.IOException;
-import java.io.InputStream;
-import java.net.*;
+import java.net.SocketException;
 import java.nio.ByteBuffer;
 import java.time.Duration;
 import java.time.ZonedDateTime;
@@ -74,27 +72,8 @@ public class StreamAudioPlayer {
         return instance;
     }
 
-    private static AudioDecoder loadAudioDecoder(String urlString, FormatType formatType) throws URISyntaxException, IOException {
-        URL url = new URI(urlString).toURL();
-        HttpURLConnection connection = (HttpURLConnection) url.openConnection();
-        connection.setConnectTimeout(5000);
-        connection.setReadTimeout(10000);
-        InputStream inputStream = connection.getInputStream();
-        BufferedInputStream bufferedStream = new BufferedInputStream(inputStream, 8192);
-
-        if (formatType != FormatType.AUTO) {
-            try {
-                FormatType detectedFormatType = AudioFormatDetector.detectFormat(bufferedStream);
-                if (detectedFormatType != FormatType.GENERIC && detectedFormatType != formatType) {
-                    LOGGER.warn("Detected format type {} does not match resource format type {}, using detected", detectedFormatType, formatType);
-                    return detectedFormatType.newDecoder(bufferedStream);
-                }
-            } catch (IOException e) {
-                LOGGER.warn("Failed to detect audio format from stream, using declared resource format {}", formatType, e);
-            }
-            return formatType.newDecoder(bufferedStream);
-        }
-        return formatType.newDecoder(bufferedStream);
+    private static AudioDecoder loadAudioDecoder(String urlString, FormatType formatType) {
+        return AudioDecoderFactory.open(urlString, formatType);
     }
 
     public Status getStatus() {
