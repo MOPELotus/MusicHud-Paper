@@ -1,10 +1,12 @@
 package indi.etern.musichud.client.music;
 
 import indi.etern.musichud.MusicHud;
+import indi.etern.musichud.beans.music.Fee;
 import indi.etern.musichud.beans.music.FormatType;
 import indi.etern.musichud.beans.music.MusicDetail;
 import indi.etern.musichud.beans.music.MusicResourceInfo;
 import indi.etern.musichud.beans.music.Quality;
+import indi.etern.musichud.client.music.decoder.AudioFormatDetector;
 import indi.etern.musichud.client.music.decoder.AudioDecoder;
 import indi.etern.musichud.client.music.decoder.AudioDecoderFactory;
 import indi.etern.musichud.client.services.MusicService;
@@ -60,6 +62,9 @@ public class StreamAudioPlayer {
     private volatile boolean isBuffering = false;
     private volatile ZonedDateTime serverStartTime;
     private MusicDetail currentMusicDetail;
+    private volatile boolean directPlayback = false;
+    private volatile MusicResourceInfo directMusicResourceInfo = MusicResourceInfo.NONE;
+    private volatile boolean downloadCompleted = false;
 
     public static StreamAudioPlayer getInstance() {
         if (instance == null) {
@@ -94,17 +99,45 @@ public class StreamAudioPlayer {
         } catch (InterruptedException ignored) {
         } finally {
             LOGGER.info("Fully retrying");
-            playAsync(currentMusicDetail, currentStartTime);
+            if (directPlayback && directMusicResourceInfo != null && !directMusicResourceInfo.equals(MusicResourceInfo.NONE)) {
+                playDirectAsync(directMusicResourceInfo.getUrl(), directMusicResourceInfo.getType(), currentStartTime);
+            } else {
+                playAsync(currentMusicDetail, currentStartTime);
+            }
         }
     }
 
     public CompletableFuture<ZonedDateTime> playAsync(MusicDetail musicDetail, ZonedDateTime startTime) {
+        currentMusicDetail = musicDetail;
+        currentStartTime = startTime == null ? ZonedDateTime.now() : startTime;
+        directPlayback = false;
+        directMusicResourceInfo = MusicResourceInfo.NONE;
+        return beginPlayback(startTime);
+    }
+
+    public CompletableFuture<ZonedDateTime> playDirectAsync(String identifier, FormatType formatType, ZonedDateTime startTime) {
+        currentMusicDetail = MusicDetail.NONE;
+        currentStartTime = startTime == null ? ZonedDateTime.now() : startTime;
+        directPlayback = true;
+        directMusicResourceInfo = new MusicResourceInfo(
+                0L,
+                AudioFormatDetector.normalizeIdentifier(identifier),
+                0,
+                0L,
+                formatType == null ? FormatType.AUTO : formatType,
+                "",
+                Fee.UNSET,
+                0
+        );
+        return beginPlayback(startTime);
+    }
+
+    private CompletableFuture<ZonedDateTime> beginPlayback(ZonedDateTime startTime) {
         synchronized (StreamAudioPlayer.class) {
             try {
-                currentMusicDetail = musicDetail;
-                currentStartTime = startTime == null ? ZonedDateTime.now() : startTime;
                 stopInternal(); // 先停止之前的播放
                 setStatus(Status.BUFFERING);
+                downloadCompleted = false;
 
                 source = AL10.alGenSources();
                 checkALError("alGenSources");
@@ -236,7 +269,7 @@ public class StreamAudioPlayer {
 
                                     if (audioData == null) {
                                         // 没有数据可用
-                                        if (audioBuffer.isEmpty() && NowPlayingInfo.getInstance().isCompleted()) {
+                                        if (audioBuffer.isEmpty() && (downloadCompleted || NowPlayingInfo.getInstance().isCompleted())) {
                                             // 播放已完成且缓冲区为空，结束播放
                                             LOGGER.debug("No more audio data available");
                                             shouldContinuePlaying = false;
@@ -325,7 +358,9 @@ public class StreamAudioPlayer {
         MusicResourceInfo musicResourceInfo = MusicResourceInfo.NONE;
         while (shouldContinueDownloading) {
             try {
-                if (musicResourceInfo.equals(MusicResourceInfo.NONE) || localRetryCount % 3 == 0) {
+                if (directPlayback) {
+                    musicResourceInfo = directMusicResourceInfo;
+                } else if (musicResourceInfo.equals(MusicResourceInfo.NONE) || localRetryCount % 3 == 0) {
                     musicResourceInfo = getCurrentMusicResourceInfo(clientConfig.getPrimaryChosenQuality(), musicResourceInfo).get();
                 }
                 LOGGER.debug("Starting audio download (attempt {})", localRetryCount + 1);
@@ -391,13 +426,14 @@ public class StreamAudioPlayer {
                 // 继续下载剩余数据
                 while (shouldContinueDownloading) {
                     byte[] audioData = decoder.readChunk(BUFFER_SIZE);
+                    if (audioData == null) {
+                        break;
+                    }
 
                     // 如果缓冲区已满，等待一会儿
                     while (shouldContinueDownloading && audioBuffer.remainingCapacity() == 0) {
                         Thread.sleep(50);
                     }
-                    if (audioData == null) continue;
-
                     if (!shouldContinueDownloading) break;
 
                     audioBuffer.put(audioData);
@@ -406,6 +442,7 @@ public class StreamAudioPlayer {
 
                 // 下载完成
                 LOGGER.debug("Audio download completed");
+                downloadCompleted = true;
                 break;
             } catch (InterruptedException e) {
                 LOGGER.debug("Download stopped by interruption");
@@ -529,6 +566,7 @@ public class StreamAudioPlayer {
         }
 
         lastVolume = 1;
+        downloadCompleted = false;
         cleanup();
     }
 

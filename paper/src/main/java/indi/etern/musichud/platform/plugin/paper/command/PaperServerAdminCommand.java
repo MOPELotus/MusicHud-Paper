@@ -11,10 +11,12 @@ import indi.etern.musichud.beans.music.MusicDetail;
 import indi.etern.musichud.beans.music.Playlist;
 import indi.etern.musichud.client.music.decoder.AudioDecodeProbe;
 import indi.etern.musichud.client.music.decoder.AudioDecoderFactory;
+import indi.etern.musichud.network.payloads.pushMessages.s2c.DebugPlaytestMessage;
 import indi.etern.musichud.platform.plugin.paper.config.ServerConfigDefinition;
 import indi.etern.musichud.server.api.ApiProvider;
 import indi.etern.musichud.server.api.ApiServerManager;
 import indi.etern.musichud.server.api.ILoginApiService;
+import indi.etern.musichud.network.IServerNetworkService;
 import indi.etern.musichud.server.api.MusicPlayerServerService;
 import indi.etern.musichud.server.api.impl.ncm.LoginApiService;
 import net.minecraft.server.level.ServerPlayer;
@@ -49,7 +51,7 @@ public final class PaperServerAdminCommand implements CommandExecutor, TabComple
     private static final String COMMAND_NAME = "musichudserver";
     private static final String ADMIN_PERMISSION = "musichud.admin";
     private static final String RELOAD_PERMISSION = "musichud.reload";
-    private static final List<String> ROOT_SUBCOMMANDS = List.of("help", "status", "player", "config", "api", "playback", "test");
+    private static final List<String> ROOT_SUBCOMMANDS = List.of("help", "status", "player", "config", "api", "playback", "test", "playtest");
     private static final List<String> CONFIG_KEYS = List.of(
             "serverApiBaseUrl",
             "startupBinaryApiServerWhenLaunch",
@@ -87,6 +89,7 @@ public final class PaperServerAdminCommand implements CommandExecutor, TabComple
             case "api" -> handleApi(sender, args);
             case "playback" -> handlePlayback(sender, args);
             case "test" -> handleTest(sender, args);
+            case "playtest" -> handlePlaytest(sender, args);
             default -> {
                 send(sender, "未知子命令，使用 /" + label + " help 查看帮助。");
                 yield true;
@@ -142,6 +145,29 @@ public final class PaperServerAdminCommand implements CommandExecutor, TabComple
         }
         if ("test".equals(root) && args.length >= 2) {
             return filterSuggestions(Arrays.stream(FormatType.values()).map(Enum::name).toList(), args[args.length - 1]);
+        }
+        if ("playtest".equals(root)) {
+            if (args.length == 2) {
+                List<String> suggestions = new ArrayList<>();
+                suggestions.add("stop");
+                if (sender instanceof Player) {
+                    suggestions.add("self");
+                }
+                suggestions.addAll(onlinePlayerNames());
+                return filterSuggestions(suggestions, args[1]);
+            }
+            if (args.length >= 3 && equalsAny(args[1], "stop")) {
+                return filterSuggestions(onlinePlayerNames(), args[2]);
+            }
+            if (sender instanceof Player && looksLikeIdentifierToken(args[1]) && args.length >= 3) {
+                return filterSuggestions(Arrays.stream(FormatType.values()).map(Enum::name).toList(), args[args.length - 1]);
+            }
+            if (sender instanceof Player && equalsAny(args[1], "self", "@s") && args.length >= 4) {
+                return filterSuggestions(Arrays.stream(FormatType.values()).map(Enum::name).toList(), args[args.length - 1]);
+            }
+            if (args.length >= 4) {
+                return filterSuggestions(Arrays.stream(FormatType.values()).map(Enum::name).toList(), args[args.length - 1]);
+            }
         }
 
         return List.of();
@@ -439,7 +465,13 @@ public final class PaperServerAdminCommand implements CommandExecutor, TabComple
             send(sender, "用法: /" + COMMAND_NAME + " test <路径或URL> [declaredFormat]");
             return true;
         }
-        ParsedTestInput parsedInput = parseTestInput(args);
+        ParsedTestInput parsedInput;
+        try {
+            parsedInput = parseTestInput(args, 1);
+        } catch (IllegalArgumentException e) {
+            send(sender, e.getMessage());
+            return true;
+        }
         send(sender, "开始测试解码器: " + parsedInput.identifier());
         MusicHud.EXECUTOR.execute(() -> {
             try {
@@ -461,6 +493,60 @@ public final class PaperServerAdminCommand implements CommandExecutor, TabComple
                 runOnServerThread(() -> send(sender, "解码失败: " + rootMessage(e)));
             }
         });
+        return true;
+    }
+
+    private boolean handlePlaytest(CommandSender sender, String[] args) {
+        if (!requireAdmin(sender)) {
+            return true;
+        }
+        if (args.length < 2) {
+            send(sender, "用法: /" + COMMAND_NAME + " playtest <路径或URL> [declaredFormat]");
+            send(sender, "控制台用法: /" + COMMAND_NAME + " playtest <玩家> <客户端路径或URL> [declaredFormat]");
+            send(sender, "停止用法: /" + COMMAND_NAME + " playtest stop [玩家]");
+            return true;
+        }
+
+        if (equalsAny(args[1], "stop")) {
+            Player target = resolvePlaytestTarget(sender, args, 2);
+            if (target == null) {
+                return true;
+            }
+            IServerNetworkService.getInstance().sendToPlayer(((CraftPlayer) target).getHandle(),
+                    new DebugPlaytestMessage("", FormatType.AUTO, true));
+            send(sender, "已请求停止客户端调试播放: " + target.getName());
+            return true;
+        }
+
+        Player target;
+        ParsedTestInput parsedInput;
+        try {
+            if (sender instanceof Player player && looksLikeIdentifierToken(args[1])) {
+                target = player;
+                parsedInput = parseTestInput(args, 1);
+            } else if (sender instanceof Player player && equalsAny(args[1], "self", "@s")) {
+                target = player;
+                parsedInput = parseTestInput(args, 2);
+            } else {
+                if (args.length < 3) {
+                    send(sender, "控制台或指定目标时需要: /" + COMMAND_NAME + " playtest <玩家> <客户端路径或URL> [declaredFormat]");
+                    return true;
+                }
+                target = findOnlinePlayer(args[1]);
+                if (target == null) {
+                    send(sender, "未找到在线玩家: " + args[1]);
+                    return true;
+                }
+                parsedInput = parseTestInput(args, 2);
+            }
+        } catch (IllegalArgumentException e) {
+            send(sender, e.getMessage());
+            return true;
+        }
+
+        IServerNetworkService.getInstance().sendToPlayer(((CraftPlayer) target).getHandle(),
+                new DebugPlaytestMessage(parsedInput.identifier(), parsedInput.declaredFormat(), false));
+        send(sender, "已请求客户端调试播放: " + target.getName() + " -> " + parsedInput.identifier() + " [" + parsedInput.declaredFormat() + "]");
         return true;
     }
 
@@ -502,6 +588,9 @@ public final class PaperServerAdminCommand implements CommandExecutor, TabComple
         send(sender, "/" + label + " playback queue [remove <索引>]");
         send(sender, "/" + label + " playback idle [remove <玩家> <playlist|album> <ID>]");
         send(sender, "/" + label + " test <路径或URL> [declaredFormat]");
+        send(sender, "/" + label + " playtest <路径或URL> [declaredFormat]  (对自己客户端)");
+        send(sender, "/" + label + " playtest <玩家> <客户端路径或URL> [declaredFormat]");
+        send(sender, "/" + label + " playtest stop [玩家]");
     }
 
     private boolean requireAdmin(CommandSender sender) {
@@ -618,21 +707,59 @@ public final class PaperServerAdminCommand implements CommandExecutor, TabComple
         };
     }
 
-    private static ParsedTestInput parseTestInput(String[] args) {
-        if (args.length == 2) {
-            return new ParsedTestInput(args[1], FormatType.AUTO);
+    private static ParsedTestInput parseTestInput(String[] args, int startInclusive) {
+        int tokenCount = args.length - startInclusive;
+        if (tokenCount <= 0) {
+            throw new IllegalArgumentException("缺少路径或 URL");
+        }
+        if (tokenCount == 1) {
+            return new ParsedTestInput(args[startInclusive], FormatType.AUTO);
         }
         FormatType candidate = FormatType.fromSerializedName(args[args.length - 1]);
         boolean explicitFormat = candidate != FormatType.GENERIC
                 || equalsAny(args[args.length - 1], "generic", "auto");
         if (explicitFormat) {
-            return new ParsedTestInput(joinArgs(args, 1, args.length - 1), candidate);
+            return new ParsedTestInput(joinArgs(args, startInclusive, args.length - 1), candidate);
         }
-        return new ParsedTestInput(joinArgs(args, 1, args.length), FormatType.AUTO);
+        return new ParsedTestInput(joinArgs(args, startInclusive, args.length), FormatType.AUTO);
+    }
+
+    private @Nullable Player resolvePlaytestTarget(CommandSender sender, String[] args, int playerIndex) {
+        if (args.length > playerIndex) {
+            Player target = findOnlinePlayer(args[playerIndex]);
+            if (target == null) {
+                send(sender, "未找到在线玩家: " + args[playerIndex]);
+            }
+            return target;
+        }
+        if (sender instanceof Player player) {
+            return player;
+        }
+        send(sender, "控制台需要显式指定玩家。");
+        return null;
     }
 
     private static String joinArgs(String[] args, int startInclusive, int endExclusive) {
         return String.join(" ", Arrays.copyOfRange(args, startInclusive, endExclusive));
+    }
+
+    private static boolean looksLikeIdentifierToken(String token) {
+        String lower = token.toLowerCase(Locale.ROOT);
+        return token.contains(":")
+                || token.contains("\\")
+                || token.contains("/")
+                || token.startsWith(".")
+                || lower.endsWith(".mp3")
+                || lower.endsWith(".flac")
+                || lower.endsWith(".wav")
+                || lower.endsWith(".ogg")
+                || lower.endsWith(".opus")
+                || lower.endsWith(".aac")
+                || lower.endsWith(".m4a")
+                || lower.endsWith(".mp4")
+                || lower.endsWith(".aiff")
+                || lower.endsWith(".aif")
+                || lower.endsWith(".au");
     }
 
     private static String formatOpenAl(int format) {

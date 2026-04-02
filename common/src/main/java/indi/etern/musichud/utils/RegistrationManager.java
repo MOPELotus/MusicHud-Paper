@@ -55,6 +55,7 @@ public class RegistrationManager {
             "indi.etern.musichud.network.payloads.pushMessages.s2c.LoginResultMessage$RegisterImpl",
             "indi.etern.musichud.network.payloads.pushMessages.s2c.SyncCurrentPlayingMessage$RegisterImpl",
             "indi.etern.musichud.network.payloads.pushMessages.s2c.UpdateAllIdlePlaySourcesMessage$RegisterImpl",
+            "indi.etern.musichud.network.payloads.pushMessages.s2c.DebugPlaytestMessage$RegisterImpl",
             "indi.etern.musichud.network.payloads.pushMessages.c2s.AddToIdlePlaySourceMessage$RegisterImpl",
             "indi.etern.musichud.network.payloads.pushMessages.c2s.RemoveFromIdlePlaySourceMessage$RegisterImpl",
             "indi.etern.musichud.network.payloads.pushMessages.c2s.ClientPushMusicToQueueMessage$RegisterImpl",
