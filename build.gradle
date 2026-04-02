@@ -51,6 +51,10 @@ configure(subprojects.findAll { it.name != 'paper' }) {
             name "JitPack"
             url 'https://jitpack.io'
         }
+        maven {
+            name = "dv8tion"
+            url = "https://m2.dv8tion.net/releases"
+        }
         flatDir{
             dir "$projectDir/libs"
         }

@@ -28,6 +28,10 @@ repositories {
         name = 'PaperMC'
         url = 'https://repo.papermc.io/repository/maven-public/'
     }
+    maven {
+        name = 'dv8tion'
+        url = 'https://m2.dv8tion.net/releases'
+    }
 }
 
 dependencies {
@@ -42,6 +46,9 @@ dependencies {
     testAnnotationProcessor "org.projectlombok:lombok:$rootProject.lombok_version"
     testImplementation "org.junit.jupiter:junit-jupiter:$rootProject.junit_version"
     testRuntimeOnly "org.junit.platform:junit-platform-launcher"
+
+    implementation "com.sedmelluq:lavaplayer:$rootProject.lavaplayer_version"
+    shadowBundle "com.sedmelluq:lavaplayer:$rootProject.lavaplayer_version"
 }
 
 java {

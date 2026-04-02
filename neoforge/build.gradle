@@ -67,13 +67,9 @@ dependencies {
         exclude group: "org.commonmark"
     }
 
-    implementation "com.github.umjammer:jlayer:$rootProject.jlayer_version"
-    shadowBundle "com.github.umjammer:jlayer:$rootProject.jlayer_version"
-    forgeRuntimeLibrary "com.github.umjammer:jlayer:$rootProject.jlayer_version"
-
-    implementation "org.jflac:jflac-codec:$rootProject.jflac_version"
-    shadowBundle "org.jflac:jflac-codec:$rootProject.jflac_version"
-    forgeRuntimeLibrary "org.jflac:jflac-codec:$rootProject.jflac_version"
+    implementation "com.sedmelluq:lavaplayer:$rootProject.lavaplayer_version"
+    shadowBundle "com.sedmelluq:lavaplayer:$rootProject.lavaplayer_version"
+    forgeRuntimeLibrary "com.sedmelluq:lavaplayer:$rootProject.lavaplayer_version"
 }
 processResources {
     inputs.property 'version', project.version
