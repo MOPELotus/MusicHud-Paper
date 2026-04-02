@@ -50,6 +50,7 @@ public final class PaperServerAdminCommand {
     private static final List<String> COMMAND_ALIASES = List.of("music");
     private static final String ADMIN_PERMISSION = "musichud.admin";
     private static final String RELOAD_PERMISSION = "musichud.reload";
+    private static final String PREFIX = ChatColor.DARK_GRAY + "[" + ChatColor.GOLD + "MusicHud" + ChatColor.DARK_GRAY + "] " + ChatColor.RESET;
     private static final List<String> ROOT_SUBCOMMANDS = List.of("help", "status", "player", "config", "api", "playback", "test", "playtest");
     private static final List<String> CONFIG_KEYS = List.of(
             "serverApiBaseUrl",
@@ -102,7 +103,8 @@ public final class PaperServerAdminCommand {
             case "test" -> handleTest(sender, args);
             case "playtest" -> handlePlaytest(sender, args);
             default -> {
-                send(sender, "未知子命令，使用 /" + COMMAND_NAME + " help 查看帮助。");
+                sendError(sender, "未知子命令: " + args[0]);
+                sendHint(sender, "使用 /" + COMMAND_NAME + " help 查看帮助。");
                 yield true;
             }
         };
@@ -200,14 +202,21 @@ public final class PaperServerAdminCommand {
                 .filter(info -> info.getLoginCookieInfo().type() != indi.etern.musichud.beans.login.LoginType.UNLOGGED)
                 .count();
         int idleSourceCount = idleSources.values().stream().mapToInt(Set::size).sum();
-        send(sender, "MusicHud " + Version.current);
-        send(sender, "API 状态: " + ApiServerManager.getBinaryApiServerStatus());
-        send(sender, "API 地址: " + serverConfig.getServerApiBaseUrl());
-        send(sender, "内置 API 开机启动: " + serverConfig.getStartupBinaryApiServerWhenLaunch());
-        send(sender, "在线玩家: " + Bukkit.getOnlinePlayers().size() + "，已追踪登录状态: " + loginInfoMap.size() + "，有账号信息: " + loggedAccountCount);
-        send(sender, "当前播放: " + describeMusic(musicService.getCurrentMusicDetail()));
-        send(sender, "下一首空闲播放: " + describeMusic(musicService.getNextIdleMusicDetail()));
-        send(sender, "队列数量: " + musicService.getMusicQueue().size() + "，空闲播放拥有者: " + idleSources.size() + "，空闲播放源: " + idleSourceCount);
+        sendCommandHeader(sender, "服务端状态");
+        sendField(sender, "版本", Version.current);
+        sendField(sender, "API 状态", formatStatusValue(ApiServerManager.getBinaryApiServerStatus()));
+        sendField(sender, "API 地址", serverConfig.getServerApiBaseUrl());
+        sendField(sender, "内置 API 开机启动", formatBooleanValue(serverConfig.getStartupBinaryApiServerWhenLaunch()));
+        sendSectionTitle(sender, "在线情况");
+        sendField(sender, "在线玩家", Bukkit.getOnlinePlayers().size());
+        sendField(sender, "已追踪登录状态", loginInfoMap.size());
+        sendField(sender, "有账号信息", loggedAccountCount);
+        sendSectionTitle(sender, "播放情况");
+        sendField(sender, "当前播放", describeMusic(musicService.getCurrentMusicDetail()));
+        sendField(sender, "下一首空闲播放", describeMusic(musicService.getNextIdleMusicDetail()));
+        sendField(sender, "队列数量", musicService.getMusicQueue().size());
+        sendField(sender, "空闲播放拥有者", idleSources.size());
+        sendField(sender, "空闲播放源", idleSourceCount);
         return true;
     }
 
@@ -216,12 +225,12 @@ public final class PaperServerAdminCommand {
             return true;
         }
         if (args.length < 2) {
-            send(sender, "用法: /" + COMMAND_NAME + " player <玩家名>");
+            sendUsage(sender, "/" + COMMAND_NAME + " player <玩家名>");
             return true;
         }
         Player player = findOnlinePlayer(args[1]);
         if (player == null) {
-            send(sender, "未找到在线玩家: " + args[1]);
+            sendError(sender, "未找到在线玩家: " + args[1]);
             return true;
         }
         ServerPlayer serverPlayer = ((CraftPlayer) player).getHandle();
@@ -233,28 +242,31 @@ public final class PaperServerAdminCommand {
                 .getOrDefault(serverPlayer, Set.of())
                 .size();
 
-        send(sender, "玩家: " + player.getName());
-        send(sender, "UUID: " + player.getUniqueId());
+        sendCommandHeader(sender, "玩家详情");
+        sendField(sender, "玩家", player.getName());
+        sendField(sender, "UUID", player.getUniqueId());
         if (loginInfo == null) {
-            send(sender, "登录状态: 未追踪");
+            sendField(sender, "登录状态", ChatColor.RED + "未追踪");
         } else {
             LoginCookieInfo cookieInfo = loginInfo.getLoginCookieInfo();
-            send(sender, "登录类型: " + (cookieInfo == null ? "UNKNOWN" : cookieInfo.type()));
-            send(sender, "VIP 类型: " + Objects.requireNonNullElse(loginInfo.getVipType(), indi.etern.musichud.beans.user.VipType.NORMAL));
+            sendField(sender, "登录类型", cookieInfo == null ? ChatColor.GRAY + "UNKNOWN" : ChatColor.GREEN + cookieInfo.type().name());
+            sendField(sender, "VIP 类型", Objects.requireNonNullElse(loginInfo.getVipType(), indi.etern.musichud.beans.user.VipType.NORMAL));
             if (loginInfo.getProfile() != null) {
-                send(sender, "账号: " + loginInfo.getProfile().getNickname() + " (UID: " + loginInfo.getProfile().getUserId() + ")");
+                sendField(sender, "账号", loginInfo.getProfile().getNickname() + " (UID: " + loginInfo.getProfile().getUserId() + ")");
             }
             if (cookieInfo != null) {
-                send(sender, "Cookie 时间: " + cookieInfo.generateTime());
+                sendField(sender, "Cookie 时间", cookieInfo.generateTime());
             }
         }
-        send(sender, "排队歌曲: " + queuedByPlayer + "，空闲播放源: " + idleSourceCount);
+        sendSectionTitle(sender, "播放统计");
+        sendField(sender, "排队歌曲", queuedByPlayer);
+        sendField(sender, "空闲播放源", idleSourceCount);
         return true;
     }
 
     private boolean handleConfig(CommandSender sender, String[] args) {
         if (args.length < 2) {
-            send(sender, "用法: /" + COMMAND_NAME + " config <show|set|save|reload> ...");
+            sendUsage(sender, "/" + COMMAND_NAME + " config <show|set|save|reload> ...");
             return true;
         }
         String action = args[1].toLowerCase(Locale.ROOT);
@@ -264,7 +276,7 @@ public final class PaperServerAdminCommand {
             case "save" -> handleConfigSave(sender);
             case "reload" -> handleConfigReload(sender);
             default -> {
-                send(sender, "未知 config 子命令: " + args[1]);
+                sendError(sender, "未知 config 子命令: " + args[1]);
                 yield true;
             }
         };
@@ -275,12 +287,13 @@ public final class PaperServerAdminCommand {
             return true;
         }
         ServerConfigDefinition serverConfig = ServerConfigDefinition.getInstance();
-        send(sender, "serverApiBaseUrl = " + serverConfig.getServerApiBaseUrl());
-        send(sender, "startupBinaryApiServerWhenLaunch = " + serverConfig.getStartupBinaryApiServerWhenLaunch());
-        send(sender, "serverApiBinaryExecutablePath = " + serverConfig.getConfiguredServerApiBinaryExecutablePath());
-        send(sender, "resolvedServerApiBinaryExecutablePath = " + serverConfig.getServerApiBinaryExecutablePath());
-        send(sender, "pusherVoteAdditionalRate = " + serverConfig.getPusherVoteAdditionalRate());
-        send(sender, "useRandomCnIp = " + serverConfig.getUseRandomCnIp());
+        sendCommandHeader(sender, "当前配置");
+        sendField(sender, "serverApiBaseUrl", serverConfig.getServerApiBaseUrl());
+        sendField(sender, "startupBinaryApiServerWhenLaunch", formatBooleanValue(serverConfig.getStartupBinaryApiServerWhenLaunch()));
+        sendField(sender, "serverApiBinaryExecutablePath", serverConfig.getConfiguredServerApiBinaryExecutablePath());
+        sendField(sender, "resolvedServerApiBinaryExecutablePath", serverConfig.getServerApiBinaryExecutablePath());
+        sendField(sender, "pusherVoteAdditionalRate", serverConfig.getPusherVoteAdditionalRate());
+        sendField(sender, "useRandomCnIp", formatBooleanValue(serverConfig.getUseRandomCnIp()));
         return true;
     }
 
@@ -289,7 +302,7 @@ public final class PaperServerAdminCommand {
             return true;
         }
         if (args.length < 4) {
-            send(sender, "用法: /" + COMMAND_NAME + " config set <键> <值>");
+            sendUsage(sender, "/" + COMMAND_NAME + " config set <键> <值>");
             return true;
         }
         ServerConfigDefinition serverConfig = ServerConfigDefinition.getInstance();
@@ -303,15 +316,17 @@ public final class PaperServerAdminCommand {
                 case "pusherVoteAdditionalRate" -> serverConfig.setPusherVoteAdditionalRate(Double.parseDouble(value.trim()));
                 case "useRandomCnIp" -> serverConfig.setUseRandomCnIp(parseBoolean(value));
                 default -> {
-                    send(sender, "未知配置键: " + key);
+                    sendError(sender, "未知配置键: " + key);
                     return true;
                 }
             }
         } catch (IllegalArgumentException e) {
-            send(sender, "配置值无效: " + e.getMessage());
+            sendError(sender, "配置值无效: " + e.getMessage());
             return true;
         }
-        send(sender, "已更新内存中的配置 " + key + " = " + value + "，使用 /" + COMMAND_NAME + " config save 持久化并应用。");
+        sendSuccess(sender, "已更新内存中的配置。");
+        sendField(sender, key, value);
+        sendHint(sender, "使用 /" + COMMAND_NAME + " config save 持久化并应用。");
         return true;
     }
 
@@ -322,7 +337,7 @@ public final class PaperServerAdminCommand {
         ServerConfigDefinition serverConfig = ServerConfigDefinition.getInstance();
         serverConfig.save();
         syncEmbeddedApiServer();
-        send(sender, "服务器配置已保存。");
+        sendSuccess(sender, "服务器配置已保存并应用。");
         return true;
     }
 
@@ -333,7 +348,7 @@ public final class PaperServerAdminCommand {
         ServerConfigDefinition serverConfig = ServerConfigDefinition.getInstance();
         serverConfig.reloadFromDisk();
         syncEmbeddedApiServer();
-        send(sender, "服务器配置已从磁盘重载。");
+        sendSuccess(sender, "服务器配置已从磁盘重载。");
         return true;
     }
 
@@ -342,26 +357,27 @@ public final class PaperServerAdminCommand {
             return true;
         }
         if (args.length < 2) {
-            send(sender, "用法: /" + COMMAND_NAME + " api <status|restart|stop>");
+            sendUsage(sender, "/" + COMMAND_NAME + " api <status|restart|stop>");
             return true;
         }
         return switch (args[1].toLowerCase(Locale.ROOT)) {
             case "status" -> {
-                send(sender, "API 状态: " + ApiServerManager.getBinaryApiServerStatus());
+                sendCommandHeader(sender, "API 管理");
+                sendField(sender, "API 状态", formatStatusValue(ApiServerManager.getBinaryApiServerStatus()));
                 yield true;
             }
             case "restart" -> {
                 ApiServerManager.restartApiServer();
-                send(sender, "已请求重启内置 API 服务器。");
+                sendSuccess(sender, "已请求重启内置 API 服务器。");
                 yield true;
             }
             case "stop" -> {
                 ApiServerManager.stopApiServer();
-                send(sender, "已请求停止内置 API 服务器。");
+                sendSuccess(sender, "已请求停止内置 API 服务器。");
                 yield true;
             }
             default -> {
-                send(sender, "未知 api 子命令: " + args[1]);
+                sendError(sender, "未知 api 子命令: " + args[1]);
                 yield true;
             }
         };
@@ -372,19 +388,19 @@ public final class PaperServerAdminCommand {
             return true;
         }
         if (args.length < 2) {
-            send(sender, "用法: /" + COMMAND_NAME + " playback <skip|queue|idle> ...");
+            sendUsage(sender, "/" + COMMAND_NAME + " playback <skip|queue|idle> ...");
             return true;
         }
         return switch (args[1].toLowerCase(Locale.ROOT)) {
             case "skip" -> {
                 MusicPlayerServerService.getInstance().forceSkipCurrent();
-                send(sender, "已请求强制切歌。");
+                sendSuccess(sender, "已请求强制切歌。");
                 yield true;
             }
             case "queue" -> handlePlaybackQueue(sender, args);
             case "idle" -> handlePlaybackIdle(sender, args);
             default -> {
-                send(sender, "未知 playback 子命令: " + args[1]);
+                sendError(sender, "未知 playback 子命令: " + args[1]);
                 yield true;
             }
         };
@@ -395,13 +411,13 @@ public final class PaperServerAdminCommand {
         List<MusicDetail> queue = new ArrayList<>(musicService.getMusicQueue());
         if (args.length == 2) {
             if (queue.isEmpty()) {
-                send(sender, "当前播放队列为空。");
+                sendWarning(sender, "当前播放队列为空。");
                 return true;
             }
-            send(sender, "当前播放队列:");
+            sendCommandHeader(sender, "播放队列");
             for (int i = 0; i < queue.size(); i++) {
                 MusicDetail musicDetail = queue.get(i);
-                send(sender, "#" + i + " " + describeMusic(musicDetail));
+                sendListItem(sender, "#" + i + " " + describeMusic(musicDetail));
             }
             return true;
         }
@@ -410,19 +426,20 @@ public final class PaperServerAdminCommand {
             try {
                 index = Integer.parseInt(args[3]);
             } catch (NumberFormatException e) {
-                send(sender, "队列索引无效: " + args[3]);
+                sendError(sender, "队列索引无效: " + args[3]);
                 return true;
             }
             if (index < 0 || index >= queue.size()) {
-                send(sender, "队列索引超出范围。");
+                sendError(sender, "队列索引超出范围。");
                 return true;
             }
             MusicDetail target = queue.get(index);
             musicService.forceRemoveMusicDetailFromQueue(index, target.getId());
-            send(sender, "已从队列移除: " + describeMusic(target));
+            sendSuccess(sender, "已从队列移除歌曲。");
+            sendField(sender, "已移除", describeMusic(target));
             return true;
         }
-        send(sender, "用法: /" + COMMAND_NAME + " playback queue [remove <索引>]");
+        sendUsage(sender, "/" + COMMAND_NAME + " playback queue [remove <索引>]");
         return true;
     }
 
@@ -431,16 +448,17 @@ public final class PaperServerAdminCommand {
         Map<ServerPlayer, Set<IdlePlaySource>> snapshot = new LinkedHashMap<>(musicService.getIdlePlaySourcesSnapshot());
         if (args.length == 2) {
             if (snapshot.isEmpty()) {
-                send(sender, "当前没有空闲播放源。");
+                sendWarning(sender, "当前没有空闲播放源。");
                 return true;
             }
-            send(sender, "当前空闲播放源:");
+            sendCommandHeader(sender, "空闲播放源");
             snapshot.entrySet().stream()
                     .sorted(Comparator.comparing(entry -> entry.getKey().getName().getString(), String.CASE_INSENSITIVE_ORDER))
                     .forEach(entry -> {
                         for (IdlePlaySource source : entry.getValue()) {
                             String collectionName = source.getMusicCollection() == null ? "<未加载>" : source.getMusicCollection().getName();
-                            send(sender, entry.getKey().getName().getString() + " -> " + describeCollectionType(source.getType()) + " " + source.getId() + " [" + collectionName + "]");
+                            sendListItem(sender, entry.getKey().getName().getString() + " -> "
+                                    + describeCollectionType(source.getType()) + " " + source.getId() + " [" + collectionName + "]");
                         }
                     });
             return true;
@@ -448,26 +466,29 @@ public final class PaperServerAdminCommand {
         if (args.length >= 6 && equalsAny(args[2], "remove")) {
             Player owner = findOnlinePlayer(args[3]);
             if (owner == null) {
-                send(sender, "未找到在线玩家: " + args[3]);
+                sendError(sender, "未找到在线玩家: " + args[3]);
                 return true;
             }
             Class<?> collectionClass = parseCollectionClass(args[4]);
             if (collectionClass == null) {
-                send(sender, "无效的播放源类型，支持 playlist 或 album。");
+                sendError(sender, "无效的播放源类型，支持 playlist 或 album。");
                 return true;
             }
             long id;
             try {
                 id = Long.parseLong(args[5]);
             } catch (NumberFormatException e) {
-                send(sender, "播放源 ID 无效: " + args[5]);
+                sendError(sender, "播放源 ID 无效: " + args[5]);
                 return true;
             }
             musicService.forceRemoveIdlePlaySource(owner.getUniqueId(), id, collectionClass);
-            send(sender, "已请求移除空闲播放源: " + owner.getName() + " / " + describeCollectionType(collectionClass) + " / " + id);
+            sendSuccess(sender, "已请求移除空闲播放源。");
+            sendField(sender, "目标玩家", owner.getName());
+            sendField(sender, "播放源类型", describeCollectionType(collectionClass));
+            sendField(sender, "播放源 ID", id);
             return true;
         }
-        send(sender, "用法: /" + COMMAND_NAME + " playback idle [remove <玩家> <playlist|album> <ID>]");
+        sendUsage(sender, "/" + COMMAND_NAME + " playback idle [remove <玩家> <playlist|album> <ID>]");
         return true;
     }
 
@@ -476,35 +497,38 @@ public final class PaperServerAdminCommand {
             return true;
         }
         if (args.length < 2) {
-            send(sender, "用法: /" + COMMAND_NAME + " test <路径或URL> [declaredFormat]");
+            sendUsage(sender, "/" + COMMAND_NAME + " test <路径或URL> [declaredFormat]");
             return true;
         }
         ParsedTestInput parsedInput;
         try {
             parsedInput = parseTestInput(args, 1);
         } catch (IllegalArgumentException e) {
-            send(sender, e.getMessage());
+            sendError(sender, e.getMessage());
             return true;
         }
-        send(sender, "开始测试解码器: " + parsedInput.identifier());
+        sendCommandHeader(sender, "解码探针");
+        sendField(sender, "目标", parsedInput.identifier());
+        sendField(sender, "声明格式", parsedInput.declaredFormat());
+        sendHint(sender, "正在异步探测解码器信息...");
         MusicHud.EXECUTOR.execute(() -> {
             try {
                 AudioDecodeProbe probe = AudioDecoderFactory.probe(parsedInput.identifier(), parsedInput.declaredFormat());
                 runOnServerThread(() -> {
-                    send(sender, "解码成功。");
-                    send(sender, "identifier = " + probe.identifier());
-                    send(sender, "declaredFormat = " + probe.declaredFormat());
-                    send(sender, "detectedFormat = " + probe.detectedFormat());
-                    send(sender, "backend = " + probe.backend());
-                    send(sender, "channels = " + probe.channelCount());
-                    send(sender, "sampleRate = " + probe.sampleRate());
-                    send(sender, "openAlFormat = " + formatOpenAl(probe.openAlFormat()));
-                    send(sender, "probeBytesRead = " + probe.probeBytesRead());
+                    sendSuccess(sender, "解码成功。");
+                    sendField(sender, "identifier", probe.identifier());
+                    sendField(sender, "declaredFormat", probe.declaredFormat());
+                    sendField(sender, "detectedFormat", probe.detectedFormat());
+                    sendField(sender, "backend", probe.backend());
+                    sendField(sender, "channels", probe.channelCount());
+                    sendField(sender, "sampleRate", probe.sampleRate());
+                    sendField(sender, "openAlFormat", formatOpenAl(probe.openAlFormat()));
+                    sendField(sender, "probeBytesRead", probe.probeBytesRead());
                 });
             } catch (IOException e) {
-                runOnServerThread(() -> send(sender, "解码失败: " + rootMessage(e)));
+                runOnServerThread(() -> sendError(sender, "解码失败: " + rootMessage(e)));
             } catch (RuntimeException e) {
-                runOnServerThread(() -> send(sender, "解码失败: " + rootMessage(e)));
+                runOnServerThread(() -> sendError(sender, "解码失败: " + rootMessage(e)));
             }
         });
         return true;
@@ -515,9 +539,9 @@ public final class PaperServerAdminCommand {
             return true;
         }
         if (args.length < 2) {
-            send(sender, "用法: /" + COMMAND_NAME + " playtest <路径或URL> [declaredFormat]");
-            send(sender, "控制台用法: /" + COMMAND_NAME + " playtest <玩家> <客户端路径或URL> [declaredFormat]");
-            send(sender, "停止用法: /" + COMMAND_NAME + " playtest stop [玩家]");
+            sendUsage(sender, "/" + COMMAND_NAME + " playtest <路径或URL> [declaredFormat]");
+            sendHint(sender, "控制台用法: /" + COMMAND_NAME + " playtest <玩家> <客户端路径或URL> [declaredFormat]");
+            sendHint(sender, "停止用法: /" + COMMAND_NAME + " playtest stop [玩家]");
             return true;
         }
 
@@ -528,7 +552,8 @@ public final class PaperServerAdminCommand {
             }
             IServerNetworkService.getInstance().sendToPlayer(((CraftPlayer) target).getHandle(),
                     new DebugPlaytestMessage("", FormatType.AUTO, true));
-            send(sender, "已请求停止客户端调试播放: " + target.getName());
+            sendSuccess(sender, "已请求停止客户端调试播放。");
+            sendField(sender, "目标玩家", target.getName());
             return true;
         }
 
@@ -543,24 +568,27 @@ public final class PaperServerAdminCommand {
                 parsedInput = parseTestInput(args, 2);
             } else {
                 if (args.length < 3) {
-                    send(sender, "控制台或指定目标时需要: /" + COMMAND_NAME + " playtest <玩家> <客户端路径或URL> [declaredFormat]");
+                    sendUsage(sender, "/" + COMMAND_NAME + " playtest <玩家> <客户端路径或URL> [declaredFormat]");
                     return true;
                 }
                 target = findOnlinePlayer(args[1]);
                 if (target == null) {
-                    send(sender, "未找到在线玩家: " + args[1]);
+                    sendError(sender, "未找到在线玩家: " + args[1]);
                     return true;
                 }
                 parsedInput = parseTestInput(args, 2);
             }
         } catch (IllegalArgumentException e) {
-            send(sender, e.getMessage());
+            sendError(sender, e.getMessage());
             return true;
         }
 
         IServerNetworkService.getInstance().sendToPlayer(((CraftPlayer) target).getHandle(),
                 new DebugPlaytestMessage(parsedInput.identifier(), parsedInput.declaredFormat(), false));
-        send(sender, "已请求客户端调试播放: " + target.getName() + " -> " + parsedInput.identifier() + " [" + parsedInput.declaredFormat() + "]");
+        sendSuccess(sender, "已请求客户端调试播放。");
+        sendField(sender, "目标玩家", target.getName());
+        sendField(sender, "客户端路径或 URL", parsedInput.identifier());
+        sendField(sender, "声明格式", parsedInput.declaredFormat());
         return true;
     }
 
@@ -633,11 +661,48 @@ public final class PaperServerAdminCommand {
         sendRaw(sender, ChatColor.GOLD + "" + ChatColor.STRIKETHROUGH + "------------------------------------------------");
     }
 
+    private void sendCommandHeader(CommandSender sender, String title) {
+        sendRaw(sender, ChatColor.GOLD + "" + ChatColor.STRIKETHROUGH + "----------------" + ChatColor.RESET
+                + ChatColor.GOLD + " " + title + " " + ChatColor.GOLD + "" + ChatColor.STRIKETHROUGH + "----------------");
+    }
+
+    private void sendSectionTitle(CommandSender sender, String title) {
+        sendRaw(sender, ChatColor.AQUA + title);
+    }
+
+    private void sendField(CommandSender sender, String key, Object value) {
+        sendRaw(sender, PREFIX + ChatColor.YELLOW + key + ChatColor.DARK_GRAY + " » " + ChatColor.WHITE + Objects.toString(value));
+    }
+
+    private void sendListItem(CommandSender sender, String value) {
+        sendRaw(sender, PREFIX + ChatColor.GRAY + "- " + ChatColor.WHITE + value);
+    }
+
+    private void sendSuccess(CommandSender sender, String message) {
+        sendRaw(sender, PREFIX + ChatColor.GREEN + message);
+    }
+
+    private void sendWarning(CommandSender sender, String message) {
+        sendRaw(sender, PREFIX + ChatColor.YELLOW + message);
+    }
+
+    private void sendError(CommandSender sender, String message) {
+        sendRaw(sender, PREFIX + ChatColor.RED + message);
+    }
+
+    private void sendHint(CommandSender sender, String message) {
+        sendRaw(sender, PREFIX + ChatColor.GRAY + message);
+    }
+
+    private void sendUsage(CommandSender sender, String usage) {
+        sendRaw(sender, PREFIX + ChatColor.YELLOW + "用法: " + ChatColor.WHITE + usage);
+    }
+
     private boolean requireAdmin(CommandSender sender) {
         if (hasPermission(sender, ADMIN_PERMISSION)) {
             return true;
         }
-        send(sender, "你没有权限执行这个命令，需要权限: " + ADMIN_PERMISSION);
+        sendError(sender, "你没有权限执行这个命令，需要权限: " + ADMIN_PERMISSION);
         return false;
     }
 
@@ -645,7 +710,7 @@ public final class PaperServerAdminCommand {
         if (hasPermission(sender, ADMIN_PERMISSION) || hasPermission(sender, RELOAD_PERMISSION)) {
             return true;
         }
-        send(sender, "你没有权限执行这个命令，需要权限: " + RELOAD_PERMISSION);
+        sendError(sender, "你没有权限执行这个命令，需要权限: " + RELOAD_PERMISSION);
         return false;
     }
 
@@ -654,7 +719,7 @@ public final class PaperServerAdminCommand {
     }
 
     private void send(CommandSender sender, String message) {
-        sender.sendMessage("[MusicHud] " + message);
+        sendRaw(sender, PREFIX + ChatColor.WHITE + message);
     }
 
     private void sendRaw(CommandSender sender, String message) {
@@ -751,6 +816,28 @@ public final class PaperServerAdminCommand {
         };
     }
 
+    private static String formatBooleanValue(boolean value) {
+        return (value ? ChatColor.GREEN : ChatColor.RED) + Boolean.toString(value);
+    }
+
+    private static String formatStatusValue(@Nullable Object value) {
+        if (value == null) {
+            return ChatColor.GRAY + "<unknown>";
+        }
+        String text = Objects.toString(value);
+        String lowered = text.toLowerCase(Locale.ROOT);
+        if (lowered.contains("run") || lowered.contains("start") || lowered.contains("online")) {
+            return ChatColor.GREEN + text;
+        }
+        if (lowered.contains("stop") || lowered.contains("fail") || lowered.contains("error") || lowered.contains("offline")) {
+            return ChatColor.RED + text;
+        }
+        if (lowered.contains("restart") || lowered.contains("boot") || lowered.contains("load") || lowered.contains("wait")) {
+            return ChatColor.YELLOW + text;
+        }
+        return ChatColor.WHITE + text;
+    }
+
     private static ParsedTestInput parseTestInput(String[] args, int startInclusive) {
         int tokenCount = args.length - startInclusive;
         if (tokenCount <= 0) {
@@ -772,14 +859,14 @@ public final class PaperServerAdminCommand {
         if (args.length > playerIndex) {
             Player target = findOnlinePlayer(args[playerIndex]);
             if (target == null) {
-                send(sender, "未找到在线玩家: " + args[playerIndex]);
+                sendError(sender, "未找到在线玩家: " + args[playerIndex]);
             }
             return target;
         }
         if (sender instanceof Player player) {
             return player;
         }
-        send(sender, "控制台需要显式指定玩家。");
+        sendError(sender, "控制台需要显式指定玩家。");
         return null;
     }
 
