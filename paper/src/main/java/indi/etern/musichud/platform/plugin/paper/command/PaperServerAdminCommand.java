@@ -23,6 +23,7 @@ import io.papermc.paper.command.brigadier.BasicCommand;
 import io.papermc.paper.command.brigadier.CommandSourceStack;
 import net.minecraft.server.level.ServerPlayer;
 import org.bukkit.Bukkit;
+import org.bukkit.ChatColor;
 import org.bukkit.command.CommandSender;
 import org.bukkit.craftbukkit.entity.CraftPlayer;
 import org.bukkit.entity.Player;
@@ -45,7 +46,8 @@ import java.util.UUID;
 import java.util.stream.Collectors;
 
 public final class PaperServerAdminCommand {
-    private static final String COMMAND_NAME = "musichudserver";
+    private static final String COMMAND_NAME = "musichud";
+    private static final List<String> COMMAND_ALIASES = List.of("music");
     private static final String ADMIN_PERMISSION = "musichud.admin";
     private static final String RELOAD_PERMISSION = "musichud.reload";
     private static final List<String> ROOT_SUBCOMMANDS = List.of("help", "status", "player", "config", "api", "playback", "test", "playtest");
@@ -68,8 +70,8 @@ public final class PaperServerAdminCommand {
     public void register() {
         plugin.registerCommand(
                 COMMAND_NAME,
-                "MusicHud server administration and decoder test tools",
-                List.of("mhserver", "mhs"),
+                "MusicHud admin, decoder test and playtest tools",
+                COMMAND_ALIASES,
                 new BasicCommand() {
                     @Override
                     public void execute(CommandSourceStack commandSourceStack, String[] args) {
@@ -86,8 +88,8 @@ public final class PaperServerAdminCommand {
     }
 
     private boolean handleCommand(CommandSender sender, String label, String[] args) {
-        if (args.length == 0 || equalsAny(args[0], "help", "?")) {
-            sendHelp(sender, label);
+        if (args.length == 0 || (args.length == 1 && args[0].isBlank()) || equalsAny(args[0], "help", "?")) {
+            sendHelp(sender);
             return true;
         }
 
@@ -100,18 +102,22 @@ public final class PaperServerAdminCommand {
             case "test" -> handleTest(sender, args);
             case "playtest" -> handlePlaytest(sender, args);
             default -> {
-                send(sender, "未知子命令，使用 /" + label + " help 查看帮助。");
+                send(sender, "未知子命令，使用 /" + COMMAND_NAME + " help 查看帮助。");
                 yield true;
             }
         };
     }
 
     private List<String> handleTabComplete(CommandSender sender, String alias, String[] args) {
+        if (args == null || args.length == 0) {
+            return ROOT_SUBCOMMANDS;
+        }
+        String firstArg = args[0] == null ? "" : args[0];
         if (args.length == 1) {
-            return filterSuggestions(ROOT_SUBCOMMANDS, args[0]);
+            return filterSuggestions(ROOT_SUBCOMMANDS, firstArg);
         }
 
-        String root = args[0].toLowerCase(Locale.ROOT);
+        String root = firstArg.toLowerCase(Locale.ROOT);
         if ("player".equals(root) && args.length == 2) {
             return filterSuggestions(onlinePlayerNames(), args[1]);
         }
@@ -584,21 +590,47 @@ public final class PaperServerAdminCommand {
         plugin.getServer().getGlobalRegionScheduler().execute(plugin, runnable);
     }
 
-    private void sendHelp(CommandSender sender, String label) {
-        send(sender, "/" + label + " status");
-        send(sender, "/" + label + " player <玩家名>");
-        send(sender, "/" + label + " config show");
-        send(sender, "/" + label + " config set <键> <值>");
-        send(sender, "/" + label + " config save");
-        send(sender, "/" + label + " config reload");
-        send(sender, "/" + label + " api <status|restart|stop>");
-        send(sender, "/" + label + " playback skip");
-        send(sender, "/" + label + " playback queue [remove <索引>]");
-        send(sender, "/" + label + " playback idle [remove <玩家> <playlist|album> <ID>]");
-        send(sender, "/" + label + " test <路径或URL> [declaredFormat]");
-        send(sender, "/" + label + " playtest <路径或URL> [declaredFormat]  (对自己客户端)");
-        send(sender, "/" + label + " playtest <玩家> <客户端路径或URL> [declaredFormat]");
-        send(sender, "/" + label + " playtest stop [玩家]");
+    private void sendHelp(CommandSender sender) {
+        String aliasText = COMMAND_ALIASES.stream()
+                .map(alias -> "/" + alias)
+                .collect(Collectors.joining(ChatColor.DARK_GRAY + " | " + ChatColor.WHITE));
+
+        sendRaw(sender, ChatColor.GOLD + "" + ChatColor.STRIKETHROUGH + "--------------------" + ChatColor.RESET
+                + ChatColor.GOLD + " MusicHud " + ChatColor.RESET
+                + ChatColor.GOLD + "" + ChatColor.STRIKETHROUGH + "--------------------");
+        sendRaw(sender, ChatColor.YELLOW + "主命令 " + ChatColor.DARK_GRAY + "» " + ChatColor.WHITE + "/" + COMMAND_NAME
+                + ChatColor.GRAY + "    别名 " + ChatColor.DARK_GRAY + "» " + ChatColor.WHITE + aliasText);
+        sendRaw(sender, ChatColor.GRAY + "输入 /" + COMMAND_NAME + " help 可再次查看此帮助。");
+        sendRaw(sender, "");
+
+        sendRaw(sender, ChatColor.AQUA + "基础");
+        sendRaw(sender, ChatColor.WHITE + "/" + COMMAND_NAME + " status" + ChatColor.GRAY + " - 查看服务端与播放状态");
+        sendRaw(sender, ChatColor.WHITE + "/" + COMMAND_NAME + " player <玩家名>" + ChatColor.GRAY + " - 查看玩家登录与排队信息");
+        sendRaw(sender, "");
+
+        sendRaw(sender, ChatColor.AQUA + "配置");
+        sendRaw(sender, ChatColor.WHITE + "/" + COMMAND_NAME + " config show" + ChatColor.GRAY + " - 查看当前配置");
+        sendRaw(sender, ChatColor.WHITE + "/" + COMMAND_NAME + " config set <键> <值>" + ChatColor.GRAY + " - 修改内存中的配置");
+        sendRaw(sender, ChatColor.WHITE + "/" + COMMAND_NAME + " config save" + ChatColor.GRAY + " - 保存配置并应用");
+        sendRaw(sender, ChatColor.WHITE + "/" + COMMAND_NAME + " config reload" + ChatColor.GRAY + " - 从磁盘重载配置");
+        sendRaw(sender, "");
+
+        sendRaw(sender, ChatColor.AQUA + "API");
+        sendRaw(sender, ChatColor.WHITE + "/" + COMMAND_NAME + " api <status|restart|stop>" + ChatColor.GRAY + " - 管理内置 API 进程");
+        sendRaw(sender, "");
+
+        sendRaw(sender, ChatColor.AQUA + "播放");
+        sendRaw(sender, ChatColor.WHITE + "/" + COMMAND_NAME + " playback skip" + ChatColor.GRAY + " - 强制切歌");
+        sendRaw(sender, ChatColor.WHITE + "/" + COMMAND_NAME + " playback queue [remove <索引>]" + ChatColor.GRAY + " - 查看或移除队列");
+        sendRaw(sender, ChatColor.WHITE + "/" + COMMAND_NAME + " playback idle [remove <玩家> <playlist|album> <ID>]" + ChatColor.GRAY + " - 管理空闲播放源");
+        sendRaw(sender, "");
+
+        sendRaw(sender, ChatColor.AQUA + "测试");
+        sendRaw(sender, ChatColor.WHITE + "/" + COMMAND_NAME + " test <服务器路径或URL> [declaredFormat]" + ChatColor.GRAY + " - 只探测解码器信息");
+        sendRaw(sender, ChatColor.WHITE + "/" + COMMAND_NAME + " playtest <客户端路径或URL> [declaredFormat]" + ChatColor.GRAY + " - 对自己发起调试播放");
+        sendRaw(sender, ChatColor.WHITE + "/" + COMMAND_NAME + " playtest <玩家> <客户端路径或URL> [declaredFormat]" + ChatColor.GRAY + " - 对指定玩家发起调试播放");
+        sendRaw(sender, ChatColor.WHITE + "/" + COMMAND_NAME + " playtest stop [玩家]" + ChatColor.GRAY + " - 停止调试播放");
+        sendRaw(sender, ChatColor.GOLD + "" + ChatColor.STRIKETHROUGH + "------------------------------------------------");
     }
 
     private boolean requireAdmin(CommandSender sender) {
@@ -623,6 +655,10 @@ public final class PaperServerAdminCommand {
 
     private void send(CommandSender sender, String message) {
         sender.sendMessage("[MusicHud] " + message);
+    }
+
+    private void sendRaw(CommandSender sender, String message) {
+        sender.sendMessage(message);
     }
 
     private static String joinArgs(String[] args, int startInclusive) {
