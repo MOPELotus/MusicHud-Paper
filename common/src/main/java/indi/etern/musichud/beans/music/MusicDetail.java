@@ -73,6 +73,8 @@ public class MusicDetail {
     long mark; // bit mask
     @SerializedName("tns")
     List<String> translations = List.of();
+    @SerializedName("cs")
+    boolean cloudSource;
 
     // Not contained in the original API response, set separately
     @Setter
@@ -151,12 +153,44 @@ public class MusicDetail {
         return translations.stream().filter(Objects::nonNull).toList();
     }
 
+    public boolean isCloudSource() {
+        return cloudSource;
+    }
+
+    public void setCloudSource(boolean cloudSource) {
+        this.cloudSource = cloudSource;
+    }
+
     public PusherInfo getPusherInfo() {
         return Objects.requireNonNullElse(pusherInfo, PusherInfo.EMPTY);
     }
 
     public LyricInfo getLyricInfo() {
         return Objects.requireNonNullElse(lyricInfo, LyricInfo.NONE);
+    }
+
+    public MusicDetail copy() {
+        MusicDetail musicDetail = new MusicDetail();
+        musicDetail.name = this.name;
+        musicDetail.id = this.id;
+        musicDetail.artists = this.getArtists();
+        musicDetail.alias = this.getAlias();
+        musicDetail.popularity = this.popularity;
+        musicDetail.infoVersion = this.infoVersion;
+        musicDetail.musicVersion = this.musicVersion;
+        musicDetail.album = this.album == null ? Album.NONE : this.album.shallowCopyBriefInfo();
+        musicDetail.durationMillis = this.durationMillis;
+        musicDetail.hiRes = this.getHiRes();
+        musicDetail.sq = this.getSq();
+        musicDetail.high = this.getHigh();
+        musicDetail.medium = this.getMedium();
+        musicDetail.low = this.getLow();
+        musicDetail.mark = this.mark;
+        musicDetail.translations = this.getTranslations();
+        musicDetail.cloudSource = this.cloudSource;
+        musicDetail.pusherInfo = this.getPusherInfo();
+        musicDetail.lyricInfo = this.getLyricInfo();
+        return musicDetail;
     }
 
     @Override

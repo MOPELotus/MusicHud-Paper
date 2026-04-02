@@ -24,7 +24,9 @@ import org.jetbrains.annotations.NotNull;
 
 import javax.annotation.Nullable;
 import java.util.ArrayList;
+import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.Objects;
 import java.util.concurrent.TimeUnit;
 import java.util.function.Function;
@@ -185,33 +187,54 @@ public class MusicApiService implements IMusicApiService {
     @Override
     public List<MusicDetail> getMusicDetailByIds(List<Long> ids, @Nullable ServerPlayer sourcePlayer) {
         List<Long> uncachedIds = new ArrayList<>();
-        List<MusicDetail> result = new ArrayList<>(ids.size());
+        Map<Long, MusicDetail> musicDetailsById = new LinkedHashMap<>();
         for (long id : ids) {
             MusicDetail cached = musicDetailCache.getIfPresent(id);
             if (cached != null) {
-                result.add(cached);
+                musicDetailsById.put(id, cached.copy());
             } else {
                 uncachedIds.add(id);
             }
         }
         if (uncachedIds.isEmpty()) {
-            return result;
+            return ids.stream()
+                    .map(musicDetailsById::get)
+                    .map(musicDetail -> musicDetail == null ? null : musicDetail.copy())
+                    .filter(Objects::nonNull)
+                    .toList();
         } else {
             try {
                 Object requestBody;
-                if (!ids.isEmpty()) {
-                    requestBody = new GetDetailsRequestBody(String.join(",",ids.stream().map(String::valueOf).toList()), null);
+                if (!uncachedIds.isEmpty()) {
+                    requestBody = new GetDetailsRequestBody(String.join(",", uncachedIds.stream().map(String::valueOf).toList()), null);
                 } else {
                     return List.of();
                 }
                 String userCookie = sourcePlayer != null ? getRawCookie(sourcePlayer) : loginApiService.randomVipCookieOr(null);
                 var response = ApiClient.post(ServerApiMeta.Music.DETAIL, requestBody, userCookie);
                 List<MusicDetail> musicDetails = response.getMusicDetails();
-                result.addAll(musicDetails);
+                var uncachedById = musicDetails.stream()
+                        .filter(Objects::nonNull)
+                        .collect(java.util.stream.Collectors.toMap(
+                                MusicDetail::getId,
+                                Function.identity(),
+                                (left, right) -> left
+                        ));
                 for (MusicDetail musicDetail : musicDetails) {
-                    musicDetailCache.put(musicDetail.getId(), musicDetail);
+                    musicDetailCache.put(musicDetail.getId(), musicDetail.copy());
+                    musicDetailsById.put(musicDetail.getId(), musicDetail.copy());
                 }
-                return result;
+                return ids.stream()
+                        .map(id -> {
+                            MusicDetail musicDetail = musicDetailsById.get(id);
+                            if (musicDetail != null) {
+                                return musicDetail.copy();
+                            }
+                            MusicDetail uncached = uncachedById.get(id);
+                            return uncached != null ? uncached.copy() : null;
+                        })
+                        .filter(Objects::nonNull)
+                        .toList();
             } catch (Exception e) {
                 throw new RuntimeException(e);
             }
