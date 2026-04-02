@@ -11,25 +11,22 @@ import indi.etern.musichud.beans.music.MusicDetail;
 import indi.etern.musichud.beans.music.Playlist;
 import indi.etern.musichud.client.music.decoder.AudioDecodeProbe;
 import indi.etern.musichud.client.music.decoder.AudioDecoderFactory;
+import indi.etern.musichud.network.IServerNetworkService;
 import indi.etern.musichud.network.payloads.pushMessages.s2c.DebugPlaytestMessage;
 import indi.etern.musichud.platform.plugin.paper.config.ServerConfigDefinition;
 import indi.etern.musichud.server.api.ApiProvider;
 import indi.etern.musichud.server.api.ApiServerManager;
 import indi.etern.musichud.server.api.ILoginApiService;
-import indi.etern.musichud.network.IServerNetworkService;
 import indi.etern.musichud.server.api.MusicPlayerServerService;
 import indi.etern.musichud.server.api.impl.ncm.LoginApiService;
+import io.papermc.paper.command.brigadier.BasicCommand;
+import io.papermc.paper.command.brigadier.CommandSourceStack;
 import net.minecraft.server.level.ServerPlayer;
 import org.bukkit.Bukkit;
-import org.bukkit.command.Command;
-import org.bukkit.command.CommandExecutor;
 import org.bukkit.command.CommandSender;
-import org.bukkit.command.PluginCommand;
-import org.bukkit.command.TabCompleter;
 import org.bukkit.craftbukkit.entity.CraftPlayer;
 import org.bukkit.entity.Player;
 import org.bukkit.plugin.java.JavaPlugin;
-import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
 
 import java.io.IOException;
@@ -47,7 +44,7 @@ import java.util.Set;
 import java.util.UUID;
 import java.util.stream.Collectors;
 
-public final class PaperServerAdminCommand implements CommandExecutor, TabCompleter {
+public final class PaperServerAdminCommand {
     private static final String COMMAND_NAME = "musichudserver";
     private static final String ADMIN_PERMISSION = "musichud.admin";
     private static final String RELOAD_PERMISSION = "musichud.reload";
@@ -69,14 +66,26 @@ public final class PaperServerAdminCommand implements CommandExecutor, TabComple
     }
 
     public void register() {
-        PluginCommand command = Objects.requireNonNull(plugin.getCommand(COMMAND_NAME), "Command not declared: " + COMMAND_NAME);
-        command.setExecutor(this);
-        command.setTabCompleter(this);
+        plugin.registerCommand(
+                COMMAND_NAME,
+                "MusicHud server administration and decoder test tools",
+                List.of("mhserver", "mhs"),
+                new BasicCommand() {
+                    @Override
+                    public void execute(CommandSourceStack commandSourceStack, String[] args) {
+                        handleCommand(commandSourceStack.getSender(), COMMAND_NAME, args);
+                    }
+
+                    @Override
+                    public Collection<String> suggest(CommandSourceStack commandSourceStack, String[] args) {
+                        return handleTabComplete(commandSourceStack.getSender(), COMMAND_NAME, args);
+                    }
+                }
+        );
         refreshAppliedConfigSnapshot();
     }
 
-    @Override
-    public boolean onCommand(@NotNull CommandSender sender, @NotNull Command command, @NotNull String label, @NotNull String[] args) {
+    private boolean handleCommand(CommandSender sender, String label, String[] args) {
         if (args.length == 0 || equalsAny(args[0], "help", "?")) {
             sendHelp(sender, label);
             return true;
@@ -97,8 +106,7 @@ public final class PaperServerAdminCommand implements CommandExecutor, TabComple
         };
     }
 
-    @Override
-    public List<String> onTabComplete(@NotNull CommandSender sender, @NotNull Command command, @NotNull String alias, @NotNull String[] args) {
+    private List<String> handleTabComplete(CommandSender sender, String alias, String[] args) {
         if (args.length == 1) {
             return filterSuggestions(ROOT_SUBCOMMANDS, args[0]);
         }

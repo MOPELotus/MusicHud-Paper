@@ -7,11 +7,6 @@ website: https://github.com/Etern-34520/MusicHud
 authors: [Etern]
 contributors: [Lotus (Paper adapter)]
 folia-supported: true
-commands:
-  musichudserver:
-    description: MusicHud server administration and decoder test tools
-    usage: /musichudserver help
-    aliases: [mhserver, mhs]
 permissions:
   musichud.admin:
     description: Allows managing MusicHud server config, playback and decoder tests
