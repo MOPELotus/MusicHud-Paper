@@ -23,6 +23,8 @@ public interface ILoginApiService {
 
     String randomVipCookieOr(Supplier<String> defaultCookieSupplier);
 
+    String getRawCookieOrElse(ServerPlayer serverPlayer, Supplier<String> supplier);
+
     void joinUnlogged(ServerPlayer serverPlayer);
 
     void logout(ServerPlayer player);

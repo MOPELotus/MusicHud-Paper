@@ -66,24 +66,13 @@ public class MusicApiService implements IMusicApiService {
     }
 
     private List<MusicDetail> appendArtistMusic(int offset, Artist artist, ServerPlayer serverPlayer) {
-        String rawCookie = getRawCookie(serverPlayer);
+        String rawCookie = loginApiService.getRawCookieOrElse(serverPlayer, loginApiService::getAnonymousCookie);
         GetArtistMusicResponse response = ApiClient.post(ServerApiMeta.Artist.ALL_SONGS, new ArtistAllMusicRequest(artist.getId(), 50, offset, "time"), rawCookie);
         List<Long> musicDetailIds = response.songs.stream().map(MusicDetail::getId).toList();
         artist.setTotalMusicCount(response.total);
         List<MusicDetail> musicDetails = getMusicDetailByIds(musicDetailIds, serverPlayer);
         artist.getMusicDetails().addAll(musicDetails);
         return musicDetails;
-    }
-
-    private static String getRawCookie(ServerPlayer serverPlayer) {
-        String rawCookie;
-        LoginApiService.PlayerLoginInfo loginInfo = ILoginApiService.getInstance(ApiProvider.NCM).getLoginedPlayerInfoMap().get(serverPlayer);
-        if (loginInfo != null) {
-            rawCookie = loginInfo.loginCookieInfo.rawCookie();
-        } else {
-            rawCookie = ILoginApiService.getInstance(ApiProvider.NCM).getAnonymousCookie();
-        }
-        return rawCookie;
     }
 
     @Override
@@ -93,7 +82,7 @@ public class MusicApiService implements IMusicApiService {
         if (cached != null) {
             playlist = cached;
         } else {
-            String rawCookie = getRawCookie(serverPlayer);
+            String rawCookie = loginApiService.getRawCookieOrElse(serverPlayer, loginApiService::getAnonymousCookie);
             PlaylistResponse playlistResponse = ApiClient.post(ServerApiMeta.Playlist.DETAIL, new IdRequest(id), rawCookie);
             if (playlistResponse.getCode() == 200) {
                 playlist = playlistResponse.getPlaylist();
@@ -210,7 +199,8 @@ public class MusicApiService implements IMusicApiService {
                 } else {
                     return List.of();
                 }
-                String userCookie = sourcePlayer != null ? getRawCookie(sourcePlayer) : loginApiService.randomVipCookieOr(null);
+                String userCookie = loginApiService.getRawCookieOrElse(sourcePlayer,
+                        () -> loginApiService.randomVipCookieOr(loginApiService::getAnonymousCookie));
                 var response = ApiClient.post(ServerApiMeta.Music.DETAIL, requestBody, userCookie);
                 List<MusicDetail> musicDetails = response.getMusicDetails();
                 var uncachedById = musicDetails.stream()
@@ -246,7 +236,7 @@ public class MusicApiService implements IMusicApiService {
     public Album getAlbumInfoDetail(long id, ServerPlayer serverPlayer) {
         return albumsCache.get(id,
                 () -> {
-                    String rawCookie = getRawCookie(serverPlayer);
+                    String rawCookie = loginApiService.getRawCookieOrElse(serverPlayer, loginApiService::getAnonymousCookie);
                     GetAlbumDetailResult post = ApiClient.post(ServerApiMeta.Album.DETAIL, new IdRequest(id), rawCookie);
                     Album album = post.album();
                     post.songs.forEach(song -> {
@@ -263,7 +253,7 @@ public class MusicApiService implements IMusicApiService {
     public Artist getArtistDetail(long id, ServerPlayer serverPlayer) {
         return artistsCache.get(id,
                 () -> {
-                    String rawCookie = getRawCookie(serverPlayer);
+                    String rawCookie = loginApiService.getRawCookieOrElse(serverPlayer, loginApiService::getAnonymousCookie);
                     Artist artist = ApiClient.post(ServerApiMeta.Artist.DETAIL, new IdRequest(id), rawCookie).data.artist;
                     appendArtistMusic(0, artist, serverPlayer);
                     return artist;
@@ -295,8 +285,7 @@ public class MusicApiService implements IMusicApiService {
                 var response = ApiClient.post(ServerApiMeta.Music.URL, request, cookie);
                 if (response.code == 200) {
                     musicResourceInfo = response.data.getFirst();
-                    // 30 seconds trial or have no copyright
-                    if (musicResourceInfo.getTime() <= 30040 || musicResourceInfo.getUrl() == null) {
+                    if (shouldUseSubstituteResource(musicDetail, musicResourceInfo)) {
                         logger.warn("Failed to get resource for music: {} (ID: {}), trying substitute", musicDetail.getName(), musicDetail.getId());
                         musicResourceInfo = getMusicResourceInfoFromMatcher(musicDetail);
                     }
@@ -318,6 +307,37 @@ public class MusicApiService implements IMusicApiService {
         }
     }
 
+    private boolean shouldUseSubstituteResource(MusicDetail musicDetail, MusicResourceInfo musicResourceInfo) {
+        if (musicResourceInfo == null || musicResourceInfo.equals(MusicResourceInfo.NONE)) {
+            return true;
+        }
+        if (musicResourceInfo.getUrl().isBlank()) {
+            return true;
+        }
+        if (musicDetail.isCloudSource()) {
+            return false;
+        }
+        if (musicResourceInfo.getFee() == Fee.SEPARATELY_PURCHASE) {
+            return true;
+        }
+        if (musicResourceInfo.getFee() == Fee.VIP && isPreviewLike(musicDetail, musicResourceInfo)) {
+            return true;
+        }
+        return musicResourceInfo.getFee() != Fee.FREE && isPreviewLike(musicDetail, musicResourceInfo);
+    }
+
+    private boolean isPreviewLike(MusicDetail musicDetail, MusicResourceInfo musicResourceInfo) {
+        if (musicDetail == null || musicResourceInfo == null) {
+            return false;
+        }
+        int expectedDuration = musicDetail.getDurationMillis();
+        int actualDuration = musicResourceInfo.getTime();
+        if (expectedDuration <= 30040 || actualDuration <= 0) {
+            return false;
+        }
+        return actualDuration + 1000 < expectedDuration;
+    }
+
     private void completeLyricInfo(MusicDetail musicDetail) {
         try {
             LyricInfo lyricInfo = getLyricInfo(musicDetail);
@@ -329,7 +349,7 @@ public class MusicApiService implements IMusicApiService {
 
     private @NotNull MusicResourceInfo getMusicResourceInfoFromMatcher(MusicDetail musicDetail) {
         var unblockRequest = new GetMatchResourceUrlRequest(musicDetail.getId(), null);
-        var unblockResponse = ApiClient.post(ServerApiMeta.Music.UNBLOCK, unblockRequest, loginApiService.randomVipCookieOr(null));
+        var unblockResponse = ApiClient.post(ServerApiMeta.Music.UNBLOCK, unblockRequest, loginApiService.randomVipCookieOr(loginApiService::getAnonymousCookie));
         return MusicResourceInfo.from(unblockResponse.data, musicDetail);
     }
 

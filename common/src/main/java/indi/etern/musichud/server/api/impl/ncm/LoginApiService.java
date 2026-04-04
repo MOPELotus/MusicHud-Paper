@@ -93,6 +93,17 @@ public class LoginApiService implements ILoginApiService {
     }
 
     @Override
+    public String getRawCookieOrElse(ServerPlayer serverPlayer, Supplier<String> supplier) {
+        if (serverPlayer != null) {
+            PlayerLoginInfo loginInfo = getLoginedPlayerInfoMap().get(serverPlayer);
+            if (loginInfo != null && loginInfo.getLoginCookieInfo() != null) {
+                return loginInfo.getLoginCookieInfo().rawCookie();
+            }
+        }
+        return supplier == null ? null : supplier.get();
+    }
+
+    @Override
     public void joinUnlogged(ServerPlayer serverPlayer) {
         loginedPlayerInfoMap.put(serverPlayer, PlayerLoginInfo.UNLOGGED);
         loginStateChangeListeners.forEach(mapConsumer -> mapConsumer.accept(loginedPlayerInfoMap));
