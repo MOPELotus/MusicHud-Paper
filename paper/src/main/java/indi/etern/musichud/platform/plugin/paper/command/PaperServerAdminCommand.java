@@ -9,8 +9,8 @@ import indi.etern.musichud.beans.music.FormatType;
 import indi.etern.musichud.beans.music.MusicCollection;
 import indi.etern.musichud.beans.music.MusicDetail;
 import indi.etern.musichud.beans.music.Playlist;
-import indi.etern.musichud.client.music.decoder.AudioDecodeProbe;
-import indi.etern.musichud.client.music.decoder.AudioDecoderFactory;
+import indi.etern.musichud.client.audio.decoder.AudioDecodeProbe;
+import indi.etern.musichud.client.audio.decoder.AudioDecoderFactory;
 import indi.etern.musichud.network.IServerNetworkService;
 import indi.etern.musichud.network.payloads.pushMessages.s2c.DebugPlaytestMessage;
 import indi.etern.musichud.platform.plugin.paper.config.ServerConfigDefinition;
@@ -195,7 +195,7 @@ public final class PaperServerAdminCommand {
         }
         ServerConfigDefinition serverConfig = ServerConfigDefinition.getInstance();
         MusicPlayerServerService musicService = MusicPlayerServerService.getInstance();
-        Map<ServerPlayer, LoginApiService.PlayerLoginInfo> loginInfoMap = ILoginApiService.getInstance(ApiProvider.NCM).getLoginedPlayerInfoMap();
+        Map<ServerPlayer, LoginApiService.PlayerLoginInfo> loginInfoMap = ILoginApiService.getInstance(ApiProvider.NCM).getPlayerInfoMap();
         Map<ServerPlayer, Set<IdlePlaySource>> idleSources = musicService.getIdlePlaySourcesSnapshot();
         long loggedAccountCount = loginInfoMap.values().stream()
                 .filter(info -> info != null && info.getLoginCookieInfo() != null && info.getLoginCookieInfo().type() != null)
@@ -204,7 +204,8 @@ public final class PaperServerAdminCommand {
         int idleSourceCount = idleSources.values().stream().mapToInt(Set::size).sum();
         sendCommandHeader(sender, "服务端状态");
         sendField(sender, "版本", Version.current);
-        sendField(sender, "API 状态", formatStatusValue(ApiServerManager.getBinaryApiServerStatus()));
+        ApiServerManager apiServerManager = ApiServerManager.getInstance();
+        sendField(sender, "API 状态", formatStatusValue(apiServerManager.getBinaryApiServerStatus()));
         sendField(sender, "API 地址", serverConfig.getServerApiBaseUrl());
         sendField(sender, "内置 API 开机启动", formatBooleanValue(serverConfig.getStartupBinaryApiServerWhenLaunch()));
         sendSectionTitle(sender, "在线情况");
@@ -236,7 +237,7 @@ public final class PaperServerAdminCommand {
         ServerPlayer serverPlayer = ((CraftPlayer) player).getHandle();
         LoginApiService.PlayerLoginInfo loginInfo = ILoginApiService.getInstance(ApiProvider.NCM).getLoginInfoByServerPlayer(serverPlayer);
         long queuedByPlayer = MusicPlayerServerService.getInstance().getMusicQueue().stream()
-                .filter(musicDetail -> musicDetail.getPusherInfo() != null && player.getUniqueId().equals(musicDetail.getPusherInfo().playerUUID()))
+                .filter(musicDetail -> musicDetail.getPusherInfo() != null && player.getUniqueId().equals(musicDetail.getPusherInfo().getPlayerUUID()))
                 .count();
         int idleSourceCount = MusicPlayerServerService.getInstance().getIdlePlaySourcesSnapshot()
                 .getOrDefault(serverPlayer, Set.of())
@@ -363,16 +364,16 @@ public final class PaperServerAdminCommand {
         return switch (args[1].toLowerCase(Locale.ROOT)) {
             case "status" -> {
                 sendCommandHeader(sender, "API 管理");
-                sendField(sender, "API 状态", formatStatusValue(ApiServerManager.getBinaryApiServerStatus()));
+                sendField(sender, "API 状态", formatStatusValue(ApiServerManager.getInstance().getBinaryApiServerStatus()));
                 yield true;
             }
             case "restart" -> {
-                ApiServerManager.restartApiServer();
+                ApiServerManager.getInstance().restartApiServer();
                 sendSuccess(sender, "已请求重启内置 API 服务器。");
                 yield true;
             }
             case "stop" -> {
-                ApiServerManager.stopApiServer();
+                ApiServerManager.getInstance().stopApiServer();
                 sendSuccess(sender, "已请求停止内置 API 服务器。");
                 yield true;
             }
@@ -597,13 +598,13 @@ public final class PaperServerAdminCommand {
         boolean currentStartup = serverConfig.getStartupBinaryApiServerWhenLaunch();
         String currentBinaryPath = serverConfig.getServerApiBinaryExecutablePath();
         if (!currentStartup) {
-            ApiServerManager.stopApiServer();
+            ApiServerManager.getInstance().stopApiServer();
             refreshAppliedConfigSnapshot();
             return;
         }
         boolean changed = currentStartup != appliedStartupBinary || !Objects.equals(currentBinaryPath, appliedBinaryPath);
-        if (changed || ApiServerManager.getBinaryApiServerStatus() == ApiServerManager.BinaryApiServerStatus.STOPPED) {
-            ApiServerManager.restartApiServer();
+        if (changed || ApiServerManager.getInstance().getBinaryApiServerStatus() == ApiServerManager.BinaryApiServerStatus.STOPPED) {
+            ApiServerManager.getInstance().restartApiServer();
         }
         refreshAppliedConfigSnapshot();
     }
@@ -768,7 +769,7 @@ public final class PaperServerAdminCommand {
         String name = musicDetail.getName() == null || musicDetail.getName().isBlank() ? "<unnamed>" : musicDetail.getName();
         String by = musicDetail.getPusherInfo() == null || musicDetail.getPusherInfo().equals(indi.etern.musichud.beans.music.PusherInfo.EMPTY)
                 ? "unknown"
-                : musicDetail.getPusherInfo().playerName();
+                : musicDetail.getPusherInfo().getPlayerName();
         return name + " (ID: " + musicDetail.getId() + ", by: " + by + ")";
     }
 

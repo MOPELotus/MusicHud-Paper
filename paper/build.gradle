@@ -74,6 +74,12 @@ tasks.processResources {
                 apiVersion: rootProject.minecraft_version
         )
     }
+    filesMatching('plugin.yml') {
+        expand(
+                version: project.version,
+                apiVersion: rootProject.minecraft_version
+        )
+    }
 }
 
 tasks.shadowJar {

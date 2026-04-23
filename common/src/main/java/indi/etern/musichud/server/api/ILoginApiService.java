@@ -21,9 +21,7 @@ public interface ILoginApiService {
 
     String getAnonymousCookie();
 
-    String randomVipCookieOr(Supplier<String> defaultCookieSupplier);
-
-    String getRawCookieOrElse(ServerPlayer serverPlayer, Supplier<String> supplier);
+    String randomVipCookieOrElse(Supplier<String> defaultCookieSupplier);
 
     void joinUnlogged(ServerPlayer serverPlayer);
 
@@ -41,9 +39,23 @@ public interface ILoginApiService {
 
     LoginApiService.PlayerLoginInfo getLoginInfoByServerPlayer(ServerPlayer player);
 
-    java.util.Map<ServerPlayer, LoginApiService.PlayerLoginInfo> getLoginedPlayerInfoMap();
+    java.util.Map<ServerPlayer, LoginApiService.PlayerLoginInfo> getPlayerInfoMap();
 
     java.util.Set<java.util.function.Consumer<java.util.Map<ServerPlayer, LoginApiService.PlayerLoginInfo>>> getLoginStateChangeListeners();
+
+    String getRawCookieOrElse(ServerPlayer serverPlayer, Supplier<String> supplier);
+
+    void requestValidationCodeFor(int regionCode, long phone, ServerPlayer serverPlayer);
+
+    void loginWithPhoneAndCode(int regionCode, long phone, int code, ServerPlayer serverPlayer);
+
+    void loginWithPhoneAndPassword(long phone, String md5password, ServerPlayer serverPlayer);
+
+    void loginWithEmailAndPassword(String email, String md5password, ServerPlayer serverPlayer);
+
+    void disconnectToAll();
+
+    void reconnectAll();
 
     @RegisterMark
     class Register implements ServerRegister {

@@ -15,14 +15,14 @@ import indi.etern.musichud.MusicHud;
 import indi.etern.musichud.beans.music.LyricLine;
 import indi.etern.musichud.beans.music.MusicCollection;
 import indi.etern.musichud.beans.music.MusicDetail;
-import indi.etern.musichud.client.music.NowPlayingInfo;
+import indi.etern.musichud.client.audio.NowPlayingInfo;
 import indi.etern.musichud.client.services.MusicService;
 import indi.etern.musichud.client.ui.Theme;
 import indi.etern.musichud.client.ui.components.AutoFlowGridLayout;
 import indi.etern.musichud.client.ui.components.MusicCollectionCard;
 import indi.etern.musichud.client.ui.components.MusicListItem;
 import indi.etern.musichud.client.ui.components.StaggeredLyricScrollView;
-import indi.etern.musichud.client.ui.utils.ButtonInsetBackground;
+import indi.etern.musichud.client.ui.utils.ButtonInsetBackgroundFactory;
 import indi.etern.musichud.interfaces.ClientConfig;
 import lombok.Getter;
 import lombok.extern.slf4j.Slf4j;
@@ -30,9 +30,10 @@ import net.minecraft.client.Minecraft;
 import net.minecraft.client.player.LocalPlayer;
 import net.minecraft.client.resources.language.I18n;
 
-import java.util.HashMap;
+import java.util.Map;
 import java.util.Queue;
 import java.util.Set;
+import java.util.concurrent.ConcurrentHashMap;
 import java.util.function.Consumer;
 
 import static icyllis.modernui.view.ViewGroup.LayoutParams.MATCH_PARENT;
@@ -40,11 +41,10 @@ import static icyllis.modernui.view.ViewGroup.LayoutParams.WRAP_CONTENT;
 
 @Slf4j
 public class HomeView extends LinearLayout {
+    private static final ClientConfig clientConfig = ClientConfig.getInstance();
     @Getter
     private static HomeView instance;
-
-    private final HashMap<MusicCollection, MusicCollectionCard> idlePlaySourceCardMap = new HashMap<>();
-    private static final ClientConfig clientConfig = ClientConfig.getInstance();
+    private final Map<MusicCollection, MusicCollectionCard> idlePlaySourceCardMap = new ConcurrentHashMap<>();
     @Getter
     private StaggeredLyricScrollView staggeredLyricScrollView;
     private MusicListItem nextToPlayItem;
@@ -188,12 +188,14 @@ public class HomeView extends LinearLayout {
             Set<MusicCollection> clientIdlePlaySources = musicService.getLocalIdlePlaySources();
             Set<MusicCollection> serverIdlePlaySources = musicService.getServerIdlePlaySources();
             clientIdlePlaySources.forEach(collection -> {
-                MusicCollectionCard child = new MusicCollectionCard(context, collection);
-                clientIdlePlaySourceCardsList.addView(child);
-                idlePlaySourceCardMap.put(collection, child);
+                if (!idlePlaySourceCardMap.containsKey(collection)) {
+                    MusicCollectionCard child = new MusicCollectionCard(context, collection);
+                    clientIdlePlaySourceCardsList.addView(child);
+                    idlePlaySourceCardMap.put(collection, child);
+                }
             });
             serverIdlePlaySources.forEach(collection -> {
-                if (localPlayer != null && !collection.getPusherInfo().playerUUID().equals(localPlayer.getUUID())) {
+                if (localPlayer != null && !collection.getPusherInfo().getPlayerUUID().equals(localPlayer.getUUID()) && !idlePlaySourceCardMap.containsKey(collection)) {
                     MusicCollectionCard child = new MusicCollectionCard(context, collection);
                     serverIdlePlaySourceCardsList.addView(child);
                     idlePlaySourceCardMap.put(collection, child);
@@ -223,7 +225,7 @@ public class HomeView extends LinearLayout {
                 });
             });
             musicService.getServerIdlePlaySourceAddListeners().add(collection -> {
-                if ((localPlayer != null && collection.getPusherInfo().playerUUID() != localPlayer.getUUID())
+                if ((localPlayer != null && collection.getPusherInfo().getPlayerUUID() != localPlayer.getUUID())
                         && !idlePlaySourceCardMap.containsKey(collection)) {
                     MuiModApi.postToUiThread(() -> {
                         addIdlePlaySourceTo(collection, context, serverIdlePlaySourceCardsList);
@@ -326,7 +328,7 @@ public class HomeView extends LinearLayout {
         Queue<MusicDetail> musicQueue = musicService.getMusicQueue();
         boolean hasIdlePlaySources = !musicService.getLocalIdlePlaySources().isEmpty() || !musicService.getServerIdlePlaySources().isEmpty();
         MusicDetail next = hasIdlePlaySources ? nextIdle : null;
-        if (musicQueue.isEmpty() && next != null && next != MusicDetail.NONE) {
+        if (musicQueue.isEmpty() && next != null && !next.equals(MusicDetail.NONE)) {
             nextToPlayTitle.setVisibility(VISIBLE);
             nextToPlayItem.setVisibility(VISIBLE);
             nextToPlayItem.bindData(next);
@@ -344,16 +346,16 @@ public class HomeView extends LinearLayout {
         LinearLayout actions = new LinearLayout(getContext());
 
         assert Minecraft.getInstance().player != null;
-        if (musicDetail.getPusherInfo().playerUUID().equals(Minecraft.getInstance().player.getUUID())) {
+        if (musicDetail.getPusherInfo().getPlayerUUID().equals(Minecraft.getInstance().player.getUUID())) {
             Button removeButton = new Button(getContext());
             removeButton.setText(I18n.get(MusicHud.MOD_ID + ".button.remove"));
             removeButton.setTextSize(Theme.TEXT_SIZE_NORMAL);
             removeButton.setTextColor(Theme.SECONDARY_TEXT_COLOR);
-            Drawable background = ButtonInsetBackground.builder()
+            Drawable background = ButtonInsetBackgroundFactory.builder()
                     .inset(1)
-                    .padding(new ButtonInsetBackground.Padding(dp(8), dp(2), dp(2), dp(8)))
+                    .padding(new ButtonInsetBackgroundFactory.Padding(dp(8), dp(2), dp(2), dp(8)))
                     .cornerRadius(dp(4))
-                    .build().get();
+                    .build().newBackgroundDrawable();
             removeButton.setBackground(background);
             removeButton.setOnClickListener(v -> {
                 MusicService.getInstance().sendRemoveMusicFromQueue(playQueueView.indexOfChild(musicListItem), musicDetail);

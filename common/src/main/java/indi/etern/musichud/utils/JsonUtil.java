@@ -5,7 +5,6 @@ import com.google.gson.reflect.TypeToken;
 import com.google.gson.stream.JsonReader;
 import com.google.gson.stream.JsonWriter;
 import indi.etern.musichud.MusicHud;
-import indi.etern.musichud.beans.music.FormatType;
 import indi.etern.musichud.interfaces.AliasEnum;
 import indi.etern.musichud.interfaces.IntegerCodeEnum;
 import lombok.SneakyThrows;
@@ -19,48 +18,10 @@ public class JsonUtil {
     public static final Gson gson;
     static {
         gson = new GsonBuilder()
-                .registerTypeAdapter(FormatType.class, new FormatTypeAdapter())
                 .registerTypeAdapterFactory(new LenientEnumTypeAdapterFactory())
                 .registerTypeAdapter(Class.class, new ClassAdapter())
                 .registerTypeAdapter(ZonedDateTime.class, new ZonedDateTimeAdapter())
                 .create();
-    }
-
-    public static class FormatTypeAdapter extends TypeAdapter<FormatType> {
-        @Override
-        public void write(JsonWriter out, FormatType value) throws IOException {
-            if (value == null) {
-                out.nullValue();
-                return;
-            }
-            out.value(value.name());
-        }
-
-        @Override
-        public FormatType read(JsonReader in) throws IOException {
-            switch (in.peek()) {
-                case NULL:
-                    in.nextNull();
-                    return null;
-                case STRING:
-                    String input = in.nextString();
-                    FormatType type = FormatType.fromSerializedName(input);
-                    if (type == FormatType.GENERIC && input != null && !input.isBlank()) {
-                        MusicHud.getLogger(JsonUtil.class).debug("Unknown format type from API: {}, using GENERIC fallback", input);
-                    }
-                    return type;
-                case NUMBER:
-                    int ordinal = in.nextInt();
-                    FormatType[] values = FormatType.values();
-                    if (ordinal >= 0 && ordinal < values.length) {
-                        return values[ordinal];
-                    }
-                    MusicHud.getLogger(JsonUtil.class).debug("Invalid format type ordinal from API: {}, using GENERIC fallback", ordinal);
-                    return FormatType.GENERIC;
-                default:
-                    throw new JsonSyntaxException("Expected STRING, NUMBER, or NULL, but got: " + in.peek());
-            }
-        }
     }
 
     public static class LenientEnumTypeAdapterFactory implements TypeAdapterFactory {

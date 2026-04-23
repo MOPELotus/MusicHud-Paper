@@ -12,6 +12,40 @@ architectury {
 allprojects {
     group = rootProject.maven_group
     version = rootProject.mod_version + "+" + rootProject.minecraft_version_range
+
+    configurations.configureEach {
+        resolutionStrategy.eachDependency { details ->
+            if (details.requested.group == "net.neoforged.accesstransformers"
+                    && details.requested.name == "at-cli") {
+                details.useVersion("11.0.2")
+                details.because("NeoForge 21.11.0-beta resolves at-cli 10.0.2 without the required at-parser runtime class.")
+            }
+            if (details.requested.group == "net.neoforged"
+                    && details.requested.name == "accesstransformers") {
+                details.useVersion("11.0.2")
+                details.because("Keep the access transformer runtime aligned with at-cli 11.0.2.")
+            }
+        }
+    }
+
+    dependencies {
+        components {
+            withModule("net.neoforged.accesstransformers:at-cli") {
+                allVariants {
+                    withDependencies {
+                        add("net.neoforged.accesstransformers:at-parser:13.0.3")
+                    }
+                }
+            }
+            withModule("net.neoforged:accesstransformers") {
+                allVariants {
+                    withDependencies {
+                        add("net.neoforged.accesstransformers:at-parser:13.0.3")
+                    }
+                }
+            }
+        }
+    }
 }
 
 configure(subprojects.findAll { it.name != 'paper' }) {
@@ -50,10 +84,6 @@ configure(subprojects.findAll { it.name != 'paper' }) {
         maven {
             name "JitPack"
             url 'https://jitpack.io'
-        }
-        maven {
-            name = "dv8tion"
-            url = "https://m2.dv8tion.net/releases"
         }
         flatDir{
             dir "$projectDir/libs"

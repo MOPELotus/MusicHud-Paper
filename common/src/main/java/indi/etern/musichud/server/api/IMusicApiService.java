@@ -30,11 +30,7 @@ public interface IMusicApiService {
 
     <T> T search(String keywords, int offset, int limit, SearchType searchType, Function<String, T> transformer);
 
-    List<MusicDetail> getMusicDetailByIds(List<Long> ids);
-
-    default List<MusicDetail> getMusicDetailByIds(List<Long> ids, @Nullable ServerPlayer sourcePlayer) {
-        return getMusicDetailByIds(ids);
-    }
+    List<MusicDetail> getMusicDetailByIds(List<Long> ids, ServerPlayer serverPlayer);
 
     Album getAlbumInfoDetail(long id, ServerPlayer serverPlayer);
 
@@ -42,7 +38,7 @@ public interface IMusicApiService {
 
     List<MusicDetail> getArtistMoreMusic(long id, int offset, ServerPlayer serverPlayer);
 
-    MusicResourceInfo getResourceInfo(MusicDetail musicDetail, Quality quality, String cookie);
+    MusicResourceInfo getResourceInfo(MusicDetail musicDetail, Quality quality, ServerPlayer serverPlayer);
 
     List<Playlist> getPlayersUserSubscribedPlaylists(ServerPlayer player);
 

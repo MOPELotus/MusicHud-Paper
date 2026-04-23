@@ -2,8 +2,8 @@ package indi.etern.musichud.network.payloads.pushMessages.s2c;
 
 import indi.etern.musichud.MusicHud;
 import indi.etern.musichud.beans.music.FormatType;
-import indi.etern.musichud.client.music.NowPlayingInfo;
-import indi.etern.musichud.client.music.StreamAudioPlayer;
+import indi.etern.musichud.client.audio.NowPlayingInfo;
+import indi.etern.musichud.client.audio.StreamAudioPlayer;
 import indi.etern.musichud.interfaces.CommonRegister;
 import indi.etern.musichud.interfaces.RegisterMark;
 import indi.etern.musichud.network.INetworkRegister;

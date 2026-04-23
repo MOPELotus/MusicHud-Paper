@@ -1,9 +1,8 @@
 package indi.etern.musichud.utils;
 
 import indi.etern.musichud.MusicHud;
-import indi.etern.musichud.interfaces.ClientConfig;
-import indi.etern.musichud.platform.Environment;
 import indi.etern.musichud.interfaces.Register;
+import indi.etern.musichud.platform.Environment;
 
 import java.util.HashSet;
 import java.util.Set;
@@ -50,12 +49,16 @@ public class RegistrationManager {
             "indi.etern.musichud.network.payloads.requestResponseCycle.GetArtistMoreMusicResponse$RegisterImpl",
             "indi.etern.musichud.network.payloads.requestResponseCycle.GetMusicResourceRequest$RegisterImpl",
             "indi.etern.musichud.network.payloads.requestResponseCycle.GetMusicResourceResponse$RegisterImpl",
+            "indi.etern.musichud.network.payloads.requestResponseCycle.PhoneCodeLoginRequest$RegisterImpl",
+            "indi.etern.musichud.network.payloads.requestResponseCycle.PhonePasswordLoginRequest$RegisterImpl",
+            "indi.etern.musichud.network.payloads.requestResponseCycle.EmailPasswordLoginRequest$RegisterImpl",
+            "indi.etern.musichud.network.payloads.requestResponseCycle.SendPhoneValidationCodeRequest$RegisterImpl",
+            "indi.etern.musichud.network.payloads.requestResponseCycle.SendPhoneValidationCodeResponse$RegisterImpl",
             "indi.etern.musichud.network.payloads.pushMessages.s2c.RefreshMusicQueueMessage$RegisterImpl",
             "indi.etern.musichud.network.payloads.pushMessages.s2c.SwitchMusicMessage$RegisterImpl",
             "indi.etern.musichud.network.payloads.pushMessages.s2c.LoginResultMessage$RegisterImpl",
             "indi.etern.musichud.network.payloads.pushMessages.s2c.SyncCurrentPlayingMessage$RegisterImpl",
             "indi.etern.musichud.network.payloads.pushMessages.s2c.UpdateAllIdlePlaySourcesMessage$RegisterImpl",
-            "indi.etern.musichud.network.payloads.pushMessages.s2c.DebugPlaytestMessage$RegisterImpl",
             "indi.etern.musichud.network.payloads.pushMessages.c2s.AddToIdlePlaySourceMessage$RegisterImpl",
             "indi.etern.musichud.network.payloads.pushMessages.c2s.RemoveFromIdlePlaySourceMessage$RegisterImpl",
             "indi.etern.musichud.network.payloads.pushMessages.c2s.ClientPushMusicToQueueMessage$RegisterImpl",
@@ -66,20 +69,20 @@ public class RegistrationManager {
 
     private static final Set<Class<?>> registeredSet = new HashSet<>();
 
-    public static void performAutoRegistration() {
+    public static void performCommonAutoRegistration() {
+        MusicHud.LOGGER.info("Starting explicit auto-registration for common");
+        registerClassesFromList(COMMON_REGISTRIES, "common");
+    }
+
+    public static void performSideAutoRegistration() {
         Environment.Side side = MusicHud.getCurrentEnvironment().getSide();
         MusicHud.LOGGER.info("Starting explicit auto-registration in environment: {}", side.name());
 
         // 根据环境注册特定接口
         if (side == Environment.Side.CLIENT) {
             registerClassesFromList(CLIENT_REGISTRIES, "client");
-            if (ClientConfig.getInstance().getEnableEmbeddedServer()) {
-                registerClassesFromList(SERVER_REGISTRIES, "server");
-            }
-        } else {
-            registerClassesFromList(SERVER_REGISTRIES, "server");
         }
-        registerClassesFromList(COMMON_REGISTRIES, "common");
+        registerClassesFromList(SERVER_REGISTRIES, "server");
     }
 
     private static void registerClassesFromList(String[] classNames, String typeName) {

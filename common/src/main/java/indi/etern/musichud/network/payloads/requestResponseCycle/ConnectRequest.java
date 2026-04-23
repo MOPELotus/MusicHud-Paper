@@ -1,11 +1,14 @@
 package indi.etern.musichud.network.payloads.requestResponseCycle;
 
+import indi.etern.musichud.MusicHud;
 import indi.etern.musichud.Version;
+import indi.etern.musichud.interfaces.ClientConfig;
 import indi.etern.musichud.interfaces.CommonRegister;
 import indi.etern.musichud.interfaces.RegisterMark;
-import indi.etern.musichud.network.payloads.C2SPayload;
 import indi.etern.musichud.network.INetworkRegister;
 import indi.etern.musichud.network.IServerNetworkService;
+import indi.etern.musichud.network.payloads.C2SPayload;
+import indi.etern.musichud.platform.Environment;
 import indi.etern.musichud.server.api.ApiProvider;
 import indi.etern.musichud.server.api.ILoginApiService;
 import indi.etern.musichud.server.api.MusicPlayerServerService;
@@ -25,11 +28,17 @@ public record ConnectRequest(Version clientVersion) implements C2SPayload {
             INetworkRegister.getInstance().autoRegisterPayload(
                     ConnectRequest.class, CODEC,
                     ServerDataPacketVThreadExecutor.execute((startQRLoginRequest, serverPlayer) -> {
+                        ILoginApiService instance = ILoginApiService.getInstance(ApiProvider.NCM);
                         boolean compatible = Version.capableWith(startQRLoginRequest.clientVersion());
+                        if (MusicHud.getCurrentEnvironment().getSide() == Environment.Side.CLIENT && !ClientConfig.getInstance().getEnableEmbeddedServer()) {
+                            if (compatible) {
+                                instance.joinUnlogged(serverPlayer);
+                            }
+                            return;
+                        }
                         ConnectResponse response = new ConnectResponse(compatible, Version.current, List.of(ApiProvider.NCM));
                         IServerNetworkService.getInstance().sendToPlayer(serverPlayer, response);
                         if (compatible) {
-                            ILoginApiService instance = ILoginApiService.getInstance(ApiProvider.NCM);
                             instance.joinUnlogged(serverPlayer);
                             MusicPlayerServerService.getInstance().sendSyncPlayingStatusToPlayer(serverPlayer);
                         }

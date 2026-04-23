@@ -9,9 +9,15 @@ import org.apache.logging.log4j.Level;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
 
+import java.time.Duration;
+import java.util.HashSet;
 import java.util.Random;
+import java.util.Set;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
+import java.util.concurrent.Future;
+import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.function.Consumer;
 
 public final class MusicHud {
     public static final String MOD_ID = "music_hud";
@@ -21,8 +27,9 @@ public final class MusicHud {
     public static final Logger LOGGER = LogManager.getLogger(LOGGER_BASE_NAME);
     public static final ExecutorService EXECUTOR = Executors.newVirtualThreadPerTaskExecutor();
     @Getter
-    @Setter
     private static ConnectStatus status = ConnectStatus.NOT_CONNECTED;
+    @Getter
+    private static Set<Consumer<ConnectStatus>> connectStatusListeners = new HashSet<>();
     @Getter
     @Setter
     private static Environment currentEnvironment;
@@ -39,7 +46,11 @@ public final class MusicHud {
         }
         LOGGER.atLevel(Level.ALL);
         LOGGER.debug("Initialized in environment: {}", currentEnvironment);
-        EXECUTOR.execute(RegistrationManager::performAutoRegistration);
+        RegistrationManager.performCommonAutoRegistration();
+    }
+
+    public static void onConfigLoaded() {
+        RegistrationManager.performSideAutoRegistration();
     }
 
     public static Identifier location(String s) {
@@ -50,5 +61,40 @@ public final class MusicHud {
         CONNECTED,
         INCAPABLE,
         NOT_CONNECTED
+    }
+
+    public static ScheduledTask scheduleWithFixedDelay(Runnable task,
+                                                       Duration initialDelay,
+                                                       Duration delayBetween) {
+        AtomicBoolean running = new AtomicBoolean(true);
+
+        Future<?> future = EXECUTOR.submit(() -> {
+            try {
+                Thread.sleep(initialDelay.toMillis());
+                while (running.get() && !Thread.currentThread().isInterrupted()) {
+                    task.run();
+                    //noinspection BusyWait
+                    Thread.sleep(delayBetween.toMillis());
+                }
+            } catch (InterruptedException e) {
+                Thread.currentThread().interrupt(); // 恢复中断状态
+            }
+        });
+
+        // 优雅关闭：停止新任务并等待现有循环结束
+        return () -> {
+            running.set(false);
+            future.cancel(true);   // 中断线程，使sleep立即返回
+        };
+    }
+
+    @FunctionalInterface
+    public interface ScheduledTask {
+        void stop() throws InterruptedException;
+    }
+
+    public static void setStatus(ConnectStatus status) {
+        MusicHud.status = status;
+        connectStatusListeners.forEach(l -> l.accept(status));
     }
 }

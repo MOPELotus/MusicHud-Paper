@@ -11,7 +11,7 @@ import indi.etern.musichud.beans.music.Artist;
 import indi.etern.musichud.beans.music.MusicDetail;
 import indi.etern.musichud.beans.music.PusherInfo;
 import indi.etern.musichud.client.ui.Theme;
-import indi.etern.musichud.client.ui.utils.ButtonInsetBackground;
+import indi.etern.musichud.client.ui.utils.ButtonInsetBackgroundFactory;
 import lombok.Getter;
 import lombok.Setter;
 import net.minecraft.client.Minecraft;
@@ -29,7 +29,7 @@ public class MusicListItem extends LinearLayout {
     private final DateTimeFormatter timeFormatter = DateTimeFormatter.ofPattern("mm:ss");
     private UrlImageView albumImage;
     private TextView musicName;
-    private LinearLayout musicArtistAndAlbum;
+    private FlexWrapLayout musicArtistAndAlbum;
     private TextView durationText;
     private TextView pusherText;
     @Setter
@@ -47,15 +47,17 @@ public class MusicListItem extends LinearLayout {
         setOrientation(HORIZONTAL);
         LayoutParams musicLayoutParams = new LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT);
         setLayoutParams(musicLayoutParams);
+        setGravity(Gravity.CENTER_VERTICAL);
 
         albumImage = new UrlImageView(context);
         albumImage.setCornerRadius(dp(8));
+        albumImage.setAspectRatio(1);
         addView(albumImage, new LayoutParams(dp(imageSize), dp(imageSize)));
 
         LinearLayout musicTexts = new LinearLayout(context);
         musicTexts.setOrientation(VERTICAL);
         musicTexts.setGravity(Gravity.CENTER_VERTICAL);
-        LayoutParams textsParams = new LayoutParams(0, LayoutParams.MATCH_PARENT, 1);
+        LayoutParams textsParams = new LayoutParams(0, LayoutParams.WRAP_CONTENT, 1);
         textsParams.setMargins(dp(12), 0, 0, 0);
         addView(musicTexts, textsParams);
 
@@ -65,8 +67,7 @@ public class MusicListItem extends LinearLayout {
         musicName.setTextColor(Theme.NORMAL_TEXT_COLOR);
         musicTexts.addView(musicName);
 
-        musicArtistAndAlbum = new LinearLayout(context);
-        musicArtistAndAlbum.setOrientation(HORIZONTAL);
+        musicArtistAndAlbum = new FlexWrapLayout(context);
         musicTexts.addView(musicArtistAndAlbum);
 
         LinearLayout linearLayout = new LinearLayout(context);
@@ -110,11 +111,11 @@ public class MusicListItem extends LinearLayout {
             }
             index++;
             Button artistButton = new Button(context);
-            Drawable background = ButtonInsetBackground.builder()
+            Drawable background = ButtonInsetBackgroundFactory.builder()
                     .inset(0)
                     .cornerRadius(dp(2))
-                    .padding(new ButtonInsetBackground.Padding(0, 0, 0, 0))
-                    .build().get();
+                    .padding(new ButtonInsetBackgroundFactory.Padding(0, 0, 0, 0))
+                    .build().newBackgroundDrawable();
             artistButton.setBackground(background);
             artistButton.setFocusable(true);
             artistButton.setClickable(true);
@@ -138,11 +139,11 @@ public class MusicListItem extends LinearLayout {
         split.setText(" - ");
         musicArtistAndAlbum.addView(split);
         Button albumButton = new Button(context);
-        Drawable background = ButtonInsetBackground.builder()
+        Drawable background = ButtonInsetBackgroundFactory.builder()
                 .inset(0)
                 .cornerRadius(dp(2))
-                .padding(new ButtonInsetBackground.Padding(0, 0, 0, 0))
-                .build().get();
+                .padding(new ButtonInsetBackgroundFactory.Padding(0, 0, 0, 0))
+                .build().newBackgroundDrawable();
         albumButton.setBackground(background);
         albumButton.setFocusable(true);
         albumButton.setClickable(true);
@@ -170,10 +171,10 @@ public class MusicListItem extends LinearLayout {
 
         if (showPusherInfo) {
             PusherInfo pusherInfo = musicDetail.getPusherInfo();
-            if (!pusherInfo.playerName().isEmpty()) {
+            if (!pusherInfo.getPlayerName().isEmpty()) {
                 ClientPacketListener connection = Minecraft.getInstance().getConnection();
                 if (connection == null) throw new IllegalStateException();
-                pusherText.setText(pusherInfo.playerName());
+                pusherText.setText(pusherInfo.getPlayerName());
             }
         }
     }

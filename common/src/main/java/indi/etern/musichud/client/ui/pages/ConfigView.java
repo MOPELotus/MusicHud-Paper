@@ -10,8 +10,8 @@ import icyllis.modernui.view.View;
 import icyllis.modernui.widget.*;
 import indi.etern.musichud.MusicHud;
 import indi.etern.musichud.beans.music.Quality;
-import indi.etern.musichud.client.music.NowPlayingInfo;
-import indi.etern.musichud.client.music.StreamAudioPlayer;
+import indi.etern.musichud.client.audio.NowPlayingInfo;
+import indi.etern.musichud.client.audio.StreamAudioPlayer;
 import indi.etern.musichud.client.services.LoginService;
 import indi.etern.musichud.client.services.MusicService;
 import indi.etern.musichud.client.ui.Theme;
@@ -20,10 +20,13 @@ import indi.etern.musichud.client.ui.hud.HudRendererManager;
 import indi.etern.musichud.client.ui.hud.metadata.HorizontalAlign;
 import indi.etern.musichud.client.ui.hud.metadata.VerticalAlign;
 import indi.etern.musichud.client.ui.screen.MainFragment;
-import indi.etern.musichud.client.ui.utils.ButtonInsetBackground;
+import indi.etern.musichud.client.ui.utils.ButtonInsetBackgroundFactory;
 import indi.etern.musichud.interfaces.ClientConfig;
 import indi.etern.musichud.interfaces.ServerConfig;
+import indi.etern.musichud.server.api.ApiProvider;
 import indi.etern.musichud.server.api.ApiServerManager;
+import indi.etern.musichud.server.api.ILoginApiService;
+import indi.etern.musichud.server.api.MusicPlayerServerService;
 import lombok.Getter;
 import lombok.extern.slf4j.Slf4j;
 import net.minecraft.util.Util;
@@ -215,6 +218,22 @@ public class ConfigView extends LinearLayout {
                     clientConfig::setEnableEmbeddedServer)
                     .setDefaultValue(true);
             enableEmbeddedServerOption.create(embeddedServerCategory);
+            ApiServerManager apiServerManager = ApiServerManager.getInstance();
+            enableEmbeddedServerOption.setOnChanged(() -> {
+                ILoginApiService loginApiService = ILoginApiService.getInstance(ApiProvider.NCM);
+                if (clientConfig.getEnableEmbeddedServer()) {
+                    if (apiServerManager != null) {
+                        apiServerManager.restartApiServer();
+                    }
+                    loginApiService.reconnectAll();
+                } else {
+                    MusicPlayerServerService.getInstance().reset();
+                    loginApiService.disconnectToAll();
+                    if (apiServerManager != null) {
+                        apiServerManager.stopApiServer();
+                    }
+                }
+            });
 
             ServerConfig serverConfig = ServerConfig.getInstance();
             {
@@ -282,34 +301,34 @@ public class ConfigView extends LinearLayout {
             TextView apiStatusLabel = new TextView(context);
             apiStatusLabel.setTextSize(14);
             String string = I18n.get(MusicHud.MOD_ID + ".text.binaryApiStatus");
-            apiStatusLabel.setText(string.replace("{}", I18n.get(ApiServerManager.getBinaryApiServerStatus().i18nKey())));
+            apiStatusLabel.setText(string.replace("{}", I18n.get(apiServerManager.getBinaryApiServerStatus().i18nKey())));
 
             Consumer<ApiServerManager.BinaryApiServerStatus> listener = (apiStatusListener) -> {
                 MuiModApi.postToUiThread(() -> {
                     apiStatusLabel.setText(string.replace("{}", I18n.get(apiStatusListener.i18nKey())));
                 });
             };
-            List<Consumer<ApiServerManager.BinaryApiServerStatus>> apiStatusListeners = ApiServerManager.getApiStatusListeners();
+            List<Consumer<ApiServerManager.BinaryApiServerStatus>> apiStatusListeners = apiServerManager.getApiStatusListeners();
             apiStatusListeners.add(listener);
 
             Button stopApiServerButton = new Button(context);
             stopApiServerButton.setText(I18n.get(MusicHud.MOD_ID + ".button.stopApiServer"));
             stopApiServerButton.setTextColor(Theme.PRIMARY_COLOR);
             stopApiServerButton.setTextSize(14);
-            Drawable bg1 = ButtonInsetBackground.builder().inset(0).padding(new ButtonInsetBackground.Padding(dp(8), dp(4), dp(8), dp(4))).build().get();
+            Drawable bg1 = ButtonInsetBackgroundFactory.builder().inset(0).padding(new ButtonInsetBackgroundFactory.Padding(dp(8), dp(4), dp(8), dp(4))).build().newBackgroundDrawable();
             stopApiServerButton.setBackground(bg1);
             stopApiServerButton.setOnClickListener((v) -> {
-                ApiServerManager.stopApiServer();
+                apiServerManager.stopApiServer();
             });
 
             Button restartApiServerButton = new Button(context);
             restartApiServerButton.setText(I18n.get(MusicHud.MOD_ID + ".button.restartApiServer"));
             restartApiServerButton.setTextColor(Theme.PRIMARY_COLOR);
             restartApiServerButton.setTextSize(14);
-            Drawable bg = ButtonInsetBackground.builder().inset(0).padding(new ButtonInsetBackground.Padding(dp(8), dp(4), dp(8), dp(4))).build().get();
+            Drawable bg = ButtonInsetBackgroundFactory.builder().inset(0).padding(new ButtonInsetBackgroundFactory.Padding(dp(8), dp(4), dp(8), dp(4))).build().newBackgroundDrawable();
             restartApiServerButton.setBackground(bg);
             restartApiServerButton.setOnClickListener((v) -> {
-                ApiServerManager.restartApiServer();
+                apiServerManager.restartApiServer();
             });
 
             addOnAttachStateChangeListener(new OnAttachStateChangeListener() {

@@ -33,6 +33,7 @@ public final class CommonInitializer extends JavaPlugin {
 
         try {
             MusicHud.init();
+            MusicHud.onConfigLoaded();
         } catch (RuntimeException e) {
             shutdownServices();
             throw e;
@@ -48,7 +49,7 @@ public final class CommonInitializer extends JavaPlugin {
         if (eventService != null) {
             eventService.fireServerStopping();
         }
-        ApiServerManager.stopApiServer();
+        ApiServerManager.getInstance().stopApiServer();
         if (networkManager != null) {
             networkManager.close();
             networkManager = null;

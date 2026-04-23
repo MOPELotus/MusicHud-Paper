@@ -1,30 +1,16 @@
 package indi.etern.musichud.client.ui.hud.renderer;
 
-import com.mojang.blaze3d.buffers.GpuBufferSlice;
-import com.mojang.blaze3d.systems.RenderPass;
-import icyllis.modernui.mc.GradientRectangleRenderState;
-import icyllis.modernui.mc.MuiModApi;
-import indi.etern.musichud.client.ui.hud.metadata.BackgroundImage;
+import icyllis.modernui.mc.ModernUIMod;
 import indi.etern.musichud.client.ui.hud.metadata.HudRenderData;
-import indi.etern.musichud.client.ui.hud.metadata.HudUniformWriter;
 import indi.etern.musichud.client.ui.hud.metadata.Layout;
-import indi.etern.musichud.client.ui.hud.piplines.HudRenderPipelines;
-import indi.etern.musichud.client.ui.utils.image.ImageTextureData;
-import indi.etern.musichud.client.ui.utils.image.ImageUtils;
+import indi.etern.musichud.client.ui.hud.metadata.ThemedColors;
+import indi.etern.musichud.client.ui.hud.pipelines.HudRenderPipelines;
+import indi.etern.musichud.client.ui.hud.pipelines.HudRenderState;
 import net.minecraft.client.Minecraft;
-import net.minecraft.client.gui.GuiGraphics;
-import net.minecraft.client.gui.navigation.ScreenRectangle;
 import net.minecraft.client.gui.render.TextureSetup;
-import net.minecraft.client.renderer.texture.AbstractTexture;
-import net.minecraft.client.renderer.texture.DynamicTexture;
-import net.minecraft.resources.Identifier;
-import org.joml.Matrix3x2f;
 
-public class BackgroundRenderer {
+public class BackgroundRenderer implements HudRenderer {
     private static volatile BackgroundRenderer instance;
-    private final HudUniformWriter uniformWriter = new HudUniformWriter();
-    private Identifier defaultImageLocation;
-    private GpuBufferSlice gpuBufferSlice;
     private HudRenderData currentData;
 
     public static BackgroundRenderer getInstance() {
@@ -41,73 +27,55 @@ public class BackgroundRenderer {
         this.currentData = data;
     }
 
-    public void render(GuiGraphics gr) {
+    private static final int SWATCH_SIZE = 20;
+    private static final int PADDING = 4;
+    private static final int START_X = 4;
+    private static final int START_Y = 4;
+
+    public void drawColorDebug(HudRenderContext renderContext, ThemedColors colors) {
+        if (colors == null) return;
+
+        int currentY = START_Y;
+        drawColorDebugLine(renderContext, currentY, colors.primary, "Primary");
+        currentY += SWATCH_SIZE + PADDING;
+        drawColorDebugLine(renderContext, currentY, colors.secondary, "Secondary");
+        currentY += SWATCH_SIZE + PADDING;
+        drawColorDebugLine(renderContext, currentY, colors.bright, "Bright");
+        currentY += SWATCH_SIZE + PADDING;
+        drawColorDebugLine(renderContext, currentY, colors.dark, "Dark");
+    }
+
+    private static void drawColorDebugLine(HudRenderContext renderContext, int currentY, int color, String label) {
+        // 绘制色块背景（黑色边框+色块）
+        renderContext.fill(START_X, currentY, START_X + SWATCH_SIZE, currentY + SWATCH_SIZE, 0xFF000000); // 黑色边框背景
+        renderContext.fill(START_X + 1, currentY + 1, START_X + SWATCH_SIZE - 1, currentY + SWATCH_SIZE - 1, color);
+
+        // 绘制文字（颜色值 + 标签）
+        String hex = String.format("#%06X", color & 0x00FFFFFF);
+        renderContext.drawString(Minecraft.getInstance().font, label + ": " + hex,
+                START_X + SWATCH_SIZE + PADDING, currentY + (SWATCH_SIZE - 8) / 2, 0xFFFFFFFF);
+    }
+
+    @Override
+    public void render(HudRenderContext hudRenderContext) {
         if (currentData == null) {
             return;
         }
-
-        gpuBufferSlice = uniformWriter.write(currentData, gr);
+        hudRenderContext.writeUniformData("HudBackgroundParams", currentData);
 
         Layout layout = currentData.getLayout();
-        BackgroundImage bgImage = currentData.getBackgroundImage();
+        HudRenderState hudRenderState = new HudRenderState(
+                HudRenderPipelines.BACKGROUND,
+                TextureSetup.noTexture(),
+                hudRenderContext.currentPose(),
+                layout.width, layout.height
+        );
 
-        var transitionStatus = HudRenderData.getTransitionStatus();
-        var nextData = transitionStatus.getNextData();
-        Identifier nextBlurredLocation = nextData == null ? null : nextData.nextBlurred();
-        DynamicTexture currentTexture = getDynamicTexture(bgImage.currentBlurredLocation);
-        DynamicTexture nextTexture = getDynamicTexture(nextBlurredLocation);
-        DynamicTexture transitionTexture = transitionStatus.isTransitioning() ?
-                nextTexture : currentTexture;
-
-        TextureSetup textureSetup;
-        if (currentTexture != null) {
-            textureSetup = transitionTexture != null ?
-                    TextureSetup.doubleTexture(
-                            currentTexture.getTextureView(), currentTexture.getSampler(),
-                            transitionTexture.getTextureView(), transitionTexture.getSampler()
-                    ) : TextureSetup.singleTexture(currentTexture.getTextureView(),  currentTexture.getSampler());
-        } else {
-            textureSetup = TextureSetup.noTexture();
+        if (ModernUIMod.isDeveloperMode()) {
+            drawColorDebug(hudRenderContext, currentData.getTransitionableBackground().getCurrent().color());
         }
 
-        float halfWidth = layout.width / 2f;
-        float halfHeight = layout.height / 2f;
-
-        ScreenRectangle scissor = MuiModApi.get().peekScissorStack(gr);
-        MuiModApi.get().submitGuiElementRenderState(gr,
-                new GradientRectangleRenderState(
-                        HudRenderPipelines.BACKGROUND,
-                        textureSetup,
-                        new Matrix3x2f(gr.pose()),
-                        -halfWidth, -halfHeight, halfWidth, halfHeight,
-                        0xFFFFFFFF, 0xFFFFFFFF, 0xFFFFFFFF, 0xFFFFFFFF,
-                        scissor
-                ));
-    }
-
-    private DynamicTexture getDynamicTexture(Identifier imageLocation) {
-        if (imageLocation == null) {
-            if (defaultImageLocation == null) {
-                String greyImageBase64 = "data:bitmap/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAoAAAAKCAYAAACNMs+9AAAAGElEQVQYV2OMiYn5z0AEYBxViC+UqB88ABNsFMnD0ASTAAAAAElFTkSuQmCC";
-                ImageTextureData imageTextureData = ImageUtils.loadBase64(greyImageBase64);
-                imageTextureData.register().join();
-                defaultImageLocation = imageTextureData.getLocation();
-            }
-            return getDynamicTexture(defaultImageLocation);
-        }
-
-        AbstractTexture texture = Minecraft.getInstance()
-                .getTextureManager()
-                .getTexture(imageLocation);
-        if (texture instanceof DynamicTexture dynamicTexture) {
-            return dynamicTexture;
-        }
-        return null;
-    }
-
-    public void updateRenderPass(RenderPass renderPass) {
-        if (gpuBufferSlice != null) {
-            renderPass.setUniform("HudBackgroundParams", gpuBufferSlice);
-        }
+        hudRenderContext.submitGuiElementRenderState(hudRenderState);
+        hudRenderContext.nextStratum();
     }
 }

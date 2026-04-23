@@ -1,40 +1,115 @@
 # Music Hud
 ![Static Badge](https://img.shields.io/badge/Java-21-red?style=for-the-badge)
-![Static Badge](https://img.shields.io/badge/Minecraft-1.21.x-blue?style=for-the-badge)
-![Static Badge](https://img.shields.io/badge/Platform-Fabric-green?style=for-the-badge)
-![Static Badge](https://img.shields.io/badge/Platform-Neoforge-orange?style=for-the-badge)
-![Static Badge](https://img.shields.io/badge/Platform-Paper-grey?style=for-the-badge)
 ![Static Badge](https://img.shields.io/badge/License-LGPLv3-brightgreen?style=for-the-badge)
 
-#### 一个带 Paper 服务端增强支持的全服点歌模组维护分支
+## Paper Release Additions
+- Added Paper admin commands: `/musichud` and `/music` for status, player info, config, API process control, playback queue/idle source management, decoder probing, and client playtest.
+- Replaced the client audio decoder path with LavaPlayer-backed decoding while keeping upstream UI, login, network, and playback changes synced.
+- Supported debug/local playback formats include `aac`, `flac`, `m4a`, `mp3`, `ogg`, `opus`, `opus.ogg`, `wav`, and `webm`; `auto`/`generic` probing is available for unknown sources.
+- Paper server jars bundle the decoder libraries, so `/musichud test` and `/musichud playtest` can be used directly after installing the matching client mod.
 
-> 本分支新增了 `/musichud` 与 `/music` 服务端管理指令，并将客户端与服务端的音频解码统一切换为 LavaPlayer。  
-> 常见 `mp3`、`flac`、`wav`、`ogg`、`opus`、`aac`、`m4a/mp4`、`aiff`、`au` 现已纳入支持范围，且可通过 `test` / `playtest` 指令直接验证解码与播放链路。
+## 本分支增强
+- 新增 Paper 管理指令 `/musichud` 与 `/music`，包含状态查询、玩家信息、配置、API 进程、播放队列/空闲播放源管理、解码器探测和客户端 playtest。
+- 将客户端解码链路切换为 LavaPlayer，同时保留并同步上游 UI、登录、网络和播放逻辑更新。
+- 调试播放/本地播放支持 `aac`、`flac`、`m4a`、`mp3`、`ogg`、`opus`、`opus.ogg`、`wav`、`webm`，未知来源可用 `auto`/`generic` 自动探测。
+- Paper 服务端构建会打包解码依赖，安装匹配客户端 mod 后可直接使用 `/musichud test` 和 `/musichud playtest`。
+
+![Banner](https://cdn.modrinth.com/data/7Rnb6oJr/images/82adebdd95d53dd3d97c41ae2f60d24b033c9fb3.png)
+![Home View](https://cdn.modrinth.com/data/7Rnb6oJr/images/2d00c770f54f44fc194f46842f5876e307ab54e5.png)
+
+#### A GUI-based Full Server Song Request Mod / Plugin
+
+> Due to service scope provided by Netease, this mod might not working good outside China
+
+## Related Links
+
+[Third-party Bukkit plugin 1](https://github.com/Shiroiame-Kusu/MusicHud-Bukkit) (1.0.5 stable -)
+
+[Third-party Bukkit plugin 2](https://github.com/MOPELotus/MusicHud-Paper) (1.1.4 hotfix +, now partly merged into main repository)
+
+## Prerequisites
+- Fabric: Fabric API and Forge Config API Port are required; Mod Menu and Modern UI are recommended.
+- NeoForge: Modern UI is required on the client.
+- Paper: install the Paper jar on the server and the matching Fabric/NeoForge client mod for HUD playback.
+
+## Features
+- GUI-based, providing an in-game operation interface and a relatively aesthetic, easily configurable HUD.
+- Can read NetEase Cloud Music account playlists for convenient song requests.
+- The server does not retain user data; it is only temporarily stored during login.
+- Streamed playback with no redundant client-side caching.
+- Staggered lyrics auto scroll inspired by Apple Music
+- HUD dynamic fluid background
+
+## Functions
+- Search for music.
+- Log in to NetEase Cloud Music account via QR code to request songs from user playlists.
+- Synchronized server-wide playlist.
+- Configure playlists as idle playback sources for automatic random song switching.
+- Display lyrics, requesting player (with avatar) in the HUD and user interface.
+- Display the playlist in the user interface.
+
+## Usage
+
+### Client
+First of all, place the MusicHud jar file into the `mods` folder. Fabric also requires Fabric API and Forge Config API Port; Mod Menu and Modern UI are recommended. NeoForge requires Modern UI on the client.
+
+#### Single-player or LAN Multi-player Host
+> Currently experimentally supports single-player mode.
+
+All you need is to deploy an API server
+
+#### Multiplayer (join Server or LAN Multi-player)
+You don't need to deploy an API server, but the server or LAN multiplayer host to deploy MusicHUD and API server
+
+### Server
+All you need is to deploy an API server
+
+### How to Deploy an API server
+There are 2 methods to deploy
+#### Deploy bound with mod (recommend for client)
+> This method will allows MusicHUD to manage lifecycle by itself
+>
+> Due to some limitations, API Server may not be auto-closed when game exit abnormal as crashes
+
+1. **Login to GitHub** and goes to https://github.com/NeteaseCloudMusicApiEnhanced/api-enhanced/actions/workflows/build-and-pr.yml
+2. Click latest action runs in type "build-and-pr" and download platform binary artifacts matches to your pc/server
+3. Uncompress the binary executable file from ZIP file to {corepath}/music-hud/ and renames to `api` (`api.exe` on Windows)
+
+> Default path for plugin versions is `{corepath}/api(.exe)`
+> Or place it in anywhere and modify config `startupBinaryApiServerWhenLaunch` in game or in config file `music_hud-server.toml`
+
+#### Deploy seperately (recommend for server)
+1. Deploy Netease Cloud Music API Enhanced (https://github.com/neteasecloudmusicapienhanced/api-enhanced).
+2. If not using the default port (3000) of NCM API Enhanced or deploying on another server, modify the `serverApiBaseUrl` property in the config file.
+> Configuration file location: `/config/music_hud-server.toml`
+
+---
+## CN version description
+
+#### 一个 GUI 化的全服点歌模组/插件
 
 ## 相关链接
-[ModRinth](https://modrinth.com/mod/music-hud)
 
 [MC 百科](https://www.mcmod.cn/class/23688.html)
 
-[原第三方 Bukkit 插件实现](https://github.com/Shiroiame-Kusu/MusicHud-Bukkit)
+[第三方bukkit插件实现 1](https://github.com/Shiroiame-Kusu/MusicHud-Bukkit) (1.0.5 stable -)
 
-![img](https://cdn-alt.modrinth.com/data/7Rnb6oJr/images/96714cbb6621950e3daceee1ab2f7343836e9bbb.png)
-![img](https://cdn-alt.modrinth.com/data/7Rnb6oJr/images/49fdedf9f26ec05930035f9f79ba388502f0f62d.png)
+[第三方bukkit插件实现 2](https://github.com/MOPELotus/MusicHud-Paper) (1.1.4 hotfix +,，目前已部分合并至主仓库)
 
 ## 前置依赖
-- ModernUI
-- Forge Config API Port
-- Architectury API
+- Fabric：需要 Fabric API 与 Forge Config API Port，推荐安装 Mod Menu 与 Modern UI。
+- NeoForge：客户端需要 Modern UI。
+- Paper：服务端安装 Paper 插件 jar，客户端安装匹配的 Fabric/NeoForge mod 才能显示 HUD 并播放。
 
 ## 特点
 - GUI 化， 提供游戏内操作界面，以及较为美观易配置的 HUD
 - 可读取网易云账户歌单，方便点歌
 - 服务端不保留用户数据，仅在登录时暂存
 - 流式播放，无赘余的客户端缓存
-- 增强了 Paper 服务端管理能力，可直接在游戏内或控制台维护配置、播放和 API 状态
-- 客户端与服务端播放链统一使用 LavaPlayer，格式兼容性显著提升
+- 受 Apple Music 启发的歌词交错滚动
+- HUD 动态流体背景
 
-## 功能 
+## 功能
 - 搜索音乐
 - 通过二维码登录网易云账户，从用户歌单点歌
 - 全服同步播放列表
@@ -42,64 +117,35 @@
 - 在 HUD 和用户界面中展示歌词，点歌玩家（/头像）
 - 在用户界面中展示播放列表
 
-## 本分支新增
-- 新增 Paper 服务端管理指令：`/musichud`、`/music`
-- 新增服务端解码探针：`/musichud test <服务器路径或URL> [declaredFormat]`
-- 新增客户端调试播放：`/musichud playtest <客户端路径或URL> [declaredFormat]`
-- 客户端与服务端解码统一切换为 LavaPlayer
-- 统一支持和识别常见音频格式：`mp3`、`flac`、`wav`、`ogg`、`opus`、`aac`、`m4a/mp4`、`aiff`、`au`
-
-## 兼容性说明
-- 具体适用的 Minecraft 小版本请以当前分支名和构建产物文件名为准；本 README 统一使用 `1.21.x` 表示同一套维护线。
-- 发布时建议将 **Paper 插件** 与本仓库对应版本的 **Fabric/NeoForge 客户端模组** 一起分发与使用。
-- 上游旧客户端在部分传统场景下可能仍能处理 `mp3` / `flac`，但本分支新增了新的 `FormatType`、新的调试播放消息以及新的 LavaPlayer 解码链路，**不再保证与上游旧客户端完全兼容**。
-- 如果你要使用新增格式支持、`test` / `playtest` 调试能力，或避免 `WAV/OGG/AAC/M4A/OPUS` 等资源在旧客户端上因枚举不一致而失败，请使用本仓库配套客户端。
-
-## Paper 服务端指令
-- `/musichud` 或 `/music`：打开帮助
-- `/musichud status`：查看服务端、API 与播放状态
-- `/musichud player <玩家名>`：查看指定玩家的登录与排队信息
-- `/musichud config show|set|save|reload`：查看、修改、保存或重载服务端配置
-- `/musichud api status|restart|stop`：管理内置 API 进程
-- `/musichud playback skip`：强制切歌
-- `/musichud playback queue [remove <索引>]`：查看或移除播放队列
-- `/musichud playback idle [remove <玩家> <playlist|album> <ID>]`：管理空闲播放源
-- `/musichud test <服务器路径或URL> [declaredFormat]`：只测试服务端解码器与探针信息
-- `/musichud playtest <客户端路径或URL> [declaredFormat]`：让自己客户端进行调试播放
-- `/musichud playtest <玩家> <客户端路径或URL> [declaredFormat]`：让指定玩家客户端进行调试播放
-- `/musichud playtest stop [玩家]`：停止调试播放
-
-## 格式支持
-- 常见本地文件与直链格式：`mp3`、`flac`、`wav`、`ogg/vorbis`、`ogg/opus`、`aac`、`m4a/mp4`、`aiff`、`au`
-- `test` 指令会优先显示检测到的资源格式、解码后端、声道数、采样率与 OpenAL 格式
-- `playtest` 指令可用于验证目标客户端是否能真实播放对应文件或 URL
-- 如果某些文件仍然无法播放，建议优先用 `test` 查看识别结果，再用 `playtest` 复现客户端行为
-
 ## 使用
 ### 客户端
-> 目前不支持在单人游戏中使用
+首先在 `mods` 文件夹中放入 MusicHud 的 jar 文件。Fabric 还需要 Fabric API 与 Forge Config API Port，推荐安装 Mod Menu 与 Modern UI；NeoForge 客户端需要 Modern UI。
+#### 单人模式 或 局域网联机主机
+> 目前对单人游戏和局域网联机主机提供实验性支持
+>
+> 由于一些限制，在游戏非正常退出时（如崩溃）无法自动结束进程
 
-在 mods 文件夹中放入 Architectury API, ModernUI 和 Forge Config API Port (仅Fabric需要) 这几个前置 mod 和 MusicHud 的 jar 文件即可
+只需要部署 API 服务器
+
+#### 加入服务器 或 加入局域网世界
+不需要部署 API 服务器但是需要服务器/局域网主机部署 MusicHUD 和 API 服务器
+
 ### 服务端
-1. 部署 Netease Cloud Music API Enhanced (https://github.com/neteasecloudmusicapienhanced/api-enhanced)，或者使用本分支提供的 Paper 插件内置 API 管理能力
-2. 如果不使用 NCM API Enhanced 的默认端口 ( 3000 ) 或在其他服务器上部署，需要修改配置文件的 `serverApiBaseUrl` 属性
-3. 如果使用本仓库的 Paper 插件增强功能，建议一并给客户端更新本仓库对应版本的 Fabric / NeoForge 模组
+只需要部署 API 服务器
 
-配置文件位置 `/config/music_hud-server.toml`
+### 如何部署
+两种方法
+#### 绑定在 mod 中（推荐客户端使用）
+> 这个方法会让 MusicHUD 管理 API 服务器生命周期
 
-配置文件默认内容
-```toml
-#Server API Base URL configuration
-serverApiBaseUrl = "http://localhost:3000"
-#Music Pusher's vote additional rate when voting for skip music configuration (0.0 ~ 1.0, total rate larger than or equals to 0.5 means to skip)
-# Default: 0.5
-# Range: 0.0 ~ 1.0
-pusherVoteAdditionalRate = 0.5
-#Use random Chinese IP provided by api server
-useRandomCnIp = true
+1. **登录到 GitHub** 并跳转到 https://github.com/NeteaseCloudMusicApiEnhanced/api-enhanced/actions/workflows/build-and-pr.yml
+2. 在 actions 类型中选择 "build-and-pr" 并进入最新的构建中根据你的平台下载对应的二进制构建产物
+3. 解压下载得到的压缩包并将其中的二进制可执行文件放置到 {核心目录}/music-hud/ and renames to `api` (`api.exe` on Windows)
 
-```
+> 对应插件版本则是 {核心目录}/api(.exe)
+> 或者放在任意处并在游戏内或配置文件中修改选项 `serverApiBinaryExecutablePath` 对应目录
 
-## 已知问题
-- 未登录时，由于使用音源替换，部分音乐可能会出现音频瑕疵以及加载缓慢
-- 不同来源的音频容器和编码差异较大，遇到问题时建议先使用 `test` / `playtest` 定位是识别、解码还是目标客户端环境问题
+#### 独立部署（推荐服务端使用）
+1. 部署 Netease Cloud Music API Enhanced (https://github.com/neteasecloudmusicapienhanced/api-enhanced)
+2. 如果不使用 NCM API Enhanced 的默认端口 ( 3000 ) 或在其他服务器上部署，需要修改配置文件的 serverApiBaseUrl 属性
+> 配置文件位置 `/config/music_hud-server.toml`

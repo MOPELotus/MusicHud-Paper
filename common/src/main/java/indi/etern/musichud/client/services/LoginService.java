@@ -7,10 +7,13 @@ import indi.etern.musichud.beans.login.LoginCookieInfo;
 import indi.etern.musichud.beans.login.LoginType;
 import indi.etern.musichud.beans.user.Profile;
 import indi.etern.musichud.client.config.ProfileConfigData;
-import indi.etern.musichud.client.ui.components.AccountView;
-import indi.etern.musichud.client.ui.components.QRLoginView;
-import indi.etern.musichud.client.ui.pages.AccountBaseView;
-import indi.etern.musichud.interfaces.*;
+import indi.etern.musichud.client.ui.pages.account.AccountBaseView;
+import indi.etern.musichud.client.ui.pages.account.AccountView;
+import indi.etern.musichud.client.ui.pages.account.LoginView;
+import indi.etern.musichud.interfaces.ClientConfig;
+import indi.etern.musichud.interfaces.ClientRegister;
+import indi.etern.musichud.interfaces.IClientEventService;
+import indi.etern.musichud.interfaces.RegisterMark;
 import indi.etern.musichud.network.IClientNetworkService;
 import indi.etern.musichud.network.NetworkReceiver;
 import indi.etern.musichud.network.payloads.pushMessages.c2s.LogoutMessage;
@@ -21,6 +24,7 @@ import indi.etern.musichud.network.payloads.requestResponseCycle.CookieLoginRequ
 import indi.etern.musichud.network.payloads.requestResponseCycle.StartQRLoginResponse;
 import lombok.Getter;
 import lombok.Setter;
+import net.minecraft.client.resources.language.I18n;
 import org.apache.logging.log4j.Logger;
 
 import java.util.ArrayList;
@@ -44,7 +48,7 @@ public class LoginService {
     @Getter
     NetworkReceiver<LoginResultMessage> loginResultReceiver = (loginResult, player) -> {
         MusicHud.EXECUTOR.submit(() -> {
-            Thread.currentThread().setName("Login Processor");
+            Thread.currentThread().setName("MHWorker-Login-V");
             LoginCookieInfo loginCookieInfo = loginResult.loginCookieInfo();
             LoginType type = loginCookieInfo.type();
             if (type != LoginType.UNLOGGED && type != LoginType.ANONYMOUS && loginResult.success()) {
@@ -65,16 +69,26 @@ public class LoginService {
                     ProfileConfigData profileConfigData = ProfileConfigData.getInstance();
                     profileConfigData.setProfile(loginResult.profile());
                     profileConfigData.saveToConfig();
+                    MuiModApi.postToUiThread(() -> {
+                        AccountView accountView = AccountView.getInstance();
+                        if (accountView != null) {
+                            accountView.refresh();
+                        }
+                    });
                 } else {
                     MuiModApi.postToUiThread(() -> {
                         AccountView accountView = AccountView.getInstance();
                         if (accountView != null) {
                             accountView.refresh();
                         }
-                        QRLoginView qrLoginView = QRLoginView.getInstance();
-                        if (qrLoginView != null) {
-                            qrLoginView.reset();
-                            qrLoginView.errorText(loginResult.message());
+                        LoginView loginView = LoginView.getInstance();
+                        if (loginView != null) {
+                            loginView.reset();
+                            String message = loginResult.message();
+                            if (message.startsWith(MusicHud.MOD_ID)) {
+                                message = I18n.get(message);
+                            }
+                            loginView.errorText(message);
                         }
                     });
                 }
@@ -121,12 +135,15 @@ public class LoginService {
     public void setDisconnected() {
         if (clientConfig.getEnable()) {
             MusicHud.setStatus(MusicHud.ConnectStatus.NOT_CONNECTED);
+            Profile.setCurrent(Profile.ANONYMOUS);
         }
     }
 
     public void sendConnectMessageToServer() {
         if (clientConfig.getEnable()) {
-            clientNetworkService.sendToServer(new ConnectRequest(Version.current));
+            MusicHud.EXECUTOR.submit(() -> {
+                clientNetworkService.sendToServer(new ConnectRequest(Version.current));
+            });
         }
     }
 

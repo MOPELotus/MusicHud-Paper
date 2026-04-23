@@ -20,26 +20,18 @@ import java.util.function.Consumer;
 
 @RegisterMark
 public class ApiServerManager implements ServerRegister {
-    private static ApiServerManager register;
-    private static final Logger apiLogger = LogManager.getLogger(MusicHud.LOGGER_BASE_NAME + "/API");
-    private static final ServerConfig serverConfig = ServerConfig.getInstance();
-    private static final Object PROCESS_LOCK = new Object();
-    private static Process process;
-    private static boolean desiredRunning = false;
+    private final Logger apiLogger = LogManager.getLogger(MusicHud.LOGGER_BASE_NAME + "/API");
+    private final ServerConfig serverConfig = ServerConfig.getInstance();
     @Getter
-    private static BinaryApiServerStatus binaryApiServerStatus = BinaryApiServerStatus.STOPPED;
+    private final List<Consumer<BinaryApiServerStatus>> apiStatusListeners = new ArrayList<>();
     @Getter
-    private static final List<Consumer<BinaryApiServerStatus>> apiStatusListeners = new ArrayList<>();
-    private static final int maxTries = 5;
-    private static int triedCount = 0;
-
-    public enum BinaryApiServerStatus {
-        STOPPED, LAUNCHING, RUNNING;
-
-        public String i18nKey() {
-            return MusicHud.MOD_ID + ".text.binaryApiServerStatus." + name();
-        }
-    }
+    private static ApiServerManager instance;
+    private Process process;
+    private boolean continueRestart = true;
+    @Getter
+    private BinaryApiServerStatus binaryApiServerStatus = BinaryApiServerStatus.STOPPED;
+    private int triedCount = 0;
+    private boolean initialized = false;
 
     public void log(String s, boolean error) {
         if (error || s.contains("[ERROR]")) {
@@ -51,171 +43,133 @@ public class ApiServerManager implements ServerRegister {
 
     @Override
     public void register() {
-        register = this;
+        instance = this;
+        if (initialized) {
+            return;
+        }
+        initialized = true;
+        if (MusicHud.getCurrentEnvironment().getSide() == Environment.Side.CLIENT && !ClientConfig.getInstance().getEnableEmbeddedServer()) {
+            return;
+        }
+        if (serverConfig.getStartupBinaryApiServerWhenLaunch()) {
+            launchApiServerInternal();
+        }
+    }
+
+    public void stopApiServer() {
+        if (process != null) {
+            continueRestart = false;
+            process.destroy();
+        }
+    }
+
+    public void restartApiServer() {
+        triedCount = 0;
+        stopApiServer();
+        launchApiServerInternal();
+    }
+
+    private void launchApiServerInternal() {
         MusicHud.EXECUTOR.execute(() -> {
-            Thread.currentThread().setName("API Server Launcher");
+            Thread.currentThread().setName("MHWorker-API-Launcher");
             boolean apiAvailable = ApiClient.checkAvailable();
-            if (serverConfig.getStartupBinaryApiServerWhenLaunch() && !apiAvailable) {
-                synchronized (PROCESS_LOCK) {
-                    triedCount = 0;
-                    desiredRunning = true;
-                }
+            if (!apiAvailable) {
+                triedCount = 0;
                 startEmbeddedApiServer();
                 Environment.Side side = MusicHud.getCurrentEnvironment().getSide();
                 if (side == Environment.Side.CLIENT) {
-                    IClientEventService.getInstance().registerClientLifecycleStopping(ApiServerManager::stopApiServer);
+                    IClientEventService.getInstance().registerClientLifecycleStopping(this::stopApiServer);
                 } else if (side == Environment.Side.SERVER) {
-                    IServerEventService.getInstance().registerServerLifecycleStopping(ApiServerManager::stopApiServer);
+                    IServerEventService.getInstance().registerServerLifecycleStopping(this::stopApiServer);
                 }
-            } else if (apiAvailable) {
+            } else {
                 apiLogger.info("API Server has been launched externally");
             }
         });
     }
 
-    public static void stopApiServer() {
-        Process currentProcess;
-        synchronized (PROCESS_LOCK) {
-            desiredRunning = false;
-            currentProcess = process;
-            if (currentProcess == null || !currentProcess.isAlive()) {
-                process = null;
-            }
-        }
-        if (currentProcess != null) {
-            currentProcess.destroy();
-        } else {
-            setApiStatus(BinaryApiServerStatus.STOPPED);
-        }
-    }
-
-    public static void restartApiServer() {
-        if (register == null) {
+    private void startEmbeddedApiServer() {
+        int maxTries = 5;
+        if (triedCount >= maxTries) {
+            apiLogger.error("Embedded API Server has been stopped due to maximum tries reached.");
             return;
         }
-        Process currentProcess;
-        synchronized (PROCESS_LOCK) {
-            desiredRunning = true;
-            triedCount = 0;
-            currentProcess = process;
-        }
-        if (currentProcess != null && currentProcess.isAlive()) {
-            currentProcess.destroy();
-        } else {
-            register.startEmbeddedApiServer();
-        }
-    }
-
-    private void startEmbeddedApiServer() {
-        Path launchPath;
-        synchronized (PROCESS_LOCK) {
-            desiredRunning = true;
-            if (process != null && process.isAlive()) {
-                return;
-            }
-            if (triedCount >= maxTries) {
-                desiredRunning = false;
-                setApiStatus(BinaryApiServerStatus.STOPPED);
-                apiLogger.error("Embedded API Server has been stopped due to maximum tries reached.");
-                return;
-            }
-
-            String configuredPathString = serverConfig.getServerApiBinaryExecutablePath();
-            Path configuredPath = Paths.get(configuredPathString);
-            Path windowsExePath = Paths.get(configuredPathString + ".exe");
-
-            if (Files.exists(configuredPath) && Files.isExecutable(configuredPath)) {
-                launchPath = configuredPath;
-            } else if (Files.exists(windowsExePath) && Files.isExecutable(windowsExePath)) {
-                launchPath = windowsExePath;
-            } else {
-                if (Files.exists(configuredPath) || Files.exists(windowsExePath)) {
-                    apiLogger.error("Embedded API executable exists but is not executable: {}", configuredPathString);
-                } else {
-                    apiLogger.error("Embedded API executable not found: {}", configuredPathString);
-                }
-                desiredRunning = false;
-                setApiStatus(BinaryApiServerStatus.STOPPED);
-                return;
-            }
-
-            triedCount++;
-            setApiStatus(BinaryApiServerStatus.LAUNCHING);
-        }
-
-        try {
-            Process launchedProcess = Runtime.getRuntime().exec(new String[]{launchPath.toString()});
-            synchronized (PROCESS_LOCK) {
-                process = launchedProcess;
-            }
-
-            MusicHud.EXECUTOR.execute(() -> {
-                Thread.currentThread().setName("API Console");
-                try (BufferedReader reader = new BufferedReader(new InputStreamReader(launchedProcess.getInputStream()))) {
-                    String line;
-                    while ((line = reader.readLine()) != null) {
-                        if (line.contains("Server started successfully") && binaryApiServerStatus == BinaryApiServerStatus.LAUNCHING) {
-                            setApiStatus(BinaryApiServerStatus.RUNNING);
-                            apiLogger.info("Api server started");
-                        }
-                        log(line, false);
-                    }
-                } catch (IOException e) {
-                    apiLogger.error("Error reading stdout", e);
-                }
-            });
-
-            MusicHud.EXECUTOR.execute(() -> {
-                Thread.currentThread().setName("API Console");
-                try (BufferedReader reader = new BufferedReader(new InputStreamReader(launchedProcess.getErrorStream()))) {
-                    String line;
-                    while ((line = reader.readLine()) != null) {
-                        log(line, true);
-                    }
-                } catch (IOException e) {
-                    apiLogger.error("Error reading stderr", e);
-                }
-            });
-
-            MusicHud.EXECUTOR.execute(() -> {
-                Thread.currentThread().setName("API Daemon");
+        String binaryExecutableApiServerPathString = serverConfig.getServerApiBinaryExecutablePath();
+        Path binaryExecutableApiServerPath = Paths.get(binaryExecutableApiServerPathString);
+        Path windowsExePath = Paths.get(binaryExecutableApiServerPathString + ".exe");
+        boolean executable = Files.isExecutable(binaryExecutableApiServerPath) || Files.isExecutable(windowsExePath);
+        boolean exists = Files.exists(binaryExecutableApiServerPath) || Files.exists(windowsExePath);
+        if (exists) {
+            if (executable) {
+                triedCount++;
                 try {
-                    int exitCode = launchedProcess.waitFor();
-                    boolean latestProcess;
-                    boolean shouldRestart;
-                    synchronized (PROCESS_LOCK) {
-                        latestProcess = process == launchedProcess;
-                        if (latestProcess) {
-                            process = null;
+                    continueRestart = true;
+                    setApiStatus(BinaryApiServerStatus.LAUNCHING);
+                    process = Runtime.getRuntime().exec(new String[]{binaryExecutableApiServerPath.toString()});
+
+                    // 使用虚拟线程池分别读取 stdout 和 stderr
+                    MusicHud.EXECUTOR.execute(() -> {
+                        Thread.currentThread().setName("MHWorker-API-Console");
+                        try (BufferedReader reader = new BufferedReader(new InputStreamReader(process.getInputStream()))) {
+                            String line;
+                            while ((line = reader.readLine()) != null) {
+                                if (line.contains("Server started successfully") && binaryApiServerStatus == BinaryApiServerStatus.LAUNCHING) {
+                                    setApiStatus(BinaryApiServerStatus.RUNNING);
+                                    apiLogger.info("Api server started");
+                                }
+                                log(line, false);
+                            }
+                        } catch (IOException e) {
+                            apiLogger.error("Error reading stdout", e);
                         }
-                        shouldRestart = desiredRunning && latestProcess;
-                    }
-                    if (latestProcess) {
-                        setApiStatus(BinaryApiServerStatus.STOPPED);
-                    }
-                    if (shouldRestart) {
-                        apiLogger.warn("Api server unexpectedly stopped with code:{}, restarting...", exitCode);
-                        startEmbeddedApiServer();
-                    } else if (latestProcess) {
-                        apiLogger.info("Api server stopped with code:{}", exitCode);
-                    }
-                } catch (InterruptedException e) {
-                    Thread.currentThread().interrupt();
-                    apiLogger.error("Process wait interrupted", e);
+                    });
+
+                    MusicHud.EXECUTOR.execute(() -> {
+                        Thread.currentThread().setName("MHWorker-API-Console");
+                        try (BufferedReader reader = new BufferedReader(new InputStreamReader(process.getErrorStream()))) {
+                            String line;
+                            while ((line = reader.readLine()) != null) {
+                                log(line, true);
+                            }
+                        } catch (IOException e) {
+                            apiLogger.error("Error reading stderr", e);
+                        }
+                    });
+
+                    // 在另一个虚拟线程中等待进程结束，并处理重启逻辑
+                    MusicHud.EXECUTOR.execute(() -> {
+                        Thread.currentThread().setName("MHWorker-API-Daemon");
+                        try {
+                            int exitCode = process.waitFor();
+                            setApiStatus(BinaryApiServerStatus.STOPPED);
+                            if (continueRestart) {
+                                apiLogger.warn("Api server unexpectedly stopped with code:{}, restarting...", exitCode);
+                                startEmbeddedApiServer();
+                            } else {
+                                apiLogger.info("Api server stopped with code:{}", exitCode);
+                            }
+                        } catch (InterruptedException e) {
+                            Thread.currentThread().interrupt();
+                            apiLogger.error("Process wait interrupted", e);
+                        }
+                    });
+                } catch (Exception e) {
+                    MusicHud.LOGGER.error("Failed to call binary server at path: \"{}\"", binaryExecutableApiServerPathString, e);
                 }
-            });
-        } catch (Exception e) {
-            synchronized (PROCESS_LOCK) {
-                process = null;
-                desiredRunning = false;
             }
-            setApiStatus(BinaryApiServerStatus.STOPPED);
-            MusicHud.LOGGER.error("Failed to call binary server at path: \"{}\"", launchPath, e);
         }
     }
 
-    private static void setApiStatus(BinaryApiServerStatus status) {
+    private void setApiStatus(BinaryApiServerStatus status) {
         binaryApiServerStatus = status;
         apiStatusListeners.forEach(l -> l.accept(status));
+    }
+
+    public enum BinaryApiServerStatus {
+        STOPPED, LAUNCHING, RUNNING;
+
+        public String i18nKey() {
+            return MusicHud.MOD_ID + ".text.binaryApiServerStatus." + name();
+        }
     }
 }

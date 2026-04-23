@@ -1,7 +1,10 @@
 package indi.etern.musichud.server.api.impl.ncm;
 
+import com.google.common.cache.Cache;
+import com.google.common.cache.CacheBuilder;
 import com.google.gson.annotations.SerializedName;
 import indi.etern.musichud.MusicHud;
+import indi.etern.musichud.Version;
 import indi.etern.musichud.beans.login.LoginCookieInfo;
 import indi.etern.musichud.beans.login.LoginType;
 import indi.etern.musichud.beans.user.Profile;
@@ -9,6 +12,9 @@ import indi.etern.musichud.beans.user.VipType;
 import indi.etern.musichud.interfaces.IntegerCodeEnum;
 import indi.etern.musichud.network.IServerNetworkService;
 import indi.etern.musichud.network.payloads.pushMessages.s2c.LoginResultMessage;
+import indi.etern.musichud.network.payloads.requestResponseCycle.ConnectResponse;
+import indi.etern.musichud.network.payloads.requestResponseCycle.SendPhoneValidationCodeResponse;
+import indi.etern.musichud.server.api.ApiProvider;
 import indi.etern.musichud.server.api.ILoginApiService;
 import indi.etern.musichud.server.api.MusicPlayerServerService;
 import indi.etern.musichud.utils.http.ApiClient;
@@ -30,10 +36,15 @@ public class LoginApiService implements ILoginApiService {
     private static volatile LoginApiService loginApiService;
     Map<ServerPlayer, Runnable> pollingMap = new HashMap<>();
     @Getter
-    Map<ServerPlayer, PlayerLoginInfo> loginedPlayerInfoMap = new HashMap<>();
+    Map<ServerPlayer, PlayerLoginInfo> playerInfoMap = new HashMap<>();
     @Getter
     Set<Consumer<Map<ServerPlayer, PlayerLoginInfo>>> loginStateChangeListeners = new HashSet<>();
     volatile String anonymousCookie;
+    Cache<ServerPlayer, ZonedDateTime> lastSentTimes = CacheBuilder.newBuilder()
+            .expireAfterWrite(Duration.ofSeconds(30))
+            .maximumSize(Long.MAX_VALUE)
+            .softValues()
+            .build();
 
     public static LoginApiService getInstance() {
         if (LoginApiService.loginApiService == null) {
@@ -46,12 +57,17 @@ public class LoginApiService implements ILoginApiService {
         return LoginApiService.loginApiService;
     }
 
-    static void sendLoginFailResult(ServerPlayer player, Exception e) {
-        LoginApiService.logger.error(e);
+    private static void sendSuccessLoginResultTo(ServerPlayer player, LoginCookieInfo loginCookieInfo, Profile profile) {
+        serverNetworkService.sendToPlayer(player, new LoginResultMessage(true, "", loginCookieInfo, profile));
+        MusicPlayerServerService.getInstance().sendUpdateAllIdlePlaySourcesMessageTo(Collections.singleton(player));
+    }
+
+    void sendLoginFailResult(ServerPlayer player, Exception e) {
+        logger.error(e);
         String message;
         String eMessage = e.getMessage();
         message = e.getClass().getSimpleName() + (eMessage != null ? ":" + eMessage : "");
-        LoginApiService.serverNetworkService.sendToPlayer(player,
+        serverNetworkService.sendToPlayer(player,
                 new LoginResultMessage(
                         false,
                         message,
@@ -81,10 +97,10 @@ public class LoginApiService implements ILoginApiService {
     }
 
     @Override
-    public String randomVipCookieOr(Supplier<String> defaultCookieSupplier) {
+    public String randomVipCookieOrElse(Supplier<String> defaultCookieSupplier) {
         //noinspection ComparatorMethodParameterNotUsed
         Comparator<String> randomComparator = (a, b) -> MusicHud.RANDOM.nextInt(-1, 1);
-        return loginedPlayerInfoMap.values().stream()
+        return playerInfoMap.values().stream()
                 .filter(info -> info.getVipType() != null && info.getVipType() == VipType.VIP)
                 .map(info -> info.getLoginCookieInfo().rawCookie())
                 .sorted(randomComparator)
@@ -93,28 +109,17 @@ public class LoginApiService implements ILoginApiService {
     }
 
     @Override
-    public String getRawCookieOrElse(ServerPlayer serverPlayer, Supplier<String> supplier) {
-        if (serverPlayer != null) {
-            PlayerLoginInfo loginInfo = getLoginedPlayerInfoMap().get(serverPlayer);
-            if (loginInfo != null && loginInfo.getLoginCookieInfo() != null) {
-                return loginInfo.getLoginCookieInfo().rawCookie();
-            }
-        }
-        return supplier == null ? null : supplier.get();
-    }
-
-    @Override
     public void joinUnlogged(ServerPlayer serverPlayer) {
-        loginedPlayerInfoMap.put(serverPlayer, PlayerLoginInfo.UNLOGGED);
-        loginStateChangeListeners.forEach(mapConsumer -> mapConsumer.accept(loginedPlayerInfoMap));
+        playerInfoMap.put(serverPlayer, PlayerLoginInfo.UNLOGGED);
+        loginStateChangeListeners.forEach(mapConsumer -> mapConsumer.accept(playerInfoMap));
         MusicPlayerServerService.getInstance().sendUpdateAllIdlePlaySourcesMessageTo(Collections.singleton(serverPlayer));
     }
 
     @Override
     public void logout(ServerPlayer player) {
         Runnable remove = pollingMap.remove(player);
-        loginedPlayerInfoMap.remove(player);
-        loginStateChangeListeners.forEach(mapConsumer -> mapConsumer.accept(loginedPlayerInfoMap));
+        playerInfoMap.remove(player);
+        loginStateChangeListeners.forEach(mapConsumer -> mapConsumer.accept(playerInfoMap));
         if (remove != null) {
             logger.warn("Polling v-thread stopped as player {} quit", player.getName());
         }
@@ -125,18 +130,23 @@ public class LoginApiService implements ILoginApiService {
     @SneakyThrows
     @Override
     public void loginAsAnonymous(ServerPlayer player, boolean sendFail) {
-        AnonymousLoginData response = ApiClient.post(
-                ServerApiMeta.Login.ANONYMOUS,
-                null,
-                null);
-        LoginCookieInfo loginCookieInfo;
-        if (response.code == 200) {
-            loginCookieInfo = new LoginCookieInfo(LoginType.ANONYMOUS, response.cookie, ZonedDateTime.now());
-            Profile profile = loadUserProfile(player, loginCookieInfo);
-            serverNetworkService.sendToPlayer(player, new LoginResultMessage(true, "", loginCookieInfo, profile));
-            MusicPlayerServerService.getInstance().sendUpdateAllIdlePlaySourcesMessageTo(Collections.singleton(player));
-        } else if (sendFail) {
-            sendLoginFailResult(player, new RuntimeException("login failed"));
+        try {
+            AnonymousLoginData response = ApiClient.post(
+                    ServerApiMeta.Login.ANONYMOUS,
+                    null,
+                    null);
+            LoginCookieInfo loginCookieInfo;
+            if (response.code == 200) {
+                loginCookieInfo = new LoginCookieInfo(LoginType.ANONYMOUS, response.cookie, ZonedDateTime.now());
+                Profile profile = loadUserProfile(player, loginCookieInfo);
+                sendSuccessLoginResultTo(player, loginCookieInfo, profile);
+            } else if (sendFail) {
+                sendLoginFailResult(player, new RuntimeException("login failed"));
+            }
+        } catch (Exception e){
+            if (sendFail) {
+                sendLoginFailResult(player, new RuntimeException("login failed"));
+            }
         }
     }
 
@@ -188,10 +198,10 @@ public class LoginApiService implements ILoginApiService {
             Runnable runnable = null;
         };
         ref.runnable = () -> {
-            Thread.currentThread().setName("PollingVWorker_" + Thread.currentThread().hashCode());
+            Thread.currentThread().setName("MHWorker-Polling-V" + Thread.currentThread().hashCode());
             try {
                 logger.info("Start QR login polling v-thread for player: {}", player.getName());
-                QRLoginStatus qrLoginStatus;
+                QRLoginStatus qrLoginStatus = null;
                 do {
                     Thread.sleep(Duration.of(5, ChronoUnit.SECONDS));
 
@@ -200,25 +210,37 @@ public class LoginApiService implements ILoginApiService {
                         return;
                     }
 
-                    qrLoginStatus = ApiClient.post(
-                            ServerApiMeta.Login.QrCode.CHECK,
-                            params2,
-                            null
-                    );
-                    logger.debug("QR login polling v-thread for {} got result: {}", player.getName(), qrLoginStatus.code);
-                    if (qrLoginStatus.code == QRLoginStatus.Code.SUCCEED) {
-                        logger.info("QR login polling v-thread pushing successful result to player: {}", player.getName());
-                        LoginCookieInfo loginCookieInfo = new LoginCookieInfo(LoginType.QR_CODE, qrLoginStatus.cookie, ZonedDateTime.now());
-                        Profile profile = loadUserProfile(player, loginCookieInfo);
-                        serverNetworkService.sendToPlayer(player, new LoginResultMessage(true, "", loginCookieInfo, profile));
-                        MusicPlayerServerService.getInstance().sendUpdateAllIdlePlaySourcesMessageTo(Collections.singleton(player));
+                    try {
+                        qrLoginStatus = ApiClient.post(
+                                ServerApiMeta.Login.QrCode.CHECK,
+                                params2,
+                                null
+                        );
+                        logger.debug("QR login polling v-thread for {} got result: {}", player.getName(), qrLoginStatus.code);
+                        if (qrLoginStatus.code == QRLoginStatus.Code.SUCCEED) {
+                            logger.info("QR login polling v-thread pushing successful result to player: {}", player.getName());
+                            LoginCookieInfo loginCookieInfo = new LoginCookieInfo(LoginType.QR_CODE, qrLoginStatus.cookie, ZonedDateTime.now());
+                            Profile profile = loadUserProfile(player, loginCookieInfo);
+                            sendSuccessLoginResultTo(player, loginCookieInfo, profile);
+                        } else if (qrLoginStatus.code == QRLoginStatus.Code.EXPIRED) {
+                            serverNetworkService.sendToPlayer(player,
+                                    new LoginResultMessage(
+                                            false,
+                                            MusicHud.MOD_ID + ".text.login.qrExpired",
+                                            LoginCookieInfo.UNLOGGED,
+                                            Profile.ANONYMOUS));
+                            logger.warn("QR code expired for player: {}", player.getName());
+                        }
+                    } catch (Exception e) {
+                        logger.warn("Failed to check QR Status for player: {}", player.getName(), e);
                     }
-                } while (qrLoginStatus.code != QRLoginStatus.Code.EXPIRED && qrLoginStatus.code != QRLoginStatus.Code.SUCCEED);
+                } while (qrLoginStatus == null || (qrLoginStatus.code != QRLoginStatus.Code.EXPIRED && qrLoginStatus.code != QRLoginStatus.Code.SUCCEED));
             } catch (InterruptedException e) {
                 logger.warn("Thread ({}) interrupted while polling for QR login status", Thread.currentThread().getName(), e);
             } catch (Exception e) {
                 sendLoginFailResult(player, e);
             }
+            logger.info("Polling v-thread finished for player {}", player.getName());
         };
         pollingMap.put(player, ref.runnable);
         MusicHud.EXECUTOR.execute(ref.runnable);
@@ -228,17 +250,22 @@ public class LoginApiService implements ILoginApiService {
     public Profile loadUserProfile(ServerPlayer player, LoginCookieInfo loginCookieInfo) {
         AccountDetail accountDetail = ApiClient.get(ServerApiMeta.User.ACCOUNT, loginCookieInfo.rawCookie());
         Profile profile = accountDetail.profile();
+        return postProcessProfile(player, loginCookieInfo, profile, accountDetail.account);
+    }
+
+    private Profile postProcessProfile(ServerPlayer player, LoginCookieInfo loginCookieInfo, Profile profile, Account account) {
         if (profile == null) {
-            if (accountDetail.account().anonymous) {
-                profile = Profile.ANONYMOUS;
+            if (account.anonymous) {
+                return Profile.ANONYMOUS;
             } else {
-                throw new IllegalStateException("accountDetail.profile is null but the account is not anonymous");
+                throw new IllegalStateException("Profile is null but the account is not anonymous");
             }
         }
+        profile.setVipType(account.vipType);
         PlayerLoginInfo playerLoginInfo = PlayerLoginInfo.of(loginCookieInfo);
-        playerLoginInfo.appendAccountDetail(new AccountDetail(accountDetail.account(), profile));
-        loginedPlayerInfoMap.put(player, playerLoginInfo);
-        loginStateChangeListeners.forEach(mapConsumer -> mapConsumer.accept(loginedPlayerInfoMap));
+        playerLoginInfo.appendProfile(profile);
+        playerInfoMap.put(player, playerLoginInfo);
+        loginStateChangeListeners.forEach(mapConsumer -> mapConsumer.accept(playerInfoMap));
         return profile;
     }
 
@@ -249,7 +276,98 @@ public class LoginApiService implements ILoginApiService {
 
     @Override
     public PlayerLoginInfo getLoginInfoByServerPlayer(ServerPlayer player) {
-        return loginedPlayerInfoMap.get(player);
+        if (player == null) {
+            return null;
+        }
+        return playerInfoMap.get(player);
+    }
+
+    @Override
+    public String getRawCookieOrElse(ServerPlayer serverPlayer, Supplier<String> supplier) {
+        String rawCookie;
+        if (serverPlayer != null) {
+            PlayerLoginInfo loginInfo = this.getPlayerInfoMap().get(serverPlayer);
+            if (loginInfo != null) {
+                rawCookie = loginInfo.loginCookieInfo.rawCookie();
+            } else {
+                rawCookie = supplier != null ? supplier.get() : null;
+            }
+        } else {
+            rawCookie = supplier != null ? supplier.get() : null;
+        }
+        return rawCookie;
+    }
+
+    @Override
+    public void requestValidationCodeFor(int regionCode, long phone, ServerPlayer serverPlayer) {
+        SendValidationCodeResponse response = ApiClient.post(ServerApiMeta.Login.DeviceCode.SENT, new ValidationCodeRequest(regionCode, phone), null);
+        ZonedDateTime lastSentTime = lastSentTimes.getIfPresent(serverPlayer);
+        ZonedDateTime now = ZonedDateTime.now();
+
+        Duration duration = null;
+        if (lastSentTime != null) {
+            duration = Duration.between(lastSentTime, now);
+        }
+        if (lastSentTime == null || duration.compareTo(Duration.ofSeconds(30)) > 0) {
+            lastSentTimes.put(serverPlayer, now);
+            if (response.done) {
+                logger.info("Successfully send code to player: {}", serverPlayer.getName());
+            } else {
+                logger.error("Failed to send code to player: {}", serverPlayer.getName());
+            }
+            serverNetworkService.sendToPlayer(serverPlayer, new SendPhoneValidationCodeResponse(response.done, 30));
+        } else {
+            logger.warn("Refuse to send code to player: {}, as frequency limit", serverPlayer.getName());
+            serverNetworkService.sendToPlayer(serverPlayer, new SendPhoneValidationCodeResponse(response.done, 30 - (int) duration.getSeconds()));
+        }
+    }
+
+    @Override
+    public void loginWithPhoneAndCode(int regionCode, long phone, int code, ServerPlayer serverPlayer) {
+        PhoneCodeLoginRequest requestBody = new PhoneCodeLoginRequest(regionCode, phone, code);
+        PhoneLoginResponse loginResponse = ApiClient.post(ServerApiMeta.Login.PHONE, requestBody, null);
+        if (loginResponse.code == 200) {
+            LoginCookieInfo loginCookieInfo = new LoginCookieInfo(LoginType.DEVICE_CODE, loginResponse.cookie, ZonedDateTime.now());
+            Profile profile = postProcessProfile(serverPlayer, loginCookieInfo, loginResponse.profile, loginResponse.account);
+            sendSuccessLoginResultTo(serverPlayer, loginCookieInfo, profile);
+        } else {
+            String i18nMessage = loginResponse.message;
+            if (Objects.equals(i18nMessage, "验证码错误")) {
+                i18nMessage = MusicHud.MOD_ID + ".text.validationCodeError";
+            } else if (i18nMessage == null) {
+                i18nMessage = MusicHud.MOD_ID + ".text.unknownError";
+            }
+            serverNetworkService.sendToPlayer(serverPlayer,
+                    new LoginResultMessage(
+                            false,
+                            i18nMessage,
+                            LoginCookieInfo.UNLOGGED,
+                            Profile.ANONYMOUS)
+            );
+        }
+    }
+
+    @Override
+    public void loginWithPhoneAndPassword(long phone, String md5password, ServerPlayer serverPlayer) {
+        throw new UnsupportedOperationException("Not supported yet due to api.");
+    }
+
+    @Override
+    public void loginWithEmailAndPassword(String email, String md5password, ServerPlayer serverPlayer) {
+        throw new UnsupportedOperationException("Not supported yet due to api.");
+    }
+
+    @Override
+    public void disconnectToAll() {
+        serverNetworkService.sendToPlayers(playerInfoMap.keySet(), new ConnectResponse(false, Version.current, List.of(ApiProvider.NCM)));
+    }
+
+    @Override
+    public void reconnectAll() {
+        serverNetworkService.sendToPlayers(playerInfoMap.keySet(), new ConnectResponse(true, Version.current, List.of(ApiProvider.NCM)));
+    }
+
+    record ValidationCodeRequest(int ctcode, long phone) {
     }
 
     @AllArgsConstructor
@@ -264,12 +382,9 @@ public class LoginApiService implements ILoginApiService {
             return new PlayerLoginInfo(loginCookieInfo, null, null);
         }
 
-        public void appendAccountDetail(AccountDetail accountDetail) {
-            this.profile = accountDetail.profile();
-            vipType = accountDetail.account().vipType;
-            if (profile != null) {
-                profile.setVipType(vipType);
-            }
+        public void appendProfile(Profile profile) {
+            this.profile = profile;
+            vipType = profile.getVipType();
         }
     }
 
@@ -315,6 +430,22 @@ public class LoginApiService implements ILoginApiService {
     }
 
     public record ProfileResponse(Profile profile) {
+    }
+
+    public record SendValidationCodeResponse(@SerializedName("data") boolean done) {
+    }
+
+    @SuppressWarnings("SpellCheckingInspection")
+    record PhoneCodeLoginRequest(int countrycode, long phone, @SerializedName("captcha") int code) {
+    }
+
+    public record PhoneLoginResponse(
+            int code,
+            Account account,
+            Profile profile,
+            String cookie,
+            String message
+    ) {
     }
 
     @AllArgsConstructor(access = AccessLevel.PUBLIC)
