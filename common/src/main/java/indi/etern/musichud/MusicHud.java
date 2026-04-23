@@ -9,6 +9,7 @@ import org.apache.logging.log4j.Level;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
 
+import java.nio.file.Path;
 import java.time.Duration;
 import java.util.HashSet;
 import java.util.Random;
@@ -33,6 +34,9 @@ public final class MusicHud {
     @Getter
     @Setter
     private static Environment currentEnvironment;
+    @Getter
+    @Setter
+    private static Path configDirectory = Path.of("config");
 
     public static Logger getLogger(Class<?> clazz) {
         Logger logger = LogManager.getLogger(LOGGER_BASE_NAME + "/" + clazz.getSimpleName());

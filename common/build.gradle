@@ -34,7 +34,6 @@ dependencies {
 
     testImplementation "org.junit.jupiter:junit-jupiter:$rootProject.junit_version"
     testRuntimeOnly "org.junit.platform:junit-platform-launcher"
-    api "fuzs.forgeconfigapiport:forgeconfigapiport-common-neoforgeapi:$rootProject.forge_config_api_port_version"
 
     implementation "com.sedmelluq:lavaplayer:$rootProject.lavaplayer_version"
     compileOnly "icyllis.modernui:ModernUI-NeoForge:1.21.8-${rootProject.modernui_version}.+"

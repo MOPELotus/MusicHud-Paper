@@ -5,12 +5,14 @@
 ## Paper Release Additions
 - Added Paper admin commands: `/musichud` and `/music` for status, player info, config, API process control, playback queue/idle source management, decoder probing, and client playtest.
 - Replaced the client audio decoder path with LavaPlayer-backed decoding while keeping upstream UI, login, network, and playback changes synced.
+- Replaced the Forge Config API Port dependency with Music Hud's built-in config loader. Existing `music_hud-client.toml` and `music_hud-server.toml` paths are preserved.
 - Supported debug/local playback formats include `aac`, `flac`, `m4a`, `mp3`, `ogg`, `opus`, `opus.ogg`, `wav`, and `webm`; `auto`/`generic` probing is available for unknown sources.
 - Paper server jars bundle the decoder libraries, so `/musichud test` and `/musichud playtest` can be used directly after installing the matching client mod.
 
 ## 本分支增强
 - 新增 Paper 管理指令 `/musichud` 与 `/music`，包含状态查询、玩家信息、配置、API 进程、播放队列/空闲播放源管理、解码器探测和客户端 playtest。
 - 将客户端解码链路切换为 LavaPlayer，同时保留并同步上游 UI、登录、网络和播放逻辑更新。
+- 移除 Forge Config API Port 依赖，改为 Music Hud 内置配置读取；原有 `music_hud-client.toml` 与 `music_hud-server.toml` 路径保持不变。
 - 调试播放/本地播放支持 `aac`、`flac`、`m4a`、`mp3`、`ogg`、`opus`、`opus.ogg`、`wav`、`webm`，未知来源可用 `auto`/`generic` 自动探测。
 - Paper 服务端构建会打包解码依赖，安装匹配客户端 mod 后可直接使用 `/musichud test` 和 `/musichud playtest`。
 
@@ -28,7 +30,7 @@
 [Third-party Bukkit plugin 2](https://github.com/MOPELotus/MusicHud-Paper) (1.1.4 hotfix +, now partly merged into main repository)
 
 ## Prerequisites
-- Fabric: Fabric API and Forge Config API Port are required; Mod Menu and Modern UI are recommended.
+- Fabric: Fabric API is required. Modern UI is required for client UI/HUD usage, but it is listed as recommended in Fabric metadata so dedicated Fabric servers can load without it. Mod Menu is optional.
 - NeoForge: Modern UI is required on the client.
 - Paper: install the Paper jar on the server and the matching Fabric/NeoForge client mod for HUD playback.
 
@@ -51,7 +53,7 @@
 ## Usage
 
 ### Client
-First of all, place the MusicHud jar file into the `mods` folder. Fabric also requires Fabric API and Forge Config API Port; Mod Menu and Modern UI are recommended. NeoForge requires Modern UI on the client.
+First of all, place the MusicHud jar file into the `mods` folder. Fabric also requires Fabric API; install Modern UI on the client for UI/HUD usage. NeoForge requires Modern UI on the client. Mod Menu is optional.
 
 #### Single-player or LAN Multi-player Host
 > Currently experimentally supports single-player mode.
@@ -97,7 +99,7 @@ There are 2 methods to deploy
 [第三方bukkit插件实现 2](https://github.com/MOPELotus/MusicHud-Paper) (1.1.4 hotfix +,，目前已部分合并至主仓库)
 
 ## 前置依赖
-- Fabric：需要 Fabric API 与 Forge Config API Port，推荐安装 Mod Menu 与 Modern UI。
+- Fabric：需要 Fabric API。客户端使用 UI/HUD 时必须安装 Modern UI；由于同一个 Fabric 包也支持服务端加载，metadata 中只能将 Modern UI 写为推荐依赖。Mod Menu 可选。
 - NeoForge：客户端需要 Modern UI。
 - Paper：服务端安装 Paper 插件 jar，客户端安装匹配的 Fabric/NeoForge mod 才能显示 HUD 并播放。
 
@@ -119,7 +121,7 @@ There are 2 methods to deploy
 
 ## 使用
 ### 客户端
-首先在 `mods` 文件夹中放入 MusicHud 的 jar 文件。Fabric 还需要 Fabric API 与 Forge Config API Port，推荐安装 Mod Menu 与 Modern UI；NeoForge 客户端需要 Modern UI。
+首先在 `mods` 文件夹中放入 MusicHud 的 jar 文件。Fabric 还需要 Fabric API；客户端使用 UI/HUD 时必须安装 Modern UI。NeoForge 客户端需要 Modern UI。Mod Menu 可选。
 #### 单人模式 或 局域网联机主机
 > 目前对单人游戏和局域网联机主机提供实验性支持
 >

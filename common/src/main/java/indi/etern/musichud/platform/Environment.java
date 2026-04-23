@@ -27,8 +27,8 @@ public class Environment {
     @Getter
     public enum Platform {
         FABRIC(
-                () -> load("indi.etern.musichud.platform.mod.forgeConfig.config.ServerConfigDefinition", ServerConfig.class),
-                () -> load("indi.etern.musichud.platform.mod.forgeConfig.config.ClientConfigDefinition", ClientConfig.class),
+                () -> load("indi.etern.musichud.platform.mod.config.ServerConfigDefinition", ServerConfig.class),
+                () -> load("indi.etern.musichud.platform.mod.config.ClientConfigDefinition", ClientConfig.class),
                 () -> load("indi.etern.musichud.platform.mod.fabric.network.FabricNetworkRegister", INetworkRegister.class),
                 () -> load("indi.etern.musichud.platform.mod.fabric.network.FabricServerNetworkService", IServerNetworkService.class),
                 () -> load("indi.etern.musichud.platform.mod.fabric.network.FabricClientNetworkService", IClientNetworkService.class),
@@ -36,8 +36,8 @@ public class Environment {
                 () -> load("indi.etern.musichud.platform.mod.fabric.event.FabricClientEventService", IClientEventService.class),
                 () -> load("indi.etern.musichud.platform.mod.fabric.registry.FabricKeyRegistryService", IKeyRegistryService.class)),
         NEOFORGE(
-                () -> load("indi.etern.musichud.platform.mod.forgeConfig.config.ServerConfigDefinition", ServerConfig.class),
-                () -> load("indi.etern.musichud.platform.mod.forgeConfig.config.ClientConfigDefinition", ClientConfig.class),
+                () -> load("indi.etern.musichud.platform.mod.config.ServerConfigDefinition", ServerConfig.class),
+                () -> load("indi.etern.musichud.platform.mod.config.ClientConfigDefinition", ClientConfig.class),
                 () -> load("indi.etern.musichud.platform.mod.neoforge.network.NeoForgeNetworkManager", INetworkRegister.class),
                 () -> load("indi.etern.musichud.platform.mod.neoforge.network.NeoForgeNetworkManager", IServerNetworkService.class),
                 () -> load("indi.etern.musichud.platform.mod.neoforge.network.NeoForgeNetworkManager", IClientNetworkService.class),
