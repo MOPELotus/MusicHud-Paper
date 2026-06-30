@@ -26,10 +26,17 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        branch:
-          - 1.21.6-1.21.8
-          - 1.21.9-1.21.10
-          - 1.21.11
+        include:
+          - branch: 1.21.1
+            java: 21
+          - branch: 1.21.6-1.21.8
+            java: 21
+          - branch: 1.21.9-1.21.10
+            java: 21
+          - branch: 1.21.11
+            java: 21
+          - branch: 26.1
+            java: 25
 
     steps:
       - name: Checkout ${{ matrix.branch }}
@@ -38,11 +45,11 @@ jobs:
           ref: ${{ matrix.branch }}
           fetch-depth: 0
 
-      - name: Set up Java 21
+      - name: Set up Java ${{ matrix.java }}
         uses: actions/setup-java@v4
         with:
           distribution: temurin
-          java-version: 21
+          java-version: ${{ matrix.java }}
 
       - name: Set up Gradle
         uses: gradle/actions/setup-gradle@v4
@@ -118,7 +125,7 @@ jobs:
           {
             echo "# Commit History"
             echo
-            for BRANCH in 1.21.6-1.21.8 1.21.9-1.21.10 1.21.11; do
+            for BRANCH in 1.21.1 1.21.6-1.21.8 1.21.9-1.21.10 1.21.11 26.1; do
               cat "release-notes/${BRANCH}.md"
             done
           } > RELEASE_NOTES.md
@@ -128,7 +135,7 @@ jobs:
         uses: softprops/action-gh-release@v2
         with:
           tag_name: ${{ inputs.tag_name }}
-          target_commitish: 1.21.11
+          target_commitish: 26.1
           name: ${{ steps.meta.outputs.release_name }}
           body_path: RELEASE_NOTES.md
           prerelease: ${{ inputs.prerelease }}

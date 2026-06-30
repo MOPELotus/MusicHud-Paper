@@ -11,11 +11,11 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Set up Java 21
+      - name: Set up Java
         uses: actions/setup-java@v4
         with:
           distribution: temurin
-          java-version: 21
+          java-version: ${{ startsWith(github.ref_name, '26.1') && '25' || '21' }}
 
       - name: Set up Gradle
         uses: gradle/actions/setup-gradle@v4
@@ -40,7 +40,7 @@ jobs:
           test -n "$NEOFORGE_JAR"
           VERSION="${PAPER_JAR##*music_hud-paper-}"
           VERSION="${VERSION%-reobf.jar}"
-          PACKAGE_NAME="MusicHud-Paper-${VERSION}"
+          PACKAGE_NAME="MusicHud-${VERSION}"
           mkdir -p "out/${PACKAGE_NAME}"
           cp "$PAPER_JAR" "out/${PACKAGE_NAME}/"
           cp "$FABRIC_JAR" "out/${PACKAGE_NAME}/"
