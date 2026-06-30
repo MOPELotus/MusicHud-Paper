@@ -65,7 +65,7 @@ public record ConnectResponse(boolean accepted, Version serverVersion,
                                 StreamAudioPlayer.getInstance().stop();
                                 if (Minecraft.getInstance().getCurrentServer() != null
                                         && MusicHud.getConnectStatus() != MusicHud.ConnectStatus.CONNECTED
-                                        && clientConfig.getEnableIsolatedMode()) {
+                                        && clientConfig != null && clientConfig.getEnableIsolatedMode()) {
                                     LoginService.getInstance().disconnectToExternalOrIntegratedServer();
                                 }
 
