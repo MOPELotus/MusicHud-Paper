@@ -75,7 +75,7 @@ dependencies {
     implementation "com.github.hypfvieh:dbus-java-core:$rootProject.dbus_version"
     implementation "com.github.hypfvieh:dbus-java-transport-native-unixsocket:$rootProject.dbus_version"
 
-    compileOnly "icyllis.modernui:ModernUI-NeoForge:26.1.2-${rootProject.modernui_version}.+"
+    compileOnly "icyllis.modernui:ModernUI-NeoForge:26.2-${rootProject.modernui_version}.+"
 }
 
 java {

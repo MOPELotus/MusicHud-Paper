@@ -37,6 +37,8 @@ jobs:
             java: 21
           - branch: 26.1
             java: 25
+          - branch: 26.2
+            java: 25
 
     steps:
       - name: Checkout ${{ matrix.branch }}
@@ -53,6 +55,17 @@ jobs:
 
       - name: Set up Gradle
         uses: gradle/actions/setup-gradle@v4
+
+      - name: Checkout ModernUI 26.2 fork
+        if: ${{ matrix.branch == '26.2' }}
+        uses: actions/checkout@v4
+        with:
+          repository: MOPELotus/modernui-mc
+          path: modernui-mc
+
+      - name: Publish ModernUI 26.2 to Maven local
+        if: ${{ matrix.branch == '26.2' }}
+        run: ./gradlew -p modernui-mc publishToMavenLocal --console=plain --no-daemon
 
       - name: Grant execute permission for Gradle wrapper
         run: chmod +x gradlew
@@ -125,7 +138,7 @@ jobs:
           {
             echo "# Commit History"
             echo
-            for BRANCH in 1.21.1 1.21.6-1.21.8 1.21.9-1.21.10 1.21.11 26.1; do
+            for BRANCH in 1.21.1 1.21.6-1.21.8 1.21.9-1.21.10 1.21.11 26.1 26.2; do
               cat "release-notes/${BRANCH}.md"
             done
           } > RELEASE_NOTES.md
@@ -135,7 +148,7 @@ jobs:
         uses: softprops/action-gh-release@v2
         with:
           tag_name: ${{ inputs.tag_name }}
-          target_commitish: 26.1
+          target_commitish: 26.2
           name: ${{ steps.meta.outputs.release_name }}
           body_path: RELEASE_NOTES.md
           prerelease: ${{ inputs.prerelease }}

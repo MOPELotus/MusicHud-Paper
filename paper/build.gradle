@@ -85,7 +85,7 @@ dependencies {
 
     compileOnly "org.spongepowered:mixin:0.8.7"
 
-    compileOnly "icyllis.modernui:ModernUI-Fabric:26.1.2-${rootProject.modernui_version}.+"
+    compileOnly "icyllis.modernui:ModernUI-Fabric:26.2-${rootProject.modernui_version}.+"
     compileOnly "dev.icyllis:modernui-core:$rootProject.modernui_version"
 
     compileOnly "javax.annotation:javax.annotation-api:1.3.2"
@@ -168,11 +168,11 @@ tasks.reobfJar {
 }
 
 tasks.assemble {
-    // MC 26.1 is deobfuscated, reobfJar not needed
+    // MC 26.2 is deobfuscated, reobfJar not needed
 }
 
 tasks.runServer {
-    minecraftVersion('26.1.2')
+    minecraftVersion(rootProject.minecraft_version)
 }
 
 publishing {

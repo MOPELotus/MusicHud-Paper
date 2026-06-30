@@ -64,7 +64,7 @@ dependencies {
 
     implementation "com.terraformersmc:modmenu:$rootProject.modmenu_version"
 
-    implementation("icyllis.modernui:ModernUI-Fabric:26.1.2-${rootProject.modernui_version}.+")
+    implementation("icyllis.modernui:ModernUI-Fabric:26.2-${rootProject.modernui_version}.+")
 
     implementation "com.sedmelluq:lavaplayer:$rootProject.lavaplayer_version"
     shadowBundle "com.sedmelluq:lavaplayer:$rootProject.lavaplayer_version"
