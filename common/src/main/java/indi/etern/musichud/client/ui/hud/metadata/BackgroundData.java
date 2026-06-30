@@ -1,44 +1,43 @@
 package indi.etern.musichud.client.ui.hud.metadata;
 
+import com.mojang.blaze3d.buffers.Std140Builder;
+import com.mojang.blaze3d.buffers.Std140SizeCalculator;
+import indi.etern.musichud.client.ui.hud.pipelines.HudUniform;
 import indi.etern.musichud.client.ui.utils.ColorExtractor;
 import indi.etern.musichud.client.ui.utils.Mixable;
-import net.minecraft.client.Minecraft;
-import net.minecraft.client.renderer.texture.AbstractTexture;
-import net.minecraft.client.renderer.texture.DynamicTexture;
-import net.minecraft.resources.Identifier;
+import indi.etern.musichud.client.ui.utils.UniformDataUtils;
+import indi.etern.musichud.interfaces.ClientConfig;
+import lombok.EqualsAndHashCode;
 
 import java.util.Objects;
 
-public final class BackgroundData implements Mixable<BackgroundData> {
+@EqualsAndHashCode
+public final class BackgroundData implements Mixable<BackgroundData>, HudUniform {
     private final BackgroundImages image;
-    private final ThemedColors colors;
-    public static BackgroundData NONE = new BackgroundData(null, ColorExtractor.getDefaultColors());
+    private final ThemedColors themedColors;
+    private ThemedColors mixedColors;
+    private static final ClientConfig clientConfig = ClientConfig.getInstance();
+    private float mixAlpha = -1;
+    public static final BackgroundData NONE = new BackgroundData(null, ColorExtractor.getDefaultColors());
 
     public BackgroundData(
             BackgroundImages image
     ) {
         this.image = image;
-        this.colors = ColorExtractor.adjustColors(ColorExtractor.extractColors(getDynamicTexture(image.blurredLocation)), 1.15f, 0.45f, 0.76f);
+        this.mixAlpha = (float) clientConfig.getHudBackgroundMixAlpha();
+        this.themedColors = ColorExtractor.extractColors(image.current.getTexture());
+        this.mixedColors = ColorExtractor.mixBaseColorsWithAlpha(themedColors, 0xFF1A1A1A, mixAlpha);
     }
 
-    BackgroundData(BackgroundImages image, ThemedColors colors) {
+    BackgroundData(BackgroundImages image, ThemedColors themedColors) {
         this.image = image;
-        this.colors = colors;
-    }
-
-    private DynamicTexture getDynamicTexture(Identifier imageLocation) {
-        if (imageLocation == null) return null;
-        AbstractTexture texture = Minecraft.getInstance()
-                .getTextureManager()
-                .getTexture(imageLocation);
-        if (texture instanceof DynamicTexture dynamicTexture) {
-            return dynamicTexture;
-        }
-        return null;
+        this.mixAlpha = (float) clientConfig.getHudBackgroundMixAlpha();
+        this.themedColors = themedColors;
+        this.mixedColors = ColorExtractor.mixBaseColorsWithAlpha(themedColors, 0xFF1A1A1A, mixAlpha);
     }
 
     public ThemedColors color() {
-        return colors;
+        return themedColors;
     }
 
     public BackgroundImages image() {
@@ -46,58 +45,61 @@ public final class BackgroundData implements Mixable<BackgroundData> {
     }
 
     @Override
-    public boolean equals(Object obj) {
-        if (obj == this) return true;
-        if (obj == null || obj.getClass() != this.getClass()) return false;
-        var that = (BackgroundData) obj;
-        return Objects.equals(this.colors, that.colors) &&
-                Objects.equals(this.image, that.image);
-    }
-
-    @Override
-    public int hashCode() {
-        return Objects.hash(colors, image);
-    }
-
-    @Override
     public String toString() {
         return "BackgroundData[" +
-                "color=" + colors + ", " +
+                "themedColors=" + themedColors + ", " +
                 "image=" + image + ']';
     }
 
     @Override
     public BackgroundData mix(BackgroundData next, float transitionProgress) {
-        return new BackgroundData(image, next != null ? mixColor(next.colors, transitionProgress) : colors);
+        return new BackgroundData(image, next != null ? mixColor(next.themedColors, transitionProgress) : themedColors);
     }
 
     private ThemedColors mixColor(ThemedColors next, float t) {
-        if (t <= 0.01f) return new ThemedColors(colors.primary, colors.secondary, colors.bright, colors.dark);
+        if (t <= 0.01f) return new ThemedColors(themedColors.primary, themedColors.secondary, themedColors.bright, themedColors.dark);
         if (t >= 0.99f) return new ThemedColors(next.primary, next.secondary, next.bright, next.dark);
 
-        int c1 = interpolateARGB(colors.primary, next.primary, t);
-        int c2 = interpolateARGB(colors.secondary, next.secondary, t);
-        int c3 = interpolateARGB(colors.bright, next.bright, t);
-        int c4 = interpolateARGB(colors.dark, next.dark, t);
+        int c1 = UniformDataUtils.interpolateARGB(themedColors.primary, next.primary, t);
+        int c2 = UniformDataUtils.interpolateARGB(themedColors.secondary, next.secondary, t);
+        int c3 = UniformDataUtils.interpolateARGB(themedColors.bright, next.bright, t);
+        int c4 = UniformDataUtils.interpolateARGB(themedColors.dark, next.dark, t);
         return new ThemedColors(c1, c2, c3, c4);
     }
 
-    private int interpolateARGB(int a, int b, float t) {
-        int aA = (a >> 24) & 0xFF;
-        int aR = (a >> 16) & 0xFF;
-        int aG = (a >> 8) & 0xFF;
-        int aB = a & 0xFF;
+    public static final int UBO_SIZE = new Std140SizeCalculator().putVec4().putVec4().putVec4().putVec4().align(16).get();
 
-        int bA = (b >> 24) & 0xFF;
-        int bR = (b >> 16) & 0xFF;
-        int bG = (b >> 8) & 0xFF;
-        int bB = b & 0xFF;
+    @Override
+    public String getUBOName() {
+        return "MHNowPlayingThemeColor";
+    }
 
-        int rA = (int) (aA + (bA - aA) * t);
-        int rR = (int) (aR + (bR - aR) * t);
-        int rG = (int) (aG + (bG - aG) * t);
-        int rB = (int) (aB + (bB - aB) * t);
+    @Override
+    public int getUBOSize() {
+        return UBO_SIZE;
+    }
 
-        return (rA << 24) | (rR << 16) | (rG << 8) | rB;
+    @Override
+    public void write(Std140Builder builder) {
+        builder.putVec4(UniformDataUtils.colorToVector(mixedColors.primary));
+        builder.putVec4(UniformDataUtils.colorToVector(mixedColors.secondary));
+        builder.putVec4(UniformDataUtils.colorToVector(mixedColors.bright));
+        builder.putVec4(UniformDataUtils.colorToVector(mixedColors.dark));
+    }
+
+    @Override
+    public boolean shouldUseBuffer(HudUniform lastBuffered) {
+        if (lastBuffered instanceof BackgroundData data) {
+            float mixAlpha = (float) clientConfig.getHudBackgroundMixAlpha();
+            if (mixAlpha != this.mixAlpha) {
+                this.mixAlpha = mixAlpha;
+                mixedColors = ColorExtractor.mixBaseColorsWithAlpha(themedColors, 0xFF1A1A1A, mixAlpha);
+                return false;
+            } else {
+                return Objects.equals(mixedColors, data.mixedColors);
+            }
+        } else {
+            return false;
+        }
     }
 }

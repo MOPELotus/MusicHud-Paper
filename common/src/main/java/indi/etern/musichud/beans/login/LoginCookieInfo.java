@@ -3,15 +3,12 @@ package indi.etern.musichud.beans.login;
 import indi.etern.musichud.MusicHud;
 import indi.etern.musichud.interfaces.ClientConfig;
 import indi.etern.musichud.network.Codecs;
-import indi.etern.musichud.network.IClientNetworkService;
-import indi.etern.musichud.network.payloads.requestResponseCycle.CookieLoginRequest;
 import indi.etern.musichud.platform.Environment;
 import io.netty.buffer.ByteBuf;
 import net.minecraft.network.codec.ByteBufCodecs;
 import net.minecraft.network.codec.StreamCodec;
 import org.apache.logging.log4j.Logger;
 
-import java.time.Period;
 import java.time.ZoneId;
 import java.time.ZonedDateTime;
 
@@ -32,13 +29,24 @@ public record LoginCookieInfo(LoginType type, String rawCookie, ZonedDateTime ge
             "",
             ZonedDateTime.of(114514, 1, 9, 1, 9, 8, 10, ZoneId.systemDefault())
     );
-    private static final Period refreshInterval = Period.of(0,0,1);
+    private static ClientConfig clientConfig;
+    static {
+        if (MusicHud.getCurrentEnvironment().getSide() == Environment.Side.CLIENT) {
+            try {
+                clientConfig = ClientConfig.getInstance();
+            } catch (UnsupportedOperationException e) {
+                clientConfig = null;
+            }
+        }
+    }
 
     public static LoginCookieInfo clientCurrentCookie() {
         Environment.Side side = MusicHud.getCurrentEnvironment().getSide();
         if (side == Environment.Side.CLIENT) {
+            if (clientConfig == null) {
+                throw new IllegalStateException("\"clientConfig\" is null in client");
+            }
             try {
-                ClientConfig clientConfig = ClientConfig.getInstance();
                 LoginCookieInfo loginCookieInfo = clientConfig.getClientCookie();
                 if (loginCookieInfo == null) {
                     return UNLOGGED;
@@ -54,22 +62,11 @@ public record LoginCookieInfo(LoginType type, String rawCookie, ZonedDateTime ge
 
     public static void setClientCookie(LoginCookieInfo loginCookieInfo) {
         try {
-            ClientConfig clientConfig = ClientConfig.getInstance();
             clientConfig.setClientCookie(loginCookieInfo);
             clientConfig.save();
             logger.info("Login cookie saved");
         } catch (RuntimeException e) {
             logger.error("Exception occurred when serializing login cookie and save", e);
-        }
-    }
-
-    public static void refreshIfNecessaryAndRegisterToServer() {
-        LoginCookieInfo loginCookieInfo = LoginCookieInfo.clientCurrentCookie();
-        if (loginCookieInfo.generateTime.plus(refreshInterval).isBefore(ZonedDateTime.now())) {
-            logger.info("Refreshing Login Cookie");
-            IClientNetworkService.getInstance().sendToServer(new CookieLoginRequest(loginCookieInfo, true));
-        } else {
-            IClientNetworkService.getInstance().sendToServer(new CookieLoginRequest(loginCookieInfo, false));
         }
     }
 

@@ -2,7 +2,7 @@ package indi.etern.musichud.interfaces;
 
 import indi.etern.musichud.MusicHud;
 import indi.etern.musichud.platform.Environment;
-import net.minecraft.server.level.ServerPlayer;
+import net.minecraft.world.entity.player.Player;
 
 import java.util.function.Consumer;
 import java.util.function.Supplier;
@@ -20,6 +20,6 @@ public interface IServerEventService {
         throw new UnsupportedOperationException();
     }
 
-    void registerCommonPlayerQuit(Consumer<ServerPlayer> listener);
-    void registerServerLifecycleStopping(Runnable listener);
+    Unregister registerCommonPlayerQuit(Consumer<Player> listener);
+    Unregister registerServerLifecycleStopping(Runnable listener);
 }

@@ -7,6 +7,7 @@ import icyllis.modernui.util.StateSet;
 import icyllis.modernui.widget.LinearLayout;
 import icyllis.modernui.widget.TextView;
 import indi.etern.musichud.MusicHud;
+import indi.etern.musichud.interfaces.ClientConfig;
 import net.minecraft.client.resources.language.I18n;
 
 import static icyllis.modernui.view.ViewGroup.LayoutParams.WRAP_CONTENT;
@@ -19,7 +20,6 @@ public class Theme {
     public static final int EMPHASIZE_TEXT_COLOR = 0xFFFFFFFF;
     public static final int NORMAL_TEXT_COLOR = 0xFFE0E0E0;
     public static final int SECONDARY_TEXT_COLOR = 0xFFA0A0A0;
-    public static final int FADE_TEXT_COLOR = 0xFF606060;
 
     public static final int ERROR_TEXT_COLOR = 0xFFFF4F4F;
 
@@ -65,20 +65,25 @@ public class Theme {
     public static final int MAIN_LYRIC_SIZE = 24;
     public static final int SUB_LYRIC_SIZE = 15;
     public static final float EMPHASIZE_LYRIC_ALPHA = 0.9f;
-    public static final float FADE_LYRIC_ALPHA = 0.3f;
+    public static final float FADE_LYRIC_ALPHA = 0.25f;
     public static final int EMPHASIZE_LYRIC_COLOR = 0xD6FFFFFF;
     public static final int GLOW_LYRIC_COLOR = 0xFFFFFFFF;
     public static final int FADE_LYRIC_COLOR = 0x4BFFFFFF;
+    public static final int HUD_EMPHASIZE_COLOR = 0xD0FFFFFF;
+    public static final int HUD_FADE_COLOR = 0x70FFFFFF;
+    public static final int HUD_PROGRESS_LEFT = 0x00000000;
+    public static final int HUD_PROGRESS_CURRENT = 0x50FFFFFF;
+    public static final int HUD_PROGRESS_BACKGROUND = 0x32FFFFFF;
 
     public static TextView getNotificationTextView(Context context, boolean enabled) {
         TextView textView = new TextView(context);
         textView.setTextSize(TEXT_SIZE_NORMAL);
         textView.setTextColor(EMPHASIZE_TEXT_COLOR);
         if (enabled) {
-            if (MusicHud.getStatus() == MusicHud.ConnectStatus.NOT_CONNECTED) {
+            if (MusicHud.getConnectStatus() == MusicHud.ConnectStatus.NOT_CONNECTED && !ClientConfig.getInstance().getEnableIsolatedMode()) {
                 textView.setText(I18n.get(MusicHud.MOD_ID + ".text.notConnected"));
-            } else if (MusicHud.getStatus() == MusicHud.ConnectStatus.INCAPABLE) {
-                textView.setText(I18n.get(MusicHud.MOD_ID + ".text.incapableWithServer"));
+            } else if (MusicHud.getConnectStatus() == MusicHud.ConnectStatus.INCOMPATIBLE) {
+                textView.setText(I18n.get(MusicHud.MOD_ID + ".text.incompatibleWithServer"));
             }
         } else {
             textView.setText(I18n.get(MusicHud.MOD_ID + ".text.disabled"));

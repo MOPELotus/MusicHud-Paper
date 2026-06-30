@@ -23,7 +23,6 @@ import java.time.ZonedDateTime;
 import static icyllis.modernui.view.ViewGroup.LayoutParams.MATCH_PARENT;
 import static icyllis.modernui.view.ViewGroup.LayoutParams.WRAP_CONTENT;
 
-@Slf4j
 public class PhoneCodeLoginView extends LinearLayout implements ILoginView {
     private final EditText phoneTextInput;
     private final EditText codeTextInput;
@@ -153,13 +152,9 @@ public class PhoneCodeLoginView extends LinearLayout implements ILoginView {
                             MuiModApi.postToUiThread(() -> {
                                 long seconds = timeout - Duration.between(lastSentCodeTime, ZonedDateTime.now()).getSeconds();
                                 if (seconds <= 1) {
-                                    try {
-                                        setSendingButtonEnable();
-                                        sendCodeButton.setText(I18n.get(MusicHud.MOD_ID + ".button.sendCode"));
-                                        scheduledRefreshTask.stop();
-                                    } catch (InterruptedException e) {
-                                        throw new RuntimeException(e);
-                                    }
+                                    setSendingButtonEnable();
+                                    sendCodeButton.setText(I18n.get(MusicHud.MOD_ID + ".button.sendCode"));
+                                    scheduledRefreshTask.stop();
                                 } else {
                                     sendCodeButton.setText(String.valueOf(seconds));
                                 }
@@ -236,11 +231,7 @@ public class PhoneCodeLoginView extends LinearLayout implements ILoginView {
             @Override
             public void onViewDetachedFromWindow(View view) {
                 if (scheduledRefreshTask != null) {
-                    try {
-                        scheduledRefreshTask.stop();
-                    } catch (InterruptedException e) {
-                        throw new RuntimeException(e);
-                    }
+                    scheduledRefreshTask.stop();
                 }
             }
         });

@@ -4,8 +4,12 @@ import com.mojang.blaze3d.platform.NativeImage;
 import indi.etern.musichud.client.ui.hud.metadata.ThemedColors;
 import net.minecraft.client.renderer.texture.DynamicTexture;
 
+import java.awt.*;
 import java.util.HashMap;
 import java.util.Map;
+
+import static indi.etern.musichud.client.ui.utils.UniformDataUtils.interpolateARGB;
+import static indi.etern.musichud.client.ui.utils.UniformDataUtils.rgbToHsl;
 
 public class ColorExtractor {
     /**
@@ -54,7 +58,7 @@ public class ColorExtractor {
         }
 
         for (float w : colorWeight.values()) totalWeight += w;
-        float minWeightRatio = 0.005f; // 0.5%，可根据需要调整
+        float minWeightRatio = 0.002f; // 0.5%，可根据需要调整
         float minWeight = totalWeight * minWeightRatio;
 
         Map<Integer, Integer> quantToRgb = new HashMap<>();
@@ -67,10 +71,47 @@ public class ColorExtractor {
 
         if (colorWeight.isEmpty()) return getDefaultColors();
 
-        float satWeight = 0.4f;
-        final float FREQ_WEIGHT = 0.2f;   // 频率影响权重（0~1，0表示忽略频率）
+        final float PRIMARY_SAT_WEIGHT = 0.3f;
+        final float SECONDARY_SAT_WEIGHT = 0.2f;
+        final float LUM_WEIGHT = 0.1f;
+        final float FREQ_WEIGHT = 0.5f;
+        final float DIST_EPSILON = 0.001f;
+        final float BD_SAT_TARGET = 0.13f;
+        final float BD_SAT_SPREAD = 0.3f;
 
-        // 主色：综合考虑鲜艳度与频率
+        int bright = 0;
+        float bestBrightScore = -1;
+        for (Map.Entry<Integer, Float> entry : colorWeight.entrySet()) {
+            if (entry.getValue() < minWeight) continue;
+            int rgb = quantToRgb.get(entry.getKey());
+            float lum = getLuminance(rgb);
+            float sat = getSaturation(rgb);
+            float satPenalty = (sat - BD_SAT_TARGET) * (sat - BD_SAT_TARGET) / (BD_SAT_SPREAD * BD_SAT_SPREAD);
+            float satScore = Math.max(0.1f, 1.0f - satPenalty);
+            float score = lum * satScore;
+            if (score > bestBrightScore) {
+                bestBrightScore = score;
+                bright = rgb;
+            }
+        }
+
+        int dark = -1;
+        float bestDarkScore = -1;
+        for (Map.Entry<Integer, Float> entry : colorWeight.entrySet()) {
+            if (entry.getValue() < minWeight) continue;
+            int rgb = quantToRgb.get(entry.getKey());
+            float lum = getLuminance(rgb);
+            float sat = getSaturation(rgb);
+            float darkness = 1.0f - lum;
+            float satPenalty = (sat - BD_SAT_TARGET) * (sat - BD_SAT_TARGET) / (BD_SAT_SPREAD * BD_SAT_SPREAD);
+            float satScore = Math.max(0.1f, 1.0f - satPenalty);
+            float score = darkness * satScore;
+            if (score > bestDarkScore) {
+                bestDarkScore = score;
+                dark = rgb;
+            }
+        }
+
         int primary = 0;
         float bestPrimaryScore = -1;
         for (Map.Entry<Integer, Float> entry : colorWeight.entrySet()) {
@@ -80,19 +121,18 @@ public class ColorExtractor {
             int rgb = quantToRgb.get(quant);
             float sat = getSaturation(rgb);
             float lum = getLuminance(rgb);
-            float vivid = (float) (Math.pow(sat, satWeight) * lum);  // 鲜艳度
-            // 频率因子：使用 weight/totalWeight 或者更平滑的 log(weight+1)
-            float freqFactor = (float) Math.log(weight + 1) / (float) Math.log(totalWeight + 1);
-            // 也可以直接用 weight/totalWeight，但 log 可以压制极高频的优势
-            float score = vivid * (1 - FREQ_WEIGHT) + freqFactor * FREQ_WEIGHT;
+            float dist1 = colorDistance(bright, rgb);
+            float dist2 = colorDistance(dark, rgb);
+            float vivid = (float) (Math.pow(sat, PRIMARY_SAT_WEIGHT) * Math.pow(lum, LUM_WEIGHT));
+            // sqrt 压制部分高频优势
+            float freqFactor = (float) Math.sqrt(weight) / (float) Math.sqrt(totalWeight);
+            float score = (vivid + freqFactor * FREQ_WEIGHT) * (dist1 + DIST_EPSILON) * (dist2 + DIST_EPSILON);
             if (score > bestPrimaryScore) {
                 bestPrimaryScore = score;
                 primary = rgb;
             }
         }
 
-        // 次主色：鲜艳度与色差综合
-        // 次主色：鲜艳度、色差、频率综合
         int secondary = primary;
         float bestSecondaryScore = -1;
         for (Map.Entry<Integer, Float> entry : colorWeight.entrySet()) {
@@ -103,53 +143,15 @@ public class ColorExtractor {
             if (rgb == primary) continue;
             float sat = getSaturation(rgb);
             float lum = getLuminance(rgb);
-            float vivid = (float) (Math.pow(sat, satWeight) * lum);
-            float dist = colorDistance(primary, rgb);
-            float freqFactor = (float) Math.log(weight + 1) / (float) Math.log(totalWeight + 1);
-            // 综合得分：鲜艳度 * 2 + 色差 + 频率因子 * 权重
-            float score = vivid * 2f + dist + freqFactor * FREQ_WEIGHT * 2f;  // 频率影响可调
-            if (score > bestSecondaryScore && dist > 0.1f) {
+            float vivid = (float) (Math.pow(sat, SECONDARY_SAT_WEIGHT) * Math.pow(lum, LUM_WEIGHT));
+            float dist1 = colorDistance(primary, rgb);
+            float dist2 = colorDistance(bright, rgb);
+            float dist3 = colorDistance(dark, rgb);
+            float freqFactor = (float) Math.sqrt(weight) / (float) Math.sqrt(totalWeight);
+            float score = (vivid + freqFactor * FREQ_WEIGHT) * (dist1 + DIST_EPSILON) * (dist2 + DIST_EPSILON) * (dist3 + DIST_EPSILON);
+            if (score > bestSecondaryScore && dist1 > 0.1f) {
                 bestSecondaryScore = score;
                 secondary = rgb;
-            }
-        }
-
-        // 亮色：综合亮度与色差评分，取最高分
-        int bright = primary;
-        float bestBrightScore = -1;
-        for (Map.Entry<Integer, Float> entry : colorWeight.entrySet()) {
-            if (entry.getValue() < minWeight) continue;
-            int rgb = quantToRgb.get(entry.getKey());
-            float lum = getLuminance(rgb);
-            float distToPrimary = colorDistance(primary, rgb);
-            float distToSecondary = colorDistance(secondary, rgb);
-            // 归一化色差到 [0,1] 范围（曼哈顿距离最大为3）
-            float distNorm = (distToPrimary + distToSecondary) / 3.0f;
-            // 亮度范围 [0,1]，直接使用
-            float score = lum * 0.8f + distNorm * 0.2f;
-            if (score > bestBrightScore) {
-                bestBrightScore = score;
-                bright = rgb;
-            }
-        }
-
-        // 暗色：综合暗度与色差评分，取最高分
-        int dark = primary;
-        float bestDarkScore = -1;
-        for (Map.Entry<Integer, Float> entry : colorWeight.entrySet()) {
-            if (entry.getValue() < minWeight) continue;
-            int rgb = quantToRgb.get(entry.getKey());
-            float lum = getLuminance(rgb);
-            float darkValue = 1.0f - lum;  // 暗度，越高越暗
-            float distToPrimary = colorDistance(primary, rgb);
-            float distToSecondary = colorDistance(secondary, rgb);
-            float distToBright = colorDistance(bright, rgb);
-            // 归一化色差（三个距离和，最大9）
-            float distNorm = (distToPrimary + distToSecondary + distToBright) / 9.0f;
-            float score = darkValue * 0.8f + distNorm * 0.2f;
-            if (score > bestDarkScore) {
-                bestDarkScore = score;
-                dark = rgb;
             }
         }
 
@@ -172,13 +174,23 @@ public class ColorExtractor {
     }
 
     private static float colorDistance(int rgb1, int rgb2) {
-        float r1 = ((rgb1 >> 16) & 0xFF) / 255.0f;
-        float g1 = ((rgb1 >> 8) & 0xFF) / 255.0f;
-        float b1 = (rgb1 & 0xFF) / 255.0f;
-        float r2 = ((rgb2 >> 16) & 0xFF) / 255.0f;
-        float g2 = ((rgb2 >> 8) & 0xFF) / 255.0f;
-        float b2 = (rgb2 & 0xFF) / 255.0f;
-        return Math.abs(r1 - r2) + Math.abs(g1 - g2) + Math.abs(b1 - b2);
+        float[] hsl1 = rgbToHsl(rgb1);
+        float[] hsl2 = rgbToHsl(rgb2);
+
+        float hueDist = 0;
+        if (hsl1[1] > 0.25f && hsl2[1] > 0.25f) {
+            hueDist = Math.abs(hsl1[0] - hsl2[0]);
+            if (hueDist > 0.5f) hueDist = 1.0f - hueDist;
+        }
+        hueDist *= 2;
+
+        float satDist = Math.abs(hsl1[1] - hsl2[1]);
+        float lumDist = Math.abs(hsl1[2] - hsl2[2]);
+
+        float HUE_WEIGHT = 0.5f;
+        float SAT_WEIGHT = 0.2f;
+        float LUM_WEIGHT = 0.3f;
+        return hueDist * HUE_WEIGHT + satDist * SAT_WEIGHT + lumDist * LUM_WEIGHT;
     }
 
     private static float getLuminance(int rgb) {
@@ -215,9 +227,6 @@ public class ColorExtractor {
         );
     }
 
-    /**
-     * 调整单个颜色（完整版）
-     */
     private static int adjustColorFull(int argb, float vibrance, float brightness, float contrast) {
         int r = (argb >> 16) & 0xFF;
         int g = (argb >> 8) & 0xFF;
@@ -262,5 +271,15 @@ public class ColorExtractor {
         int gOut = (int) (Math.clamp(gLin, 0.0f, 1.0f) * 255);
         int bOut = (int) (Math.clamp(bLin, 0.0f, 1.0f) * 255);
         return 0xFF000000 | (rOut << 16) | (gOut << 8) | bOut;
+    }
+
+    public static ThemedColors mixBaseColorsWithAlpha(ThemedColors colors, int baseColor, float alpha) {
+        if (colors == null) return null;
+        return new ThemedColors(
+                interpolateARGB(baseColor, colors.primary, alpha),
+                interpolateARGB(baseColor, colors.secondary, alpha),
+                interpolateARGB(baseColor, colors.bright, alpha),
+                interpolateARGB(baseColor, colors.dark, alpha)
+        );
     }
 }

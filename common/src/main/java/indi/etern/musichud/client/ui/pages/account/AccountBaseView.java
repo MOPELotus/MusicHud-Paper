@@ -17,7 +17,6 @@ import lombok.extern.slf4j.Slf4j;
 import static icyllis.modernui.view.ViewGroup.LayoutParams.MATCH_PARENT;
 import static icyllis.modernui.view.ViewGroup.LayoutParams.WRAP_CONTENT;
 
-@Slf4j
 public class AccountBaseView extends LinearLayout {
     private static final ClientConfig clientConfig = ClientConfig.getInstance();
     @Getter
@@ -44,7 +43,7 @@ public class AccountBaseView extends LinearLayout {
         boolean enabled = clientConfig.getEnable();
 
         Status status1;
-        if (MusicHud.getStatus() != MusicHud.ConnectStatus.CONNECTED || !enabled) {
+        if (MusicHud.getConnectStatus() != MusicHud.ConnectStatus.CONNECTED && !ClientConfig.getInstance().getEnableIsolatedMode() || !enabled) {
             status1 = Status.UNAVAILABLE;
         } else if (LoginService.getInstance().isLogined()) {
             status1 = Status.LOGGED;
@@ -76,10 +75,7 @@ public class AccountBaseView extends LinearLayout {
                     AccountView accountView = new AccountView(context);
                     view.addView(accountView);
                 } else {
-                    LoginView loginView = LoginView.getInstance();
-                    if (loginView == null) {
-                        loginView = new LoginView(context);
-                    }
+                    LoginView loginView = new LoginView(context);
                     LayoutParams loginParams = new LayoutParams(MATCH_PARENT, MATCH_PARENT);
                     loginParams.setMargins(0, loginView.dp(120), 0, 0);
                     loginView.setLayoutParams(loginParams);

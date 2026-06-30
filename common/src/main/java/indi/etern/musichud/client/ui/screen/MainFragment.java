@@ -7,7 +7,6 @@ import icyllis.modernui.annotation.Nullable;
 import icyllis.modernui.core.Context;
 import icyllis.modernui.fragment.Fragment;
 import icyllis.modernui.graphics.drawable.Drawable;
-import icyllis.modernui.graphics.drawable.ShapeDrawable;
 import icyllis.modernui.mc.MuiModApi;
 import icyllis.modernui.mc.ui.ClampingScrollView;
 import icyllis.modernui.util.DataSet;
@@ -22,17 +21,19 @@ import indi.etern.musichud.beans.music.LyricLine;
 import indi.etern.musichud.beans.music.MusicDetail;
 import indi.etern.musichud.client.audio.NowPlayingInfo;
 import indi.etern.musichud.client.audio.StreamAudioPlayer;
+import indi.etern.musichud.client.services.LoginService;
 import indi.etern.musichud.client.services.MusicService;
 import indi.etern.musichud.client.ui.Theme;
 import indi.etern.musichud.client.ui.components.*;
-import indi.etern.musichud.client.ui.pages.account.AccountBaseView;
 import indi.etern.musichud.client.ui.pages.ConfigView;
 import indi.etern.musichud.client.ui.pages.HomeView;
+import indi.etern.musichud.client.ui.pages.account.AccountBaseView;
 import indi.etern.musichud.client.ui.pages.search.SearchView;
 import indi.etern.musichud.client.ui.utils.ButtonInsetBackgroundFactory;
 import indi.etern.musichud.interfaces.ClientConfig;
 import lombok.NonNull;
 import lombok.Setter;
+import net.minecraft.client.Minecraft;
 import net.minecraft.client.multiplayer.PlayerInfo;
 import net.minecraft.client.resources.language.I18n;
 
@@ -49,6 +50,7 @@ import static icyllis.modernui.view.ViewGroup.LayoutParams.WRAP_CONTENT;
 
 public class MainFragment extends Fragment {
     private static final ClientConfig clientConfig = ClientConfig.getInstance();
+    private static final LoginService loginService = LoginService.getInstance();
     private static volatile MainFragment instance = null;
     private final NowPlayingInfo playingInfo = NowPlayingInfo.getInstance();
     private UrlImageView albumImage;
@@ -61,8 +63,20 @@ public class MainFragment extends Fragment {
     private ProgressBar progressBar;
     private TextView progressText;
     private Button skipCurrentButton;
+    private TextView serverConnectStatus;
+    private Button switchServerConnectButton;
 
     public MainFragment() {
+    }
+
+    static {
+        MusicHud.getConnectStatusListeners().add(status -> {
+            if (instance != null) {
+                MuiModApi.postToUiThread(() -> {
+                    instance.refreshServerConnectStatus();
+                });
+            }
+        });
     }
 
     public static void refresh() {
@@ -80,15 +94,16 @@ public class MainFragment extends Fragment {
             accountBaseView.refresh();
         }
         if (instance != null && instance.titleText != null) {
-            if (!clientConfig.getEnable()) {
-                instance.titleText.setText(I18n.get(MusicHud.MOD_ID + ".text.disabled"));
-            } else if (MusicHud.getStatus() == MusicHud.ConnectStatus.NOT_CONNECTED) {
-                instance.titleText.setText(I18n.get(MusicHud.MOD_ID + ".text.notConnected"));
-            } else if (MusicHud.getStatus() == MusicHud.ConnectStatus.INCAPABLE) {
-                instance.titleText.setText(I18n.get(MusicHud.MOD_ID + ".text.incapableWithServer"));
-            } else {
+//            if (!clientConfig.getEnable()) {
+//                instance.titleText.setText(I18n.get(MusicHud.MOD_ID + ".text.disabled"));
+//            } else if (MusicHud.getConnectStatus() == MusicHud.ConnectStatus.NOT_CONNECTED && !clientConfig.getEnableIsolatedClient()) {
+//                instance.titleText.setText(I18n.get(MusicHud.MOD_ID + ".text.notConnected"));
+//            } else if (MusicHud.getConnectStatus() == MusicHud.ConnectStatus.INCOMPATIBLE && !clientConfig.getEnableIsolatedClient()) {
+//                instance.titleText.setText(I18n.get(MusicHud.MOD_ID + ".text.incompatibleWithServer"));
+//            } else {
                 instance.titleText.setText(I18n.get(MusicHud.MOD_ID + ".text.idle"));
-            }
+//            }
+            instance.refreshServerConnectStatus();
         }
     }
 
@@ -96,15 +111,15 @@ public class MainFragment extends Fragment {
         if (instance != null) {
             if (musicDetail == null || musicDetail.equals(MusicDetail.NONE)) {
                 instance.albumImage.loadUrl(MusicHud.ICON_BASE64);
-                if (!clientConfig.getEnable()) {
-                    instance.titleText.setText(I18n.get(MusicHud.MOD_ID + ".text.disabled"));
-                } else if (MusicHud.getStatus() == MusicHud.ConnectStatus.NOT_CONNECTED) {
-                    instance.titleText.setText(I18n.get(MusicHud.MOD_ID + ".text.notConnected"));
-                } else if (MusicHud.getStatus() == MusicHud.ConnectStatus.INCAPABLE) {
-                    instance.titleText.setText(I18n.get(MusicHud.MOD_ID + ".text.incapableWithServer"));
-                } else {
+//                if (!clientConfig.getEnable()) {
+//                    instance.titleText.setText(I18n.get(MusicHud.MOD_ID + ".text.disabled"));
+//                } else if (MusicHud.getConnectStatus() == MusicHud.ConnectStatus.NOT_CONNECTED) {
+//                    instance.titleText.setText(I18n.get(MusicHud.MOD_ID + ".text.notConnected"));
+//                } else if (MusicHud.getConnectStatus() == MusicHud.ConnectStatus.INCOMPATIBLE) {
+//                    instance.titleText.setText(I18n.get(MusicHud.MOD_ID + ".text.incompatibleWithServer"));
+//                } else {
                     instance.titleText.setText(I18n.get(MusicHud.MOD_ID + ".text.idle"));
-                }
+//                }
                 instance.titleText.setTextColor(Theme.SECONDARY_TEXT_COLOR);
                 instance.artists.removeAllViews();
                 instance.albumContainer.removeAllViews();
@@ -114,7 +129,7 @@ public class MainFragment extends Fragment {
                 instance.skipCurrentButton.setVisibility(View.GONE);
             } else {
                 instance.titleText.setTextColor(Theme.NORMAL_TEXT_COLOR);
-                instance.albumImage.loadUrl(musicDetail.getAlbum().getThumbnailPicUrl(200));
+                instance.albumImage.loadUrl(musicDetail.getAlbum().getThumbnailPicUrl(240));
                 instance.titleText.setText(musicDetail.getName());
                 PlayerInfo pusherPlayerInfo = NowPlayingInfo.getInstance().getPusherPlayerInfo();
                 String name = pusherPlayerInfo != null ? pusherPlayerInfo.getProfile().name() : null;
@@ -241,9 +256,6 @@ public class MainFragment extends Fragment {
             var base = new LinearLayout(context);
             base.setPadding(base.dp(24), 0, base.dp(24), 0);
 
-            var baseBackground = new ShapeDrawable();
-            baseBackground.setColor(Theme.BASE_BACKGROUND_COLOR);
-            base.setBackground(baseBackground);
             var baseParams = new FrameLayout.LayoutParams(MATCH_PARENT, MATCH_PARENT);
             base.setLayoutParams(baseParams);
             base.setOrientation(LinearLayout.HORIZONTAL);
@@ -253,20 +265,29 @@ public class MainFragment extends Fragment {
             routerContainer.setAnimationDuration(300);
 
             {
-                var sideScrollView = new ClampingScrollView(context);
-                base.addView(sideScrollView);
-
                 var side = new LinearLayout(context);
                 side.setOrientation(LinearLayout.VERTICAL);
+                base.addView(side, new LinearLayout.LayoutParams(WRAP_CONTENT, MATCH_PARENT));
+
+                //noinspection UnstableApiUsage
+                var sideScrollView = new ClampingScrollView(context);
+                side.addView(sideScrollView, new LinearLayout.LayoutParams(WRAP_CONTENT, 0, 1));
+
+                var sideContent = new LinearLayout(context);
+                sideContent.setOrientation(LinearLayout.VERTICAL);
 
                 var sideMenu = new SideMenu(context, routerContainer);
-                var homeNav = sideMenu.createNavigationPage(I18n.get(MusicHud.MOD_ID + ".text.page.home"), HomeView::new);
-                var searchNav = sideMenu.createNavigationPage(I18n.get(MusicHud.MOD_ID + ".text.page.search"), SearchView::new);
-                var accountNav = sideMenu.createNavigationPage(I18n.get(MusicHud.MOD_ID + ".text.page.account"), AccountBaseView::new);
-                var settingsNav = sideMenu.createNavigationPage(I18n.get(MusicHud.MOD_ID + ".text.page.setting"), ConfigView::new);
-
-                SideMenu.NavigationMeta defaultMeta = List.of(homeNav, searchNav, accountNav, settingsNav).get(defaultSelectedIndex);
-                defaultMeta.select();
+                if (Minecraft.getInstance().player != null) {//in game
+                    var homeNav = sideMenu.createNavigationPage(I18n.get(MusicHud.MOD_ID + ".text.page.home"), HomeView::new);
+                    var searchNav = sideMenu.createNavigationPage(I18n.get(MusicHud.MOD_ID + ".text.page.search"), SearchView::new);
+                    var accountNav = sideMenu.createNavigationPage(I18n.get(MusicHud.MOD_ID + ".text.page.account"), AccountBaseView::new);
+                    var settingsNav = sideMenu.createNavigationPage(I18n.get(MusicHud.MOD_ID + ".text.page.setting"), ConfigView::new);
+                    SideMenu.NavigationMeta defaultMeta = List.of(homeNav, searchNav, accountNav, settingsNav).get(defaultSelectedIndex);
+                    defaultMeta.select();
+                } else {
+                    var settingsNav = sideMenu.createNavigationPage(I18n.get(MusicHud.MOD_ID + ".text.page.setting"), ConfigView::new);
+                    settingsNav.select();
+                }
 
                 int widthDp = base.dp(160);
                 var params = new LinearLayout.LayoutParams(widthDp, MATCH_PARENT);
@@ -275,7 +296,7 @@ public class MainFragment extends Fragment {
                 albumImage.loadUrl(MusicHud.ICON_BASE64);
                 //noinspection SuspiciousNameCombination
                 var imageParams = new FrameLayout.LayoutParams(widthDp, widthDp);
-                side.addView(albumImage, imageParams);
+                sideContent.addView(albumImage, imageParams);
 
                 LinearLayout musicInfo = new LinearLayout(context);
                 musicInfo.setOrientation(LinearLayout.VERTICAL);
@@ -283,15 +304,15 @@ public class MainFragment extends Fragment {
                 titleText = new TextView(context);
                 titleText.setTextSize(Theme.TEXT_SIZE_LARGE);
                 titleText.setTextColor(Theme.NORMAL_TEXT_COLOR);
-                if (!clientConfig.getEnable()) {
-                    instance.titleText.setText(I18n.get(MusicHud.MOD_ID + ".text.disabled"));
-                } else if (MusicHud.getStatus() == MusicHud.ConnectStatus.NOT_CONNECTED) {
-                    instance.titleText.setText(I18n.get(MusicHud.MOD_ID + ".text.notConnected"));
-                } else if (MusicHud.getStatus() == MusicHud.ConnectStatus.INCAPABLE) {
-                    instance.titleText.setText(I18n.get(MusicHud.MOD_ID + ".text.incapableWithServer"));
-                } else {
+//                if (!clientConfig.getEnable()) {
+//                    instance.titleText.setText(I18n.get(MusicHud.MOD_ID + ".text.disabled"));
+//                } else if (MusicHud.getConnectStatus() == MusicHud.ConnectStatus.NOT_CONNECTED) {
+//                    instance.titleText.setText(I18n.get(MusicHud.MOD_ID + ".text.notConnected"));
+//                } else if (MusicHud.getConnectStatus() == MusicHud.ConnectStatus.INCOMPATIBLE) {
+//                    instance.titleText.setText(I18n.get(MusicHud.MOD_ID + ".text.incompatibleWithServer"));
+//                } else {
                     instance.titleText.setText(I18n.get(MusicHud.MOD_ID + ".text.idle"));
-                }
+//                }
                 musicInfo.addView(titleText);
 
                 artists = new FlexWrapLayout(context);
@@ -328,14 +349,14 @@ public class MainFragment extends Fragment {
                     }
                 });
                 LinearLayout.LayoutParams params2 = new LinearLayout.LayoutParams(MATCH_PARENT, base.dp(4));
-                params2.setMargins(0, side.dp(1), 0, side.dp(-4));
+                params2.setMargins(0, sideContent.dp(1), 0, sideContent.dp(-4));
                 musicInfo.addView(progressBar, params2);
 
                 progressText = new TextView(context);
                 progressText.setTextColor(Theme.SECONDARY_TEXT_COLOR);
                 progressText.setTextSize(Theme.TEXT_SIZE_NORMAL);
                 LinearLayout.LayoutParams params3 = new LinearLayout.LayoutParams(MATCH_PARENT, base.dp(16));
-                params3.setMargins(0, side.dp(4), 0, 0);
+                params3.setMargins(0, sideContent.dp(4), 0, 0);
                 musicInfo.addView(progressText, params3);
 
                 skipCurrentButton = new Button(context);
@@ -365,25 +386,55 @@ public class MainFragment extends Fragment {
                     });
                 });
                 LinearLayout.LayoutParams buttonParams = new LinearLayout.LayoutParams(MATCH_PARENT, WRAP_CONTENT);
-                buttonParams.setMargins(0, side.dp(2), 0, 0);
+                buttonParams.setMargins(0, sideContent.dp(2), 0, 0);
 
                 var params1 = new LinearLayout.LayoutParams(MATCH_PARENT, WRAP_CONTENT);
-                params1.setMargins(side.dp(8), side.dp(4), side.dp(8), side.dp(24));
+                params1.setMargins(sideContent.dp(8), sideContent.dp(4), sideContent.dp(8), sideContent.dp(24));
 
                 musicInfo.addView(skipCurrentButton, buttonParams);
-                musicInfo.setMinimumHeight(side.dp(128));
+                musicInfo.setMinimumHeight(sideContent.dp(128));
 
-                side.addView(musicInfo, params1);
-                side.addView(sideMenu, params);
+                sideContent.addView(musicInfo, params1);
+                sideContent.addView(sideMenu, params);
 
-                var blank = new FrameLayout(context);
-                side.addView(blank, new FrameLayout.LayoutParams(MATCH_PARENT, base.dp(128)));
+                var bottomBlank = new FrameLayout(context);
+                sideContent.addView(bottomBlank, new FrameLayout.LayoutParams(MATCH_PARENT, base.dp(128)));
 
-                var sideParams = new LinearLayout.LayoutParams(widthDp, WRAP_CONTENT);
-                sideParams.setMargins(0, side.dp(32), 0, 0);
+                var sideParams = new LinearLayout.LayoutParams(widthDp, MATCH_PARENT);
+                sideParams.setMargins(0, sideContent.dp(32), 0, 0);
 
-                sideScrollView.addView(side, sideParams);
+                sideScrollView.addView(sideContent, sideParams);
 
+
+                LinearLayout serverConnectPanel = new LinearLayout(context);
+                serverConnectPanel.setOrientation(LinearLayout.VERTICAL);
+
+                serverConnectStatus = new TextView(context);
+                serverConnectStatus.setTextSize(Theme.TEXT_SIZE_NORMAL);
+                serverConnectStatus.setTextColor(Theme.SECONDARY_TEXT_COLOR);
+                serverConnectPanel.addView(serverConnectStatus, new LinearLayout.LayoutParams(MATCH_PARENT, WRAP_CONTENT));
+
+                switchServerConnectButton = new Button(context);
+                switchServerConnectButton.setFocusable(true);
+                switchServerConnectButton.setClickable(true);
+                switchServerConnectButton.setTextSize(Theme.TEXT_SIZE_NORMAL);
+                switchServerConnectButton.setTextColor(Theme.NORMAL_TEXT_COLOR);
+                switchServerConnectButton.setText(I18n.get(MusicHud.MOD_ID + ".button.logout"));
+                switchServerConnectButton.setGravity(Gravity.CENTER);
+                Drawable background1 = ButtonInsetBackgroundFactory.builder()
+                        .inset(0)
+                        .cornerRadius(switchServerConnectButton.dp(2))
+                        .padding(new ButtonInsetBackgroundFactory.Padding(0, 0, 0, 0))
+                        .build().newBackgroundDrawable();
+                switchServerConnectButton.setBackground(background1);
+                switchServerConnectButton.setOnClickListener(b -> {
+                    MusicHud.EXECUTOR.execute(loginService::toggleConnection);
+                });
+                serverConnectPanel.addView(switchServerConnectButton, new LinearLayout.LayoutParams(MATCH_PARENT, base.dp(40)));
+                refreshServerConnectStatus();
+                LinearLayout.LayoutParams params4 = new LinearLayout.LayoutParams(widthDp, WRAP_CONTENT);
+                params4.setMargins(0, serverConnectPanel.dp(8), 0, serverConnectPanel.dp(48));
+                side.addView(serverConnectPanel, params4);
 
                 LayoutTransition transition1 = new LayoutTransition();
                 transition1.enableTransitionType(LayoutTransition.CHANGING);
@@ -391,7 +442,13 @@ public class MainFragment extends Fragment {
 
                 LayoutTransition transition2 = new LayoutTransition();
                 transition2.enableTransitionType(LayoutTransition.CHANGING);
-                side.setLayoutTransition(transition2);
+                sideContent.setLayoutTransition(transition2);
+
+                LayoutTransition transition3 = new LayoutTransition();
+                transition3.disableTransitionType(LayoutTransition.DISAPPEARING);
+                transition3.disableTransitionType(LayoutTransition.APPEARING);
+                transition3.enableTransitionType(LayoutTransition.CHANGING);
+                serverConnectPanel.setLayoutTransition(transition3);
 
                 switchMusic(currentlyPlayingMusicDetail, nextToPlayMusicDetail, playingInfo.getLyricLines());
             }
@@ -403,6 +460,45 @@ public class MainFragment extends Fragment {
         } catch (Exception e) {
             instance = null;
             throw e;
+        }
+    }
+
+    private void refreshServerConnectStatus() {
+        if (Minecraft.getInstance().player != null) {
+            boolean singlePlayer = Minecraft.getInstance().getCurrentServer() == null;
+            switch (MusicHud.getConnectStatus()) {
+                case CONNECTED -> {
+                    if (singlePlayer) {
+                        serverConnectStatus.setText(I18n.get(MusicHud.MOD_ID + ".text.connected.integrated"));
+                        switchServerConnectButton.setVisibility(View.GONE);
+                    } else {
+                        serverConnectStatus.setText(I18n.get(MusicHud.MOD_ID + ".text.connected"));
+                        switchServerConnectButton.setVisibility(View.VISIBLE);
+                        switchServerConnectButton.setText(I18n.get(MusicHud.MOD_ID + ".button.disconnect"));
+                    }
+                }
+                case NOT_CONNECTED -> {
+                    if (clientConfig.getEnableIsolatedMode()) {
+                        serverConnectStatus.setText(I18n.get(MusicHud.MOD_ID + ".text.notConnected.isolated"));
+                    } else {
+                        serverConnectStatus.setText(I18n.get(MusicHud.MOD_ID + ".text.notConnected"));
+                    }
+                    switchServerConnectButton.setVisibility(View.VISIBLE);
+                    switchServerConnectButton.setText(I18n.get(MusicHud.MOD_ID + ".button.connect"));
+                }
+                case INCOMPATIBLE -> {
+                    if (clientConfig.getEnableIsolatedMode()) {
+                        serverConnectStatus.setText(I18n.get(MusicHud.MOD_ID + ".text.incompatible"));
+                    } else {
+                        serverConnectStatus.setText(I18n.get(MusicHud.MOD_ID + ".text.incompatible.isolated"));
+                    }
+                    switchServerConnectButton.setVisibility(View.VISIBLE);
+                    switchServerConnectButton.setText(I18n.get(MusicHud.MOD_ID + ".button.connect"));
+                }
+            }
+        } else {
+            serverConnectStatus.setText("");
+            switchServerConnectButton.setVisibility(View.GONE);
         }
     }
 

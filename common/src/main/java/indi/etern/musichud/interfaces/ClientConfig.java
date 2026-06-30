@@ -1,6 +1,7 @@
 package indi.etern.musichud.interfaces;
 
 import indi.etern.musichud.MusicHud;
+import indi.etern.musichud.beans.api.AutoConnectServerFilterType;
 import indi.etern.musichud.beans.login.LoginCookieInfo;
 import indi.etern.musichud.beans.music.Quality;
 import indi.etern.musichud.client.config.ProfileConfigData;
@@ -8,6 +9,7 @@ import indi.etern.musichud.client.ui.hud.metadata.HorizontalAlign;
 import indi.etern.musichud.client.ui.hud.metadata.VerticalAlign;
 import indi.etern.musichud.platform.Environment;
 
+import java.util.List;
 import java.util.function.Supplier;
 
 public interface ClientConfig {
@@ -51,6 +53,24 @@ public interface ClientConfig {
 
     void setHudVerticalPosition(VerticalAlign hudVerticalPosition);
 
+    boolean getMixWithVanillaSoundVolume();
+
+    void setMixWithVanillaSoundVolume(boolean mixWithVanillaSoundVolume);
+
+    boolean getMuted();
+
+    void setMuted(boolean muted);
+
+    int getSoundVolume();
+
+    void setSoundVolume(int soundVolume);
+
+    void forceSetSoundVolume(int soundVolume);
+
+    int getSoundVolumeInterval();
+
+    void setSoundVolumeInterval(int soundVolumeInterval);
+
     HorizontalAlign getHudHorizontalPosition();
 
     void setHudHorizontalPosition(HorizontalAlign hudHorizontalPosition);
@@ -83,13 +103,45 @@ public interface ClientConfig {
 
     void setClientAccountConfig(ProfileConfigData clientAccountConfig);
 
-    boolean getEnableEmbeddedServer();
+    boolean getEnabledInIntegratedServer();
 
-    void setEnableEmbeddedServer(boolean enableEmbeddedServer);
+    void setEnabledInIntegratedServer(boolean enabledInIntegratedServer);
+
+    boolean getEnableAutoConnect();
+
+    void setEnableAutoConnect(boolean autoConnect);
+
+    boolean getEnableIsolatedMode();
+
+    void setEnableIsolatedMode(boolean autoConnect);
+
+    AutoConnectServerFilterType getConnectServerFilterType();
+
+    void setConnectServerFilterType(AutoConnectServerFilterType autoConnectServerFilterType);
+
+    List<String> getBlackList();
+
+    void setBlackList(List<String> blackList);
+
+    List<String> getWhiteList();
+
+    void setWhiteList(List<String> whiteList);
 
     void save();
 
     boolean isConfigured();
 
     void setConfigured(boolean configured);
+
+    double getMainScreenAdditionalBackgroundDarken();
+
+    void setMainScreenAdditionalBackgroundDarken(double additionalBackgroundDarken);
+
+    double getHudBackgroundMixAlpha();
+
+    void setHudBackgroundMixAlpha(double hudBackgroundMixAlpha);
+
+    boolean getEnableMarqueeText();
+
+    void setEnableMarqueeText(boolean aBoolean);
 }

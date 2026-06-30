@@ -1,18 +1,24 @@
 #version 150
 
-layout(std140) uniform HudBackgroundParams {
-    mat4 u_Translation;               // unused
-    vec4 u_RectParam;                 // (halfWidth, halfHeight, radius, timestamp)
-    vec3 u_TransitionParam;           // (fadeProgress, nextImageAspect, imageAspect)
-    mat4 u_BgColors;                  // 4 colors (column-major)
+layout(std140) uniform MHBasePosition {
+    mat4 u_Translation;
+    vec3 u_Layout; // (halfWidth, halfHeight, cornerRadius)
+};
+layout(std140) uniform MHNowPlayingThemeColor {
+    vec4 u_Primary;
+    vec4 u_Secondary;
+    vec4 u_Bright;
+    vec4 u_Dark;
+};
+layout(std140) uniform MHDynamicStatus {
+    vec4 u_Dynamic1; // (timestamp, playedProgress, switchProgress)
 };
 
-in vec2 f_Position;                   // coordinates relative to center, range [-halfWidth, halfHeight]
-in vec4 f_Color;                      // vertex color (usually white, kept for compatibility)
+in vec2 f_Position;
+in vec4 f_Color;
 
 out vec4 fragColor;
 
-// ---------- 2D Simplex Noise Implementation (by Ian McEwan, Ashima Arts) ----------
 vec3 mod289(vec3 x) { return x - floor(x * (1.0 / 289.0)) * 289.0; }
 vec2 mod289(vec2 x) { return x - floor(x * (1.0 / 289.0)) * 289.0; }
 vec3 permute(vec3 x) { return mod289(((x*34.0)+1.0)*x); }
@@ -42,7 +48,6 @@ float snoise(vec2 v) {
     return 130.0 * dot(m, g);
 }
 
-// Fractal Brownian Motion (FBM) – 3 octaves for rich detail
 float fbm(vec2 uv) {
     float value = 0.0;
     float amplitude = 0.5;
@@ -52,7 +57,7 @@ float fbm(vec2 uv) {
         amplitude *= 0.5;
         frequency *= 2.0;
     }
-    return value * 0.5 + 0.5;  // map from [-1,1] to [0,1]
+    return value * 0.5 + 0.5;
 }
 
 const float SPLIT_C0 = 0.2;
@@ -62,43 +67,19 @@ const float SPLIT_C3 = 0.8;
 
 vec4 mix4Colors(vec4 c0, vec4 c1, vec4 c2, vec4 c3, float t) {
     t = clamp(t, SPLIT_C0, SPLIT_C3);
-
-    float s0 = SPLIT_C0;
-    float s1 = SPLIT_C1;
-    float s2 = SPLIT_C2;
-    float s3 = SPLIT_C3;
-
-    // 防止分界点顺序错误（可选的安全钳位）
-    s1 = clamp(s1, s0, s3);
-    s2 = clamp(s2, s1, s3);
-
+    float s0 = SPLIT_C0; float s1 = SPLIT_C1; float s2 = SPLIT_C2; float s3 = SPLIT_C3;
+    s1 = clamp(s1, s0, s3); s2 = clamp(s2, s1, s3);
     if (t <= s1) {
-        // 第一段：范围 [s0, s1]
-        float f = (t - s0) / (s1 - s0);
-        f = f * f * (3.0 - 2.0 * f);
-        return mix(c0, c1, f);
+        float f = (t - s0) / (s1 - s0); f = f * f * (3.0 - 2.0 * f); return mix(c0, c1, f);
     } else if (t <= s2) {
-        // 第二段：范围 [s1, s2]
-        float f = (t - s1) / (s2 - s1);
-        f = f * f * (3.0 - 2.0 * f);
-        return mix(c1, c2, f);
+        float f = (t - s1) / (s2 - s1); f = f * f * (3.0 - 2.0 * f); return mix(c1, c2, f);
     } else {
-        // 第三段：范围 [s2, s3]
-        float f = (t - s2) / (s3 - s2);
-        f = f * f * (3.0 - 2.0 * f);
-        return mix(c2, c3, f);
+        float f = (t - s2) / (s3 - s2); f = f * f * (3.0 - 2.0 * f); return mix(c2, c3, f);
     }
 }
 
 vec4 mix4ColorsDirectional(vec4 c0, vec4 c1, vec4 c2, vec4 c3, float t, float direction) {
-    // direction > 0 时正向 (c0→c3)，<0 时反向 (c3→c0)
-    if (direction < 0.0) {
-        // 反转 t 并交换颜色顺序
-        t = 1.0 - t;
-        vec4 tmp = c0; c0 = c3; c3 = tmp;
-        tmp = c1; c1 = c2; c2 = tmp;
-    }
-    // 调用原来的 mix4Colors（常量分界版本）
+    if (direction < 0.0) { t = 1.0 - t; vec4 tmp = c0; c0 = c3; c3 = tmp; tmp = c1; c1 = c2; c2 = tmp; }
     return mix4Colors(c0, c1, c2, c3, t);
 }
 
@@ -109,46 +90,55 @@ float aastep(float x) {
 }
 
 void main() {
-    // Extract uniform parameters
-    float halfWidth  = u_RectParam.x;
-    float halfHeight = u_RectParam.y;
-    float radius     = u_RectParam.z;
-    float timestamp  = u_RectParam.w;
+    float halfWidth  = u_Layout[0];
+    float halfHeight = u_Layout[1];
+    float radius     = u_Layout[2];
+    float timestamp  = u_Dynamic1[0];
 
-    // Normalized coordinates (-1..1)
-    vec2 uv = f_Position / vec2(halfWidth, halfHeight);
-
-    float aspect = halfWidth / halfHeight;
-    vec2 noiseUv = uv;
-    noiseUv.x *= aspect;
-    // Fluid-like distortion: scroll and scale the UVs
-    float speed = 0.008;
+    vec2 noiseUv = f_Position / 40;
+    float speed = 0.014;
     vec2 scrollVec = vec2(timestamp * speed, timestamp * speed * 0.7);
-    vec2 uv0 = noiseUv * 0.02 + scrollVec;          // base noise
-    vec2 uv1 = noiseUv * 0.04 - scrollVec * 1.3;    // second layer for complexity
 
-    // Combine two FBM layers
-    float noise1 = fbm(uv0);
-    float noise2 = fbm(uv1);
-    float finalNoise = (noise1 * 0.7 + noise2 * 0.3);
+    float wx = snoise(noiseUv * 0.015 + scrollVec * 0.3);
+    float wy = snoise(noiseUv * 0.02 + scrollVec * 0.4 + vec2(2.7, 1.3));
+    vec2 warped = noiseUv + vec2(wx, wy) * 3.0;
 
-    // Retrieve the 4 colors from uniform (column-major matrix)
-    vec4 primary = u_BgColors[0];
-    vec4 secondary = u_BgColors[1];
-    vec4 bright = u_BgColors[2];
-    vec4 dark = u_BgColors[3];
+    float a = 0.03;
+    float w0 = fbm(warped * (a) + scrollVec);
+    float w1 = fbm(warped * (a + 0.004) - scrollVec * 0.6 + vec2(3.7, 5.2));
+    float w2 = fbm(warped * (a + 0.002) + scrollVec * 0.5 + vec2(7.1, 2.9));
+    float w3 = fbm(warped * (a + 0.006) + scrollVec * 0.4 + vec2(1.8, 6.4));
 
-    // Map noise to color gradient position
-//    vec4 color = mix4Colors(dark, primary, secondary, bright, finalNoise);
-    float dir = snoise(uv0 * 0.8 + timestamp * 0.2); // 动态变化的方向场
-    vec4 color = mix4ColorsDirectional(dark, primary, secondary, bright, finalNoise, dir);
+    w0 = smoothstep(0.15, 0.85, w0);
+    w1 = smoothstep(0.15, 0.85, w1);
+    w2 = smoothstep(0.15, 0.85, w2);
+    w3 = smoothstep(0.15, 0.85, w3);
 
-    // ---------- Rounded rectangle clipping (with antialiasing) ----------
+    float total = w0 + w1 + w2 + w3 + 0.001;
+    w0 /= total; w1 /= total; w2 /= total; w3 /= total;
+
+    vec3 r0 = u_Dark.rgb;
+    vec3 r1 = u_Primary.rgb;
+    vec3 r2 = u_Secondary.rgb;
+    vec3 r3 = u_Bright.rgb;
+
+    float dir = snoise(noiseUv * 0.02 + noiseUv.yx * 0.01 + timestamp * 0.01);
+    float reverse = step(dir, 0.0);
+
+    vec3 c0 = mix(r0, r3, reverse); vec3 c3 = mix(r3, r0, reverse);
+    vec3 c1 = mix(r1, r2, reverse); vec3 c2 = mix(r2, r1, reverse);
+    float rw0 = mix(w0, w3, reverse);
+    float rw1 = mix(w1, w2, reverse);
+    float rw2 = mix(w2, w1, reverse);
+    float rw3 = mix(w3, w0, reverse);
+
+    vec3 rgb = c0 * rw0 + c1 * rw1 + c2 * rw2 + c3 * rw3;
+    float alpha = u_Dark.a * rw0 + u_Primary.a * rw1 + u_Secondary.a * rw2 + u_Bright.a * rw3;
+
     vec2 halfSize = vec2(halfWidth, halfHeight);
     vec2 d = abs(f_Position) - halfSize + radius;
     float dis = length(max(d, 0.0)) + min(max(d.x, d.y), 0.0) - radius;
     float mask = 1.0 - aastep(dis);
 
-    // Apply alpha and optional vertex color modulation
-    fragColor = vec4(color.rgb, color.a * mask);
+    fragColor = vec4(rgb, alpha * mask);
 }

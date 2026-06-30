@@ -2,23 +2,21 @@ package indi.etern.musichud.client.ui.hud.renderer;
 
 import indi.etern.musichud.MusicHud;
 import indi.etern.musichud.client.ui.hud.metadata.BackgroundData;
+import indi.etern.musichud.client.ui.hud.metadata.DynamicStatusUniform;
 import indi.etern.musichud.client.ui.hud.metadata.HudRenderData;
 import indi.etern.musichud.client.ui.hud.metadata.Layout;
 import indi.etern.musichud.client.ui.hud.pipelines.HudRenderPipelines;
 import indi.etern.musichud.client.ui.hud.pipelines.HudRenderState;
 import indi.etern.musichud.client.ui.utils.image.ImageTextureData;
 import indi.etern.musichud.client.ui.utils.image.ImageUtils;
-import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.render.TextureSetup;
-import net.minecraft.client.renderer.texture.AbstractTexture;
 import net.minecraft.client.renderer.texture.DynamicTexture;
-import net.minecraft.resources.Identifier;
 import org.jetbrains.annotations.NotNull;
 
-public class AlbumImageRenderer implements HudRenderer{
+public class AlbumImageRenderer implements HudRenderer {
     private static volatile AlbumImageRenderer instance;
-    private Identifier defaultImageLocation;
     private HudRenderData currentData;
+    private ImageTextureData icon;
 
     public static AlbumImageRenderer getInstance() {
         if (instance == null) {
@@ -36,35 +34,29 @@ public class AlbumImageRenderer implements HudRenderer{
 
     @Override
     public void render(HudRenderContext context) {
-        if (currentData == null) {
-            return;
-        }
-
-        context.writeUniformData("HudAlbumParams", currentData);
+        if (currentData == null) return;
 
         TextureSetup textureSetup = getMixedTextureSetup();
-
         Layout layout = currentData.getLayout();
+
         HudRenderState hudRenderState = new HudRenderState(
                 HudRenderPipelines.ROUNDED_ALBUM,
                 textureSetup,
                 context.currentPose(),
-                layout.width, layout.height
+                layout,
+                layout,
+                DynamicStatusUniform.getInstance()
         );
-        context.submitGuiElementRenderState(hudRenderState);
+        context.submitHudRenderState(hudRenderState);
     }
 
     private @NotNull TextureSetup getMixedTextureSetup() {
         var background = currentData.getTransitionableBackground();
         BackgroundData next = background.getNext();
         BackgroundData current = background.getCurrent();
-        Identifier nextUnblurred = next == null || next.image() == null ? null : next.image().unblurredLocation;
-        Identifier currentUnblurred = current.image() != null ? current.image().unblurredLocation : null;
-        DynamicTexture currentTexture = getDynamicTexture(currentUnblurred);
-        DynamicTexture nextTexture = getDynamicTexture(nextUnblurred);
-        DynamicTexture transitionTexture = background.isTransitioning() ?
-                nextTexture : currentTexture;
-
+        DynamicTexture currentTexture = current == null || current.image() == null || current.image().current == null ? getIconTexture() : current.image().current.getTexture();
+        DynamicTexture nextTexture = next == null || next.image() == null || next.image().current == null ? getIconTexture() : next.image().current.getTexture();
+        DynamicTexture transitionTexture = background.isTransitioning() ? nextTexture : currentTexture;
         TextureSetup textureSetup;
         if (currentTexture != null) {
             textureSetup = transitionTexture != null ?
@@ -78,23 +70,10 @@ public class AlbumImageRenderer implements HudRenderer{
         return textureSetup;
     }
 
-    private DynamicTexture getDynamicTexture(Identifier imageLocation) {
-        if (imageLocation == null) {
-            if (defaultImageLocation == null) {
-                String greyImageBase64 = MusicHud.ICON_BASE64;
-                ImageTextureData imageTextureData = ImageUtils.loadBase64(greyImageBase64);
-                imageTextureData.register().join();
-                defaultImageLocation = imageTextureData.getLocation();
-            }
-            return getDynamicTexture(defaultImageLocation);
+    private DynamicTexture getIconTexture() {
+        if (icon == null) {
+            icon = ImageUtils.loadBase64(MusicHud.ICON_BASE64);
         }
-
-        AbstractTexture texture = Minecraft.getInstance()
-                .getTextureManager()
-                .getTexture(imageLocation);
-        if (texture instanceof DynamicTexture dynamicTexture) {
-            return dynamicTexture;
-        }
-        return null;
+        return icon.getTexture();
     }
 }

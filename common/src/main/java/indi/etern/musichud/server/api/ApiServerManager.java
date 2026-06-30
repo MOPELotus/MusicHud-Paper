@@ -20,18 +20,30 @@ import java.util.function.Consumer;
 
 @RegisterMark
 public class ApiServerManager implements ServerRegister {
-    private final Logger apiLogger = LogManager.getLogger(MusicHud.LOGGER_BASE_NAME + "/API");
-    private final ServerConfig serverConfig = ServerConfig.getInstance();
-    @Getter
-    private final List<Consumer<BinaryApiServerStatus>> apiStatusListeners = new ArrayList<>();
+    private static final ServerConfig serverConfig = ServerConfig.getInstance();
+    private static ClientConfig clientConfig;
     @Getter
     private static ApiServerManager instance;
-    private Process process;
+    private final Logger apiLogger = LogManager.getLogger(MusicHud.LOGGER_BASE_NAME + "/API");
+    @Getter
+    private final List<Consumer<BinaryApiServerStatus>> apiStatusListeners = new ArrayList<>();
+    private volatile Process process;
     private boolean continueRestart = true;
     @Getter
     private BinaryApiServerStatus binaryApiServerStatus = BinaryApiServerStatus.STOPPED;
     private int triedCount = 0;
     private boolean initialized = false;
+    private Thread hook;
+
+    static {
+        if (MusicHud.getCurrentEnvironment().getSide() == Environment.Side.CLIENT) {
+            try {
+                clientConfig = ClientConfig.getInstance();
+            } catch (UnsupportedOperationException e) {
+                clientConfig = null;
+            }
+        }
+    }
 
     public void log(String s, boolean error) {
         if (error || s.contains("[ERROR]")) {
@@ -48,7 +60,7 @@ public class ApiServerManager implements ServerRegister {
             return;
         }
         initialized = true;
-        if (MusicHud.getCurrentEnvironment().getSide() == Environment.Side.CLIENT && !ClientConfig.getInstance().getEnableEmbeddedServer()) {
+        if (MusicHud.getCurrentEnvironment().getSide() == Environment.Side.CLIENT && !clientConfig.getEnabledInIntegratedServer()) {
             return;
         }
         if (serverConfig.getStartupBinaryApiServerWhenLaunch()) {
@@ -60,6 +72,8 @@ public class ApiServerManager implements ServerRegister {
         if (process != null) {
             continueRestart = false;
             process.destroy();
+            process = null;
+            removeShutdownHook();
         }
     }
 
@@ -67,6 +81,25 @@ public class ApiServerManager implements ServerRegister {
         triedCount = 0;
         stopApiServer();
         launchApiServerInternal();
+    }
+
+    private void addShutdownHook() {
+        if (hook == null) {//first call
+            hook = new Thread(this::stopApiServer);
+            if (MusicHud.getCurrentEnvironment().getSide() == Environment.Side.CLIENT) {
+                IClientEventService.getInstance().registerClientLifecycleStopping(this::stopApiServer);
+            } else {
+                IServerEventService.getInstance().registerServerLifecycleStopping(this::stopApiServer);
+            }
+            Runtime.getRuntime().addShutdownHook(hook);
+        }
+    }
+
+    private void removeShutdownHook() {
+        if (hook != null) {
+            Runtime.getRuntime().removeShutdownHook(hook);
+            hook = null;
+        }
     }
 
     private void launchApiServerInternal() {
@@ -78,17 +111,20 @@ public class ApiServerManager implements ServerRegister {
                 startEmbeddedApiServer();
                 Environment.Side side = MusicHud.getCurrentEnvironment().getSide();
                 if (side == Environment.Side.CLIENT) {
-                    IClientEventService.getInstance().registerClientLifecycleStopping(this::stopApiServer);
+                    addShutdownHook();
                 } else if (side == Environment.Side.SERVER) {
-                    IServerEventService.getInstance().registerServerLifecycleStopping(this::stopApiServer);
+                    addShutdownHook();
                 }
             } else {
-                apiLogger.info("API Server has been launched externally");
+                apiLogger.info("API Server (version: {}) has been launched externally", ApiClient.getVersion());
             }
         });
     }
 
-    private void startEmbeddedApiServer() {
+    private synchronized void startEmbeddedApiServer() {
+        if (process != null) {
+            return;
+        }
         int maxTries = 5;
         if (triedCount >= maxTries) {
             apiLogger.error("Embedded API Server has been stopped due to maximum tries reached.");
@@ -115,7 +151,14 @@ public class ApiServerManager implements ServerRegister {
                             while ((line = reader.readLine()) != null) {
                                 if (line.contains("Server started successfully") && binaryApiServerStatus == BinaryApiServerStatus.LAUNCHING) {
                                     setApiStatus(BinaryApiServerStatus.RUNNING);
-                                    apiLogger.info("Api server started");
+                                    boolean available = ApiClient.checkAvailable();
+                                    if (available) {
+                                        apiLogger.info("Api server started, version: {}", ApiClient.getVersion());
+                                    } else {
+                                        apiLogger.info("Api server started, but unavailable, restarting");
+                                        restartApiServer();
+                                        return;
+                                    }
                                 }
                                 log(line, false);
                             }

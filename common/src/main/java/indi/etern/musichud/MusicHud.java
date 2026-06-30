@@ -28,15 +28,16 @@ public final class MusicHud {
     public static final Logger LOGGER = LogManager.getLogger(LOGGER_BASE_NAME);
     public static final ExecutorService EXECUTOR = Executors.newVirtualThreadPerTaskExecutor();
     @Getter
-    private static ConnectStatus status = ConnectStatus.NOT_CONNECTED;
+    private static ConnectStatus connectStatus = ConnectStatus.NOT_CONNECTED;
     @Getter
-    private static Set<Consumer<ConnectStatus>> connectStatusListeners = new HashSet<>();
+    private static final Set<Consumer<ConnectStatus>> connectStatusListeners = new HashSet<>();
     @Getter
     @Setter
     private static Environment currentEnvironment;
     @Getter
     @Setter
     private static Path configDirectory = Path.of("config");
+    private static long initAtMillis;
 
     public static Logger getLogger(Class<?> clazz) {
         Logger logger = LogManager.getLogger(LOGGER_BASE_NAME + "/" + clazz.getSimpleName());
@@ -51,6 +52,11 @@ public final class MusicHud {
         LOGGER.atLevel(Level.ALL);
         LOGGER.debug("Initialized in environment: {}", currentEnvironment);
         RegistrationManager.performCommonAutoRegistration();
+        initAtMillis = System.currentTimeMillis();
+    }
+
+    public static long getRunningMillis() {
+        return System.currentTimeMillis() - initAtMillis;
     }
 
     public static void onConfigLoaded() {
@@ -63,7 +69,7 @@ public final class MusicHud {
 
     public enum ConnectStatus {
         CONNECTED,
-        INCAPABLE,
+        INCOMPATIBLE,
         NOT_CONNECTED
     }
 
@@ -94,11 +100,11 @@ public final class MusicHud {
 
     @FunctionalInterface
     public interface ScheduledTask {
-        void stop() throws InterruptedException;
+        void stop();
     }
 
-    public static void setStatus(ConnectStatus status) {
-        MusicHud.status = status;
+    public static void setConnectStatus(ConnectStatus status) {
+        MusicHud.connectStatus = status;
         connectStatusListeners.forEach(l -> l.accept(status));
     }
 }

@@ -1,6 +1,7 @@
 package indi.etern.musichud.platform.mod.config;
 
 import indi.etern.musichud.MusicHud;
+import indi.etern.musichud.beans.api.AutoConnectServerFilterType;
 import indi.etern.musichud.beans.login.LoginCookieInfo;
 import indi.etern.musichud.beans.music.Quality;
 import indi.etern.musichud.client.config.ProfileConfigData;
@@ -25,17 +26,29 @@ public class ClientConfigDefinition implements ClientConfig {
     private boolean disableVanillaMusic = true;
     private boolean hideHudWhenNotPlaying = true;
     private boolean enableHud = true;
+    private boolean enableMarqueeText = true;
+    private boolean mixWithVanillaSoundVolume = true;
+    private boolean muted;
+    private int soundVolume = 100;
+    private int soundVolumeInterval = 10;
     private Quality primaryChosenQuality = Quality.LOSSLESS;
+    private double mainScreenAdditionalBackgroundDarken = 0.5;
+    private double hudBackgroundMixAlpha = 0.5;
     private VerticalAlign hudVerticalPosition = VerticalAlign.TOP;
     private HorizontalAlign hudHorizontalPosition = HorizontalAlign.LEFT;
     private int hudOffsetX = 16;
     private int hudOffsetY = 16;
-    private int hudWidth = 150;
-    private int hudHeight = 44;
+    private int hudWidth = 152;
+    private int hudHeight = 52;
     private int hudCornerRadius = 8;
     private String clientCookie = "";
     private String clientAccountConfig = "";
-    private boolean enableEmbeddedServer = true;
+    private boolean enabledInIntegratedServer = true;
+    private boolean enableAutoConnect = true;
+    private boolean enableIsolatedMode = true;
+    private AutoConnectServerFilterType connectServerFilterType = AutoConnectServerFilterType.WHITE_LIST;
+    private String autoConnectBlackList = "[]";
+    private String autoConnectWhiteList = "[]";
     @Setter
     @Getter
     private boolean configured;
@@ -51,7 +64,14 @@ public class ClientConfigDefinition implements ClientConfig {
         disableVanillaMusic = SimpleTomlConfig.getBoolean(values, "disableVanillaMusic", disableVanillaMusic);
         hideHudWhenNotPlaying = SimpleTomlConfig.getBoolean(values, "hideHudWhenNotPlaying", hideHudWhenNotPlaying);
         enableHud = SimpleTomlConfig.getBoolean(values, "enableHud", enableHud);
+        enableMarqueeText = SimpleTomlConfig.getBoolean(values, "enableMarqueeText", enableMarqueeText);
+        mixWithVanillaSoundVolume = SimpleTomlConfig.getBoolean(values, "mixWithVanillaSoundVolume", mixWithVanillaSoundVolume);
+        muted = SimpleTomlConfig.getBoolean(values, "muted", SimpleTomlConfig.getBoolean(values, "Muted", muted));
+        soundVolume = SimpleTomlConfig.getInt(values, "soundVolume", soundVolume);
+        soundVolumeInterval = SimpleTomlConfig.getInt(values, "soundVolumeInterval", soundVolumeInterval);
         primaryChosenQuality = SimpleTomlConfig.getEnum(values, "primaryChosenQuality", Quality.class, primaryChosenQuality);
+        mainScreenAdditionalBackgroundDarken = SimpleTomlConfig.getDouble(values, "mainScreenAdditionalBackgroundDarken", mainScreenAdditionalBackgroundDarken);
+        hudBackgroundMixAlpha = SimpleTomlConfig.getDouble(values, "hudBackgroundMixAlpha", hudBackgroundMixAlpha);
         hudVerticalPosition = SimpleTomlConfig.getEnum(values, "verticalPosition", VerticalAlign.class, hudVerticalPosition);
         hudHorizontalPosition = SimpleTomlConfig.getEnum(values, "horizontalPosition", HorizontalAlign.class, hudHorizontalPosition);
         hudOffsetX = SimpleTomlConfig.getInt(values, "hudOffsetX", hudOffsetX);
@@ -61,7 +81,16 @@ public class ClientConfigDefinition implements ClientConfig {
         hudCornerRadius = SimpleTomlConfig.getInt(values, "hudCornerRadius", hudCornerRadius);
         clientCookie = SimpleTomlConfig.getString(values, "clientCookie", clientCookie);
         clientAccountConfig = SimpleTomlConfig.getString(values, "clientAccountConfig", clientAccountConfig);
-        enableEmbeddedServer = SimpleTomlConfig.getBoolean(values, "enableEmbeddedServer", enableEmbeddedServer);
+        enabledInIntegratedServer = SimpleTomlConfig.getBoolean(
+                values,
+                "enabledInIntegratedServer",
+                SimpleTomlConfig.getBoolean(values, "enableEmbeddedServer", enabledInIntegratedServer)
+        );
+        enableAutoConnect = SimpleTomlConfig.getBoolean(values, "enableAutoConnect", enableAutoConnect);
+        enableIsolatedMode = SimpleTomlConfig.getBoolean(values, "enableClientOnlyMode", enableIsolatedMode);
+        connectServerFilterType = SimpleTomlConfig.getEnum(values, "autoConnectServerFilterType", AutoConnectServerFilterType.class, connectServerFilterType);
+        autoConnectBlackList = SimpleTomlConfig.getString(values, "autoConnectBlackList", autoConnectBlackList);
+        autoConnectWhiteList = SimpleTomlConfig.getString(values, "autoConnectWhiteList", autoConnectWhiteList);
         configured = true;
         save();
     }
@@ -92,8 +121,49 @@ public class ClientConfigDefinition implements ClientConfig {
     }
 
     @Override
+    public void setMixWithVanillaSoundVolume(boolean mixWithVanillaSoundVolume) {
+        this.mixWithVanillaSoundVolume = mixWithVanillaSoundVolume;
+    }
+
+    @Override
+    public void setMuted(boolean muted) {
+        this.muted = muted;
+    }
+
+    @Override
+    public void setSoundVolume(int soundVolume) {
+        if (soundVolume == 0) {
+            muted = true;
+            return;
+        }
+        muted = false;
+        this.soundVolume = soundVolume;
+    }
+
+    @Override
+    public void forceSetSoundVolume(int soundVolume) {
+        muted = soundVolume == 0;
+        this.soundVolume = soundVolume;
+    }
+
+    @Override
+    public void setSoundVolumeInterval(int soundVolumeInterval) {
+        this.soundVolumeInterval = soundVolumeInterval;
+    }
+
+    @Override
     public void setPrimaryChosenQuality(Quality primaryChosenQuality) {
         this.primaryChosenQuality = primaryChosenQuality == null ? Quality.LOSSLESS : primaryChosenQuality;
+    }
+
+    @Override
+    public void setMainScreenAdditionalBackgroundDarken(double additionalBackgroundDarken) {
+        mainScreenAdditionalBackgroundDarken = additionalBackgroundDarken;
+    }
+
+    @Override
+    public void setHudBackgroundMixAlpha(double hudBackgroundMixAlpha) {
+        this.hudBackgroundMixAlpha = hudBackgroundMixAlpha;
     }
 
     @Override
@@ -142,8 +212,38 @@ public class ClientConfigDefinition implements ClientConfig {
     }
 
     @Override
-    public void setEnableEmbeddedServer(boolean enableEmbeddedServer) {
-        this.enableEmbeddedServer = enableEmbeddedServer;
+    public void setEnabledInIntegratedServer(boolean enabledInIntegratedServer) {
+        this.enabledInIntegratedServer = enabledInIntegratedServer;
+    }
+
+    @Override
+    public void setEnableAutoConnect(boolean autoConnect) {
+        enableAutoConnect = autoConnect;
+    }
+
+    @Override
+    public void setEnableIsolatedMode(boolean autoConnect) {
+        enableIsolatedMode = autoConnect;
+    }
+
+    @Override
+    public void setConnectServerFilterType(AutoConnectServerFilterType autoConnectServerFilterType) {
+        connectServerFilterType = autoConnectServerFilterType == null ? AutoConnectServerFilterType.WHITE_LIST : autoConnectServerFilterType;
+    }
+
+    @Override
+    public void setBlackList(List<String> blackList) {
+        autoConnectBlackList = JsonUtil.gson.toJson(blackList == null ? List.of() : blackList);
+    }
+
+    @Override
+    public void setWhiteList(List<String> whiteList) {
+        autoConnectWhiteList = JsonUtil.gson.toJson(whiteList == null ? List.of() : whiteList);
+    }
+
+    @Override
+    public void setEnableMarqueeText(boolean enableMarqueeText) {
+        this.enableMarqueeText = enableMarqueeText;
     }
 
     @Override
@@ -172,8 +272,38 @@ public class ClientConfigDefinition implements ClientConfig {
     }
 
     @Override
+    public boolean getMixWithVanillaSoundVolume() {
+        return mixWithVanillaSoundVolume;
+    }
+
+    @Override
+    public boolean getMuted() {
+        return muted;
+    }
+
+    @Override
+    public int getSoundVolume() {
+        return soundVolume;
+    }
+
+    @Override
+    public int getSoundVolumeInterval() {
+        return soundVolumeInterval;
+    }
+
+    @Override
     public Quality getPrimaryChosenQuality() {
         return primaryChosenQuality;
+    }
+
+    @Override
+    public double getMainScreenAdditionalBackgroundDarken() {
+        return mainScreenAdditionalBackgroundDarken;
+    }
+
+    @Override
+    public double getHudBackgroundMixAlpha() {
+        return hudBackgroundMixAlpha;
     }
 
     @Override
@@ -222,8 +352,38 @@ public class ClientConfigDefinition implements ClientConfig {
     }
 
     @Override
-    public boolean getEnableEmbeddedServer() {
-        return enableEmbeddedServer;
+    public boolean getEnabledInIntegratedServer() {
+        return enabledInIntegratedServer;
+    }
+
+    @Override
+    public boolean getEnableAutoConnect() {
+        return enableAutoConnect;
+    }
+
+    @Override
+    public boolean getEnableIsolatedMode() {
+        return enableIsolatedMode;
+    }
+
+    @Override
+    public AutoConnectServerFilterType getConnectServerFilterType() {
+        return connectServerFilterType;
+    }
+
+    @Override
+    public List<String> getBlackList() {
+        return parseList(autoConnectBlackList);
+    }
+
+    @Override
+    public List<String> getWhiteList() {
+        return parseList(autoConnectWhiteList);
+    }
+
+    @Override
+    public boolean getEnableMarqueeText() {
+        return enableMarqueeText;
     }
 
     @Override
@@ -234,7 +394,14 @@ public class ClientConfigDefinition implements ClientConfig {
                 new SimpleTomlConfig.Entry("disableVanillaMusic", "Disable vanilla game music", disableVanillaMusic),
                 new SimpleTomlConfig.Entry("hideHudWhenNotPlaying", "Hide HUD when not playing music", hideHudWhenNotPlaying),
                 new SimpleTomlConfig.Entry("enableHud", "Enable HUD", enableHud),
+                new SimpleTomlConfig.Entry("enableMarqueeText", "Enable marquee animation on overflow text", enableMarqueeText),
+                new SimpleTomlConfig.Entry("mixWithVanillaSoundVolume", "Mix Music Hud volume with vanilla music volume", mixWithVanillaSoundVolume),
+                new SimpleTomlConfig.Entry("muted", "Record muted switch", muted),
+                new SimpleTomlConfig.Entry("soundVolume", "Sound volume for Music Hud audio", soundVolume),
+                new SimpleTomlConfig.Entry("soundVolumeInterval", "Sound volume interval for hot key adjustment", soundVolumeInterval),
                 new SimpleTomlConfig.Entry("primaryChosenQuality", "Primary chosen quality", primaryChosenQuality.name()),
+                new SimpleTomlConfig.Entry("mainScreenAdditionalBackgroundDarken", "Main screen additional background darken rate", mainScreenAdditionalBackgroundDarken),
+                new SimpleTomlConfig.Entry("hudBackgroundMixAlpha", "HUD background mix alpha", hudBackgroundMixAlpha),
                 new SimpleTomlConfig.Entry("verticalPosition", "Vertical position (TOP|CENTER|BOTTOM)", hudVerticalPosition.name()),
                 new SimpleTomlConfig.Entry("horizontalPosition", "Horizontal position (LEFT|CENTER|RIGHT)", hudHorizontalPosition.name()),
                 new SimpleTomlConfig.Entry("hudOffsetX", "HUD offset x", hudOffsetX),
@@ -244,7 +411,12 @@ public class ClientConfigDefinition implements ClientConfig {
                 new SimpleTomlConfig.Entry("hudCornerRadius", "HUD rounded corner radius", hudCornerRadius),
                 new SimpleTomlConfig.Entry("clientCookie", "Client NCM cookie json", clientCookie),
                 new SimpleTomlConfig.Entry("clientAccountConfig", "Client account config json", clientAccountConfig),
-                new SimpleTomlConfig.Entry("enableEmbeddedServer", "Enable embedded server for singleplayer or LAN multiplayer", enableEmbeddedServer)
+                new SimpleTomlConfig.Entry("enabledInIntegratedServer", "Enable embedded server for singleplayer or LAN multiplayer", enabledInIntegratedServer),
+                new SimpleTomlConfig.Entry("enableAutoConnect", "Enable auto connect", enableAutoConnect),
+                new SimpleTomlConfig.Entry("enableClientOnlyMode", "Enable client-only isolated mode", enableIsolatedMode),
+                new SimpleTomlConfig.Entry("autoConnectServerFilterType", "Auto connecting servers filter type (WHITE_LIST|BLACK_LIST)", connectServerFilterType.name()),
+                new SimpleTomlConfig.Entry("autoConnectBlackList", "Auto connecting servers black list JSON", autoConnectBlackList),
+                new SimpleTomlConfig.Entry("autoConnectWhiteList", "Auto connecting servers white list JSON", autoConnectWhiteList)
         ));
     }
 
@@ -257,6 +429,20 @@ public class ClientConfigDefinition implements ClientConfig {
         } catch (RuntimeException e) {
             MusicHud.LOGGER.warn("Failed to parse client config JSON for {}", type.getSimpleName(), e);
             return null;
+        }
+    }
+
+    @SuppressWarnings("unchecked")
+    private static List<String> parseList(String json) {
+        if (json == null || json.isBlank()) {
+            return List.of();
+        }
+        try {
+            List<String> values = JsonUtil.gson.fromJson(json, List.class);
+            return values == null ? List.of() : values;
+        } catch (RuntimeException e) {
+            MusicHud.LOGGER.warn("Failed to parse client config list", e);
+            return List.of();
         }
     }
 }

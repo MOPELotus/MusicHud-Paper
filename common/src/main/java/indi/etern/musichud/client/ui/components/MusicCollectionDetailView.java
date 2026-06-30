@@ -1,8 +1,12 @@
 package indi.etern.musichud.client.ui.components;
 
 import icyllis.modernui.core.Context;
+import icyllis.modernui.graphics.Image;
 import icyllis.modernui.graphics.drawable.Drawable;
 import icyllis.modernui.mc.MuiModApi;
+import icyllis.modernui.text.SpannableString;
+import icyllis.modernui.text.Spanned;
+import icyllis.modernui.text.style.ImageSpan;
 import icyllis.modernui.view.Gravity;
 import icyllis.modernui.view.View;
 import icyllis.modernui.view.ViewGroup;
@@ -15,6 +19,7 @@ import indi.etern.musichud.client.services.MusicService;
 import indi.etern.musichud.client.ui.Theme;
 import indi.etern.musichud.client.ui.ToastUtil;
 import indi.etern.musichud.client.ui.utils.ButtonInsetBackgroundFactory;
+import indi.etern.musichud.client.ui.utils.image.ImageUtils;
 import net.minecraft.client.resources.language.I18n;
 
 import java.util.function.Consumer;
@@ -45,7 +50,14 @@ public class MusicCollectionDetailView extends LinearLayout {
         topBar.setLayoutParams(params);
 
         Button backButton = new Button(context);
-        backButton.setText(I18n.get("music_hud.button.back"));
+        String s = I18n.get(MusicHud.MOD_ID + ".button.back");
+        SpannableString spannableString = new SpannableString(s);
+        Image image = ImageUtils.getImageFromResource("/assets/music_hud/textures/gui/icons/arrow_left.png");
+        if (image != null) {
+            ImageSpan span = ImageUtils.getIconSpan(image);
+            spannableString.setSpan(span, 0, s.length(), Spanned.SPAN_EXCLUSIVE_EXCLUSIVE);
+        }
+        backButton.setText(spannableString);
         backButton.setTextColor(Theme.NORMAL_TEXT_COLOR);
         backButton.setOnClickListener(view -> {
             RouterContainer.getInstance().popNavigate();
@@ -93,7 +105,7 @@ public class MusicCollectionDetailView extends LinearLayout {
         buttons.setOrientation(HORIZONTAL);
 
         Button refreshButton = new Button(context);
-        refreshButton.setText(I18n.get("music_hud.button.refresh"));
+        refreshButton.setText(I18n.get(MusicHud.MOD_ID + ".button.refresh"));
         refreshButton.setTextColor(Theme.PRIMARY_COLOR);
         refreshButton.setTextSize(Theme.TEXT_SIZE_NORMAL);
         refreshButton.setOnClickListener((v) -> refreshData(true));
@@ -112,10 +124,10 @@ public class MusicCollectionDetailView extends LinearLayout {
         addToIdleSourceListButton.setBackground(background1);
         addToIdleSourceListButton.setOnClickListener((v) -> {
             if (musicService.getLocalIdlePlaySources().stream().anyMatch(collection -> collection.getId() == musicCollection.getId())) {
-                ToastUtil.show(Toast.makeText(context, I18n.get("music_hud.text.removedFromIdlePlaySource") + "\n" + musicCollection.getName(), Toast.LENGTH_SHORT));
+                ToastUtil.show(Toast.makeText(context, I18n.get(MusicHud.MOD_ID + ".text.removedFromIdlePlaySource") + "\n" + musicCollection.getName(), Toast.LENGTH_SHORT));
                 musicService.removeFromIdlePlaySource(musicCollection);
             } else {
-                ToastUtil.show(Toast.makeText(context, I18n.get("music_hud.text.addedToIdlePlaySource") + "\n" + musicCollection.getName(), Toast.LENGTH_SHORT));
+                ToastUtil.show(Toast.makeText(context, I18n.get(MusicHud.MOD_ID + ".text.addedToIdlePlaySource") + "\n" + musicCollection.getName(), Toast.LENGTH_SHORT));
                 musicService.addToIdlePlaySource(musicCollection);
             }
         });
@@ -174,7 +186,7 @@ public class MusicCollectionDetailView extends LinearLayout {
         progressBar.setIndeterminate(true);
         musicCollection.loadMusicDetails(ignoreCache).thenAcceptAsync(playlistDetail -> {
             MuiModApi.postToUiThread(() -> {
-                type.setText(I18n.get(collectionNameI18n) + "  " + I18n.get("music_hud.text.totalCount").replace("{}", String.valueOf(playlistDetail.size())));
+                type.setText(I18n.get(collectionNameI18n) + "  " + I18n.get(MusicHud.MOD_ID + ".text.totalCount").replace("{}", String.valueOf(playlistDetail.size())));
                 if (!playlistDetail.isEmpty()) {
                     addToIdleSourceListButton.setVisibility(View.VISIBLE);
                 }
@@ -201,16 +213,16 @@ public class MusicCollectionDetailView extends LinearLayout {
                 .map(Artist::getName).collect(Collectors.joining(" / "));
         musicLayout.setOnClickListener((view) -> {
             MusicService.getInstance().sendPushMusicToQueue(musicDetail);
-            ToastUtil.show(Toast.makeText(context, I18n.get("music_hud.text.pushedMusicToPlaylist") + "\n" + musicDetail.getName() + " - " + artistsName, Toast.LENGTH_SHORT));
+            ToastUtil.show(Toast.makeText(context, I18n.get(MusicHud.MOD_ID + ".text.pushedMusicToPlaylist") + "\n" + musicDetail.getName() + " - " + artistsName, Toast.LENGTH_SHORT));
         });
         tracksListView.addView(musicLayout);
     }
 
     private void updateButton() {
         if (musicService.getLocalIdlePlaySources().stream().anyMatch(collection -> collection.getId() == musicCollection.getId())) {
-            addToIdleSourceListButton.setText(I18n.get("music_hud.button.removeFromIdlePlaySource"));
+            addToIdleSourceListButton.setText(I18n.get(MusicHud.MOD_ID + ".button.removeFromIdlePlaySource"));
         } else {
-            addToIdleSourceListButton.setText(I18n.get("music_hud.button.addToIdlePlaySource"));
+            addToIdleSourceListButton.setText(I18n.get(MusicHud.MOD_ID + ".button.addToIdlePlaySource"));
         }
     }
 }

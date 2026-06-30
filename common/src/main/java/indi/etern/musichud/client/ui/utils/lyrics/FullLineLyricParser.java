@@ -3,6 +3,7 @@ package indi.etern.musichud.client.ui.utils.lyrics;
 import indi.etern.musichud.MusicHud;
 import indi.etern.musichud.beans.music.LyricInfo;
 import indi.etern.musichud.beans.music.LyricLine;
+import indi.etern.musichud.beans.music.MusicDetail;
 import indi.etern.musichud.client.ui.utils.lyrics.beans.MetaInfoLine;
 import indi.etern.musichud.interfaces.ClientConfig;
 import org.apache.logging.log4j.Logger;
@@ -25,9 +26,9 @@ public class FullLineLyricParser {
     private static final Duration emptyLineIgnoreDuration = Duration.ofSeconds(5);
     private static final Logger logger = MusicHud.getLogger(FullLineLyricParser.class);
     private static final ClientConfig clientConfig = ClientConfig.getInstance();
-    record LyricLineMetaData(Duration startTime, String lyric, LyricLine.Type type) {}
 
-    public static ArrayDeque<LyricLine> parse(LyricInfo lyricInfo) {
+    public static ArrayDeque<LyricLine> parse(MusicDetail musicDetail) {
+        LyricInfo lyricInfo = musicDetail.getLyricInfo();
         String lyric = lyricInfo.getLyric().getLyric();
         String translatedLyric = lyricInfo.getTranslatedLyric().getLyric();
         LinkedHashMap<Duration, LyricLine> map = new LinkedHashMap<>();
@@ -36,41 +37,52 @@ public class FullLineLyricParser {
             Duration startTime = metaData.startTime;
             LyricLine lyricLine = map.get(startTime);
             String lyricString = metaData.lyric == null ? "" : metaData.lyric.replace('\u00A0', ' ').replace('\n', ' ').trim();
+            lyricString = lyricString.replace('\n', ' ').trim();
             if (lyricLine == null) {
-                lyricLine = new LyricLine();
-                lyricLine.setStartTime(startTime);
-                lyricLine.setText(lyricString);
-                lyricLine.setType(metaData.type);
+                lyricLine = LyricLine.builder()
+                        .startTime(startTime)
+                        .text(lyricString)
+                        .type(metaData.type)
+                        .build();
                 if (startTime != null) {
                     map.put(startTime, lyricLine);
                 } else if (lyricLine.getText() != null && !lyricLine.getText().startsWith("}")) {
                     lyricLinesWithoutValidTimestamp.add(lyricLine);
                 }
-            } else {
+            } else if (!lyricString.isEmpty()) {
                 lyricLine.setText(lyricLine.getText() + "\n" + lyricString);
             }
         });
-        if (clientConfig.getShowTranslatedCnLyrics()) {
-            matchLine(translatedLyric, (metaData) -> {
-                Duration startTime = metaData.startTime;
-                LyricLine lyricLine = map.get(startTime);
-                if (lyricLine == null) {
-                    lyricLine = new LyricLine();
-                    lyricLine.setStartTime(startTime);
-                    if (startTime != null) {
-                        map.put(startTime, lyricLine);
-                    } else {
-                        lyricLinesWithoutValidTimestamp.add(lyricLine);
-                    }
-                }
-                String s = metaData.lyric;
-                if (s != null) {
-                    lyricLine.setTranslatedText(s.replace('\u00A0', ' ').trim());
+        matchLine(translatedLyric, (metaData) -> {
+            Duration startTime = metaData.startTime;
+            LyricLine lyricLine = map.get(startTime);
+            if (lyricLine == null) {
+                lyricLine = LyricLine.builder()
+                        .startTime(startTime)
+                        .build();
+                if (startTime != null) {
+                    map.put(startTime, lyricLine);
                 } else {
-                    lyricLine.setTranslatedText("");
+                    lyricLinesWithoutValidTimestamp.add(lyricLine);
                 }
-            });
-        }
+            }
+            String s = metaData.lyric;
+            String lyricLineTranslatedText = lyricLine.getTranslatedText();
+            if (s != null && !s.isEmpty()) {
+                s = s.replace('\n', ' ').replace('\u00A0', ' ').trim();
+                if (lyricLineTranslatedText == null || lyricLineTranslatedText.isEmpty()) {
+                    lyricLine.setTranslatedText(s);
+                } else {
+                    lyricLine.setTranslatedText(lyricLineTranslatedText + "\n" + s);
+                }
+            } else {
+                if (lyricLineTranslatedText == null || lyricLineTranslatedText.isEmpty()) {
+                    lyricLine.setTranslatedText("");
+                } else {
+                    lyricLine.setTranslatedText(lyricLineTranslatedText);
+                }
+            }
+        });
         ArrayDeque<LyricLine> lyricLines = new ArrayDeque<>(lyricLinesWithoutValidTimestamp);
         lyricLines.addAll(map.values());
         List<LyricLine> list = lyricLines.stream().sorted(Comparator.comparing(LyricLine::getStartTime)).toList();
@@ -89,12 +101,13 @@ public class FullLineLyricParser {
                         if (lastLyricLine != null) {
                             lastLyricLine.setDuration(oneSec);
                         }
-                        LyricLine rhythmLine = new LyricLine();
-                        rhythmLine.setStartTime(rhythmStartTime);
-                        rhythmLine.setPrevious(lastLyricLine);
+                        LyricLine rhythmLine = LyricLine.builder()
+                                .startTime(rhythmStartTime)
+                                .previous(lastLyricLine)
+                                .type(LyricLine.Type.RHYTHM)
+                                .text("")
+                                .build();
                         lastLyricLine = rhythmLine;
-                        rhythmLine.setType(LyricLine.Type.RHYTHM);
-                        rhythmLine.setText("");
                         lyricLines.add(rhythmLine);
                     }
                 }
@@ -125,7 +138,10 @@ public class FullLineLyricParser {
             } else {
                 lyricLines.add(lyricLine);
             }
-            nextIndex+=1;
+            nextIndex += 1;
+        }
+        if (lastLyricLine != null && lastLyricLine.getDuration() == null) {
+            lastLyricLine.setDuration(Duration.ofMillis(musicDetail.getDurationMillis()).minus(lastLyricLine.getStartTime()));
         }
         return lyricLines;
     }
@@ -188,5 +204,8 @@ public class FullLineLyricParser {
                 logger.debug("failed to parse line \"{}\"", item);
             }
         }
+    }
+
+    record LyricLineMetaData(Duration startTime, String lyric, LyricLine.Type type) {
     }
 }

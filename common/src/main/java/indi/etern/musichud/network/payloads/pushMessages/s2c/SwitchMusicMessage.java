@@ -31,28 +31,38 @@ public record SwitchMusicMessage(MusicDetail musicDetail, MusicDetail nextIdle, 
 
     @RegisterMark
     public static class RegisterImpl implements CommonRegister {
+        private static ClientConfig clientConfig;
+        static {
+            if (MusicHud.getCurrentEnvironment().getSide() == Environment.Side.CLIENT) {
+                try {
+                    clientConfig = ClientConfig.getInstance();
+                } catch (UnsupportedOperationException e) {
+                    clientConfig = null;
+                }
+            }
+        }
+
         public void register() {
             NetworkReceiver<SwitchMusicMessage> receiver = NetworkReceiver.noop();
             if (MusicHud.getCurrentEnvironment().getSide() == Environment.Side.CLIENT) {
-                ClientConfig clientConfig = ClientConfig.getInstance();
                 receiver = (message, player) -> {
                     MusicHud.EXECUTOR.execute(() -> {
                         if (!clientConfig.getEnable()) {
                             return;
                         }
-                        MusicService musicService = MusicService.getInstance();
                         String message1 = message.message;
                         if (message1.startsWith(MusicHud.MOD_ID + ".")) {
                             message1 = I18n.get(message1);
                         }
+                        MusicService musicService = MusicService.getInstance();
                         musicService.switchMusic(message.musicDetail, message.nextIdle, null, message1);
                         Queue<MusicDetail> musicQueue = musicService.getMusicQueue();
                         if (musicQueue.isEmpty()) {
                             if (!message.nextIdle.equals(MusicDetail.NONE)) {
-                                ImageUtils.downloadAsync(message.nextIdle.getAlbum().getThumbnailPicUrl(200));
+                                ImageUtils.downloadAsync(message.nextIdle.getAlbum().getThumbnailPicUrl(240));
                             }
                         } else {
-                            ImageUtils.downloadAsync(musicQueue.peek().getAlbum().getThumbnailPicUrl(200));
+                            ImageUtils.downloadAsync(musicQueue.peek().getAlbum().getThumbnailPicUrl(240));
                         }
                     });
                 };

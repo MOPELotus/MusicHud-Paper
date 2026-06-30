@@ -195,8 +195,8 @@ public final class PaperServerAdminCommand {
         }
         ServerConfigDefinition serverConfig = ServerConfigDefinition.getInstance();
         MusicPlayerServerService musicService = MusicPlayerServerService.getInstance();
-        Map<ServerPlayer, LoginApiService.PlayerLoginInfo> loginInfoMap = ILoginApiService.getInstance(ApiProvider.NCM).getPlayerInfoMap();
-        Map<ServerPlayer, Set<IdlePlaySource>> idleSources = musicService.getIdlePlaySourcesSnapshot();
+        Map<UUID, LoginApiService.PlayerLoginInfo> loginInfoMap = ILoginApiService.getInstance(ApiProvider.NCM).getPlayerInfoMap();
+        Map<net.minecraft.world.entity.player.Player, Set<IdlePlaySource>> idleSources = musicService.getIdlePlaySourcesSnapshot();
         long loggedAccountCount = loginInfoMap.values().stream()
                 .filter(info -> info != null && info.getLoginCookieInfo() != null && info.getLoginCookieInfo().type() != null)
                 .filter(info -> info.getLoginCookieInfo().type() != indi.etern.musichud.beans.login.LoginType.UNLOGGED)
@@ -235,7 +235,7 @@ public final class PaperServerAdminCommand {
             return true;
         }
         ServerPlayer serverPlayer = ((CraftPlayer) player).getHandle();
-        LoginApiService.PlayerLoginInfo loginInfo = ILoginApiService.getInstance(ApiProvider.NCM).getLoginInfoByServerPlayer(serverPlayer);
+        LoginApiService.PlayerLoginInfo loginInfo = ILoginApiService.getInstance(ApiProvider.NCM).getLoginInfoByPlayer(serverPlayer);
         long queuedByPlayer = MusicPlayerServerService.getInstance().getMusicQueue().stream()
                 .filter(musicDetail -> musicDetail.getPusherInfo() != null && player.getUniqueId().equals(musicDetail.getPusherInfo().getPlayerUUID()))
                 .count();
@@ -446,7 +446,7 @@ public final class PaperServerAdminCommand {
 
     private boolean handlePlaybackIdle(CommandSender sender, String[] args) {
         MusicPlayerServerService musicService = MusicPlayerServerService.getInstance();
-        Map<ServerPlayer, Set<IdlePlaySource>> snapshot = new LinkedHashMap<>(musicService.getIdlePlaySourcesSnapshot());
+        Map<net.minecraft.world.entity.player.Player, Set<IdlePlaySource>> snapshot = new LinkedHashMap<>(musicService.getIdlePlaySourcesSnapshot());
         if (args.length == 2) {
             if (snapshot.isEmpty()) {
                 sendWarning(sender, "当前没有空闲播放源。");

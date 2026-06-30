@@ -3,6 +3,7 @@ plugins {
     id 'maven-publish'
     id 'com.gradleup.shadow'
     id 'io.papermc.paperweight.userdev'
+    id 'xyz.jpenilla.run-paper' version '3.0.2'
 }
 
 base {
@@ -68,15 +69,18 @@ tasks.withType(Test).configureEach {
 
 tasks.processResources {
     duplicatesStrategy = DuplicatesStrategy.EXCLUDE
+
+    inputs.property('version', project.version)
+    inputs.property('apiVersion', rootProject.minecraft_version)
     filesMatching('paper-plugin.yml') {
         expand(
-                version: project.version,
+                version: project.minecraft_api_version,
                 apiVersion: rootProject.minecraft_version
         )
     }
     filesMatching('plugin.yml') {
         expand(
-                version: project.version,
+                version: project.minecraft_api_version,
                 apiVersion: rootProject.minecraft_version
         )
     }
@@ -94,6 +98,10 @@ tasks.reobfJar {
 
 tasks.assemble {
     dependsOn tasks.reobfJar
+}
+
+tasks.runServer {
+    minecraftVersion("${rootProject.minecraft_version}")
 }
 
 publishing {

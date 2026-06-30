@@ -60,11 +60,7 @@ configure(subprojects.findAll { it.name != 'paper' }) {
     }
 
     repositories {
-        // Add repositories to retrieve artifacts from in here.
-        // You should only use this when depending on other mods because
-        // Loom adds the essential maven repositories to download Minecraft and libraries from automatically.
-        // See https://docs.gradle.org/current/userguide/declaring_repositories.html
-        // for more information about repositories.
+        mavenLocal()
         maven {
             name = "Fuzs Mod Resources"
             url = "https://raw.githubusercontent.com/Fuzss/modresources/main/maven/"
@@ -85,7 +81,7 @@ configure(subprojects.findAll { it.name != 'paper' }) {
             name "JitPack"
             url 'https://jitpack.io'
         }
-        flatDir{
+        flatDir{// You need to put ModernUI-mVus fork into this dir
             dir "$projectDir/libs"
         }
     }
@@ -104,7 +100,9 @@ configure(subprojects.findAll { it.name != 'paper' }) {
         testImplementation "org.junit.jupiter:junit-jupiter:$rootProject.junit_version"
         testRuntimeOnly "org.junit.platform:junit-platform-launcher"
         implementation "icyllis.modernui:ModernUI-Core:$rootProject.modernui_version"
-        implementation "icyllis.modernui:ModernUI-Markflow:$rootProject.modernui_version"
+        implementation("icyllis.modernui:ModernUI-Markflow:$rootProject.modernui_version") {
+//            exclude group: "icyllis.modernui", module: "ModernUI-Core"
+        }
     }
 
     java {

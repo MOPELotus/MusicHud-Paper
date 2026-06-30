@@ -4,15 +4,18 @@ import com.google.gson.JsonElement;
 import com.google.gson.JsonObject;
 import com.google.gson.JsonSyntaxException;
 import indi.etern.musichud.MusicHud;
+import indi.etern.musichud.client.ui.ToastUtil;
 import indi.etern.musichud.interfaces.PostProcessable;
-import indi.etern.musichud.interfaces.ServerConfig;
+import indi.etern.musichud.platform.Environment;
 import indi.etern.musichud.server.api.UrlMeta;
+import indi.etern.musichud.server.api.impl.ncm.ServerApiMeta;
 import indi.etern.musichud.throwable.ApiException;
 import indi.etern.musichud.utils.JsonUtil;
+import lombok.Getter;
 import lombok.SneakyThrows;
+import net.minecraft.client.resources.language.I18n;
 import org.apache.logging.log4j.Logger;
 
-import java.io.InputStream;
 import java.net.ConnectException;
 import java.net.HttpURLConnection;
 import java.net.URI;
@@ -22,14 +25,22 @@ import java.net.http.HttpRequest;
 import java.net.http.HttpResponse;
 import java.nio.charset.StandardCharsets;
 import java.time.Duration;
+import java.util.Arrays;
+import java.util.Locale;
 import java.util.Set;
 import java.util.concurrent.Executors;
+import java.util.stream.Collectors;
 
 public class ApiClient {
     public static final HttpClient CLIENT;
     private static final int maxTrial = 5;
+    @SuppressWarnings("SpellCheckingInspection")
+    private static final Set<String> COOKIE_ATTRIBUTE_NAMES = Set.of(
+            "max-age", "expires", "path", "domain", "secure", "httponly", "samesite"
+    );
     private static final Logger LOGGER = MusicHud.getLogger(ApiClient.class);
-    private static final ServerConfig serverConfig = ServerConfig.getInstance();
+    @Getter
+    private static String version = "unknown";
 
     static {
         CLIENT = HttpClient.newBuilder()
@@ -39,24 +50,23 @@ public class ApiClient {
                 .build();
     }
 
+    public record ApiVersionResponse(ApiVersionResponseData data) {
+    }
+    private record ApiVersionResponseData(String version) {
+    }
+
     public static boolean checkAvailable() {
-        HttpRequest request = HttpRequest.newBuilder()
-                .uri(URI.create(serverConfig.getServerApiBaseUrl()))
-                .timeout(Duration.ofSeconds(5))
-                .build();
         try {
-            HttpResponse<InputStream> response = CLIENT.send(request, HttpResponse.BodyHandlers.ofInputStream());
-            try (InputStream ignored = response.body()) {
-                int statusCode = response.statusCode();
-                return statusCode == 200;
-            }
+            var response = post(ServerApiMeta.API_SERVER_VERSION, null, null, false);
+            version = response.data.version;
+            return true;
         } catch (Exception e) {
             return false;
         }
     }
 
     @SneakyThrows
-    public static <T> T post(UrlMeta<T> urlMeta, Object requestBody, String formattedUserCookie) {
+    public static <T> T post(UrlMeta<T> urlMeta, Object requestBody, String formattedUserCookie, boolean allowAlert) {
         T t = null;
         int trial = 0;
         do {
@@ -73,8 +83,9 @@ public class ApiClient {
                     JsonElement payload = requestBody instanceof JsonElement element ? element : JsonUtil.gson.toJsonTree(requestBody);
                     if (payload instanceof JsonObject jsonObject) {
                         if (formattedUserCookie != null && !formattedUserCookie.isEmpty()) {
-                            for (String cookieItem : formattedUserCookie.split(";;")) {
-                                requestBuilder.header("Cookie", cookieItem);
+                            String cleanCookie = cleanCookie(formattedUserCookie);
+                            if (!cleanCookie.isEmpty()) {
+                                requestBuilder.header("Cookie", cleanCookie);
                             }
                         } else {
                             jsonObject.addProperty("noCookie", true);
@@ -89,8 +100,9 @@ public class ApiClient {
                     }
                 } else {
                     if (formattedUserCookie != null && !formattedUserCookie.isEmpty()) {
-                        for (String cookieItem : formattedUserCookie.split(";;")) {
-                            requestBuilder.header("Cookie", cookieItem);
+                        String cleanCookie = cleanCookie(formattedUserCookie);
+                        if (!cleanCookie.isEmpty()) {
+                            requestBuilder.header("Cookie", cleanCookie);
                         }
                     }
                     requestBuilder.POST(HttpRequest.BodyPublishers.noBody());
@@ -118,7 +130,12 @@ public class ApiClient {
                     LOGGER.error("Failed to parse response as:{}, original response:{}", currentlyParsing, responseBody, e);
                     throw e;
                 } catch (ConnectException e) {
-                    LOGGER.error("Please check Api server status | 请检查 Api 服务器状态");
+                    if (allowAlert) {
+                        LOGGER.error("Please check Api server status | 请检查 Api 服务器状态");
+                        if (MusicHud.getCurrentEnvironment().getSide() == Environment.Side.CLIENT) {
+                            ToastUtil.show(I18n.get(MusicHud.MOD_ID + ".error.apiServer"));
+                        }
+                    }
                     throw e;
                 }
             } catch (ConnectException e) {
@@ -132,7 +149,7 @@ public class ApiClient {
     }
 
     @SneakyThrows
-    public static <T> T get(UrlMeta<T> urlMeta, String formattedUserCookie) {
+    public static <T> T get(UrlMeta<T> urlMeta, String formattedUserCookie, boolean allowAlert) {
         T t = null;
         int trial = 0;
         do {
@@ -145,8 +162,9 @@ public class ApiClient {
                 HttpRequest.Builder requestBuilder = HttpRequest.newBuilder()
                         .uri(urlMeta.toURI());
                 if (formattedUserCookie != null && !formattedUserCookie.isEmpty()) {
-                    for (String cookieItem : formattedUserCookie.split(";;")) {
-                        requestBuilder.header("Cookie", cookieItem);
+                    String cleanCookie = cleanCookie(formattedUserCookie);
+                    if (!cleanCookie.isEmpty()) {
+                        requestBuilder.header("Cookie", cleanCookie);
                     }
                 }
                 HttpRequest request = requestBuilder
@@ -165,7 +183,12 @@ public class ApiClient {
                         }
                     }
                 } catch (ConnectException e) {
-                    LOGGER.error("Please check Api server status | 请检查 Api 服务器状态");
+                    if (allowAlert) {
+                        LOGGER.error("Please check Api server status | 请检查 Api 服务器状态");
+                        if (MusicHud.getCurrentEnvironment().getSide() == Environment.Side.CLIENT) {
+                            ToastUtil.show(I18n.get(MusicHud.MOD_ID + ".error.apiServer"));
+                        }
+                    }
                     throw e;
                 }
             } catch (ConnectException e) {
@@ -197,6 +220,24 @@ public class ApiClient {
                 connection.disconnect();
             }
         }
+    }
+
+    private static String cleanCookie(String rawCookie) {
+        if (rawCookie == null || rawCookie.isEmpty()) {
+            return "";
+        }
+        return Arrays.stream(rawCookie.split(";+"))
+                .map(String::trim)
+                .filter(s -> !s.isEmpty())
+                .filter(s -> {
+                    int eqIdx = s.indexOf('=');
+                    if (eqIdx <= 0) {
+                        return false;
+                    }
+                    String name = s.substring(0, eqIdx).trim().toLowerCase(Locale.ROOT);
+                    return !COOKIE_ATTRIBUTE_NAMES.contains(name);
+                })
+                .collect(Collectors.joining("; "));
     }
 
     private record CodeOnlyResponse(int code) {

@@ -3,6 +3,7 @@ package indi.etern.musichud.client.ui.utils.lyrics;
 import indi.etern.musichud.MusicHud;
 import indi.etern.musichud.beans.music.LyricInfo;
 import indi.etern.musichud.beans.music.LyricLine;
+import indi.etern.musichud.beans.music.MusicDetail;
 import indi.etern.musichud.client.ui.utils.lyrics.beans.MetaInfoLine;
 import indi.etern.musichud.interfaces.ClientConfig;
 import org.apache.logging.log4j.Logger;
@@ -18,9 +19,9 @@ public class WordByWordLyricParser {
     private static final Pattern phrasePattern = Pattern.compile("\\((\\d+),(\\d+),(\\d+)\\)([\\s\\S]*?)(?=\\(\\d+,\\d+,(\\d+)\\)|$)");
     private static final Duration emptyLineIgnoreDuration = Duration.ofSeconds(5);
     private static final Logger logger = MusicHud.getLogger(FullLineLyricParser.class);
-    private static final ClientConfig clientConfig = ClientConfig.getInstance();
 
-    public static ArrayDeque<LyricLine> parse(LyricInfo lyricInfo) {
+    public static ArrayDeque<LyricLine> parse(MusicDetail musicDetail) {
+        LyricInfo lyricInfo = musicDetail.getLyricInfo();
         String lyric = lyricInfo.getWordByWordLyric().getLyric();
         String translatedLyric = lyricInfo.getWordByWordTranslatedLyric().getLyric();
         LinkedHashMap<Duration, LyricLine> map = new LinkedHashMap<>();
@@ -29,44 +30,43 @@ public class WordByWordLyricParser {
             Duration startTime = metaData.startTime;
             LyricLine lyricLine = map.get(startTime);
             String lyricString = metaData.lyric == null ? "" : metaData.lyric;
+            lyricString = lyricString.replace('\n', ' ').trim();
             if (lyricLine == null) {
-                lyricLine = new LyricLine();
-                lyricLine.setStartTime(startTime);
-                lyricLine.setDuration(metaData.lineDuration);
-                lyricLine.setText(lyricString);
-                lyricLine.setType(metaData.type);
+                // Remove duration for smooth transition between lines
+                lyricLine = LyricLine.builder()
+                        .startTime(startTime)
+                        .text(lyricString)
+                        .type(metaData.type).build();
                 if (startTime == null && lyricLine.getText() != null && !lyricLine.getText().startsWith("}")) {
                     lyricLinesWithoutValidTimestamp.add(lyricLine);
                 }
-            } else {
+            } else if (!lyricString.isEmpty()) {
                 lyricLine.setText(lyricLine.getText() + "\n" + lyricString);
             }
-            if (metaData.phraseEndingMap != null) {
-                lyricLine.getPhraseEndingMap().putAll(metaData.phraseEndingMap);
+            if (metaData.phraseEndingOffsetMap != null) {
+                lyricLine.getPhraseEndingOffsetMap().putAll(metaData.phraseEndingOffsetMap);
+                lyricLine.setWordByWord(true);
             }
             map.put(startTime, lyricLine);
         });
-        if (clientConfig.getShowTranslatedCnLyrics()) {
-            FullLineLyricParser.matchLine(translatedLyric, (metaData) -> {
-                Duration startTime = metaData.startTime();
-                LyricLine lyricLine = map.get(startTime);
-                if (lyricLine == null) {
-                    lyricLine = new LyricLine();
-                    lyricLine.setStartTime(startTime);
-                    if (startTime != null) {
-                        map.put(startTime, lyricLine);
-                    } else {
-                        lyricLinesWithoutValidTimestamp.add(lyricLine);
-                    }
-                }
-                String lyric1 = metaData.lyric();
-                if (lyric1 != null) {
-                    lyricLine.setTranslatedText(lyric1.replace('\u00A0', ' ').trim());
+        FullLineLyricParser.matchLine(translatedLyric, (metaData) -> {
+            Duration startTime = metaData.startTime();
+            LyricLine lyricLine = map.get(startTime);
+            if (lyricLine == null) {
+                lyricLine = LyricLine.builder().startTime(startTime).build();
+                if (startTime != null) {
+                    map.put(startTime, lyricLine);
                 } else {
-                    lyricLine.setTranslatedText("");
+                    lyricLinesWithoutValidTimestamp.add(lyricLine);
                 }
-            });
-        }
+            }
+            String lyric1 = metaData.lyric();
+            if (lyric1 != null) {
+                lyricLine.setTranslatedText(lyric1.replace('\u00A0', ' ').trim());
+            } else {
+                lyricLine.setTranslatedText("");
+            }
+        });
         ArrayDeque<LyricLine> lyricLines = new ArrayDeque<>(lyricLinesWithoutValidTimestamp);
         lyricLines.addAll(map.values());
         List<LyricLine> list = lyricLines.stream().sorted(Comparator.comparing(LyricLine::getStartTime)).toList();
@@ -85,12 +85,13 @@ public class WordByWordLyricParser {
                         if (lastLyricLine != null) {
                             lastLyricLine.setDuration(oneSec);
                         }
-                        LyricLine rhythmLine = new LyricLine();
-                        rhythmLine.setStartTime(rhythmStartTime);
-                        rhythmLine.setPrevious(lastLyricLine);
+                        LyricLine rhythmLine = LyricLine.builder()
+                                .startTime(rhythmStartTime)
+                                .previous(lastLyricLine)
+                                .type(LyricLine.Type.RHYTHM)
+                                .text("")
+                                .build();
                         lastLyricLine = rhythmLine;
-                        rhythmLine.setType(LyricLine.Type.RHYTHM);
-                        rhythmLine.setText("");
                         lyricLines.add(rhythmLine);
                     }
                 }
@@ -123,7 +124,10 @@ public class WordByWordLyricParser {
             } else {
                 lyricLines.add(lyricLine);
             }
-            nextIndex+=1;
+            nextIndex += 1;
+        }
+        if (lastLyricLine != null && lastLyricLine.getDuration() == null) {
+            lastLyricLine.setDuration(Duration.ofMillis(musicDetail.getDurationMillis()).minus(lastLyricLine.getStartTime()));
         }
         return lyricLines;
     }
@@ -145,7 +149,6 @@ public class WordByWordLyricParser {
             Duration interval = lineStart.minus(lastLineEnd);
             if (interval.compareTo(emptyLineIgnoreDuration) > 0) {
                 matchedConsumer.accept(new LyricLineMetaData(lastLineEnd, interval, "", LyricLine.Type.RHYTHM, null));
-                lastLineEnd = lineStart;
             }
 
             Duration nextPhraseStart = lineStart;
@@ -153,9 +156,9 @@ public class WordByWordLyricParser {
             StringBuilder lineText = new StringBuilder();
             int charIndex = 0;
             while (phraseMatcher.find()) {
-                String phraseStartTimestamp = phraseMatcher.group(1);
+//                String phraseStartTimestamp = phraseMatcher.group(1);
                 String phraseDurationMillis = phraseMatcher.group(2);
-                String unknown = phraseMatcher.group(3);
+//                String unknown = phraseMatcher.group(3);
                 String phraseText = phraseMatcher.group(4);
                 String suffix = phraseText.endsWith(" ") ? " " : "";
                 phraseText = phraseText.replace('\u00A0', ' ').replace("\n", "").trim() + suffix;
@@ -175,6 +178,6 @@ public class WordByWordLyricParser {
     }
 
     record LyricLineMetaData(Duration startTime, Duration lineDuration, String lyric, LyricLine.Type type,
-                                     Map<Duration, Integer> phraseEndingMap) {
+                             Map<Duration, Integer> phraseEndingOffsetMap) {
     }
 }

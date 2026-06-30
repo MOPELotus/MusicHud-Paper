@@ -106,7 +106,6 @@ public class AccountView extends LinearLayout {
             logoutButton.setLayoutParams(new LayoutParams(WRAP_CONTENT, WRAP_CONTENT));
             logoutButton.setOnClickListener(b -> {
                 loginService.logout();
-                loginService.loginAsAnonymousToServer();
             });
 
             ProgressBar progressRing = new ProgressBar(context);
@@ -125,7 +124,7 @@ public class AccountView extends LinearLayout {
                     retryButton.setVisibility(GONE);
                     progressRing.setVisibility(VISIBLE);
                 });
-                loginService.loginToServer();
+                loginService.loginToServer(null);
             });
 
 
@@ -203,7 +202,6 @@ public class AccountView extends LinearLayout {
             logoutButton.setBackground(background2);
             logoutButton.setOnClickListener(b -> {
                 loginService.logout();
-                loginService.loginAsAnonymousToServer();
             });
             buttonsLayout.addView(logoutButton, new LayoutParams(WRAP_CONTENT, WRAP_CONTENT));
 

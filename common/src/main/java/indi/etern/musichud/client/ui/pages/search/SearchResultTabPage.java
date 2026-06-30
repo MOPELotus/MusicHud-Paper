@@ -3,7 +3,6 @@ package indi.etern.musichud.client.ui.pages.search;
 import icyllis.modernui.animation.MotionEasingUtils;
 import icyllis.modernui.animation.ObjectAnimator;
 import icyllis.modernui.core.Context;
-import icyllis.modernui.graphics.drawable.ShapeDrawable;
 import icyllis.modernui.mc.MuiModApi;
 import icyllis.modernui.mc.ui.ClampingScrollView;
 import icyllis.modernui.view.Gravity;
@@ -26,7 +25,6 @@ import java.util.concurrent.CompletableFuture;
 import static icyllis.modernui.view.ViewGroup.LayoutParams.MATCH_PARENT;
 import static icyllis.modernui.view.ViewGroup.LayoutParams.WRAP_CONTENT;
 
-@Slf4j
 public class SearchResultTabPage extends FrameLayout {
     @Getter
     private final ViewPager pager;
@@ -65,9 +63,7 @@ public class SearchResultTabPage extends FrameLayout {
         tabLayout.setTabMode(TabLayout.MODE_AUTO);
         tabLayout.setTabGravity(TabLayout.GRAVITY_CENTER);
         tabLayout.setupWithViewPager(pager);
-        ShapeDrawable background = new ShapeDrawable();
-        background.setColor(0x00000000);
-        tabLayout.setBackground(background);
+        tabLayout.setBackground(null);
 
         var lp = new LayoutParams(MATCH_PARENT, WRAP_CONTENT);
         lp.gravity = Gravity.TOP | Gravity.CENTER_HORIZONTAL;
@@ -122,7 +118,7 @@ public class SearchResultTabPage extends FrameLayout {
             loadingMoreProgressBar.setIndeterminate(true);
 
             TextView noMoreResultText = new TextView(getContext());
-            noMoreResultText.setText(I18n.get("music_hud.text.searchNoMoreResult"));
+            noMoreResultText.setText(I18n.get(MusicHud.MOD_ID + ".text.searchNoMoreResult"));
             noMoreResultText.setTextColor(Theme.SECONDARY_TEXT_COLOR);
             noMoreResultText.setTextSize(Theme.TEXT_SIZE_NORMAL);
             noMoreResultText.setTextAlignment(TEXT_ALIGNMENT_CENTER);
@@ -261,10 +257,10 @@ public class SearchResultTabPage extends FrameLayout {
         @Override
         public CharSequence getPageTitle(int position) {
             return I18n.get(switch (position) {
-                case 0 -> "music_hud.text.page.search.music";
-                case 1 -> "music_hud.text.page.search.playlist";
-                case 2 -> "music_hud.text.page.search.album";
-                case 3 -> "music_hud.text.page.search.artist";
+                case 0 -> MusicHud.MOD_ID + ".text.page.search.music";
+                case 1 -> MusicHud.MOD_ID + ".text.page.search.playlist";
+                case 2 -> MusicHud.MOD_ID + ".text.page.search.album";
+                case 3 -> MusicHud.MOD_ID + ".text.page.search.artist";
                 default -> "";
             });
         }

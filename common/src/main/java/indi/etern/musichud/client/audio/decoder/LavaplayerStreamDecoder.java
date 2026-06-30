@@ -82,6 +82,11 @@ public final class LavaplayerStreamDecoder implements AudioDecoder {
         return sampleRate;
     }
 
+    @Override
+    public int getFrameSize() {
+        return channelCount * Short.BYTES;
+    }
+
     public int getChannelCount() {
         return channelCount;
     }

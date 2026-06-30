@@ -19,28 +19,40 @@ import net.minecraft.network.codec.StreamCodec;
 import java.util.List;
 
 public record ConnectRequest(Version clientVersion) implements C2SPayload {
-    public static StreamCodec<RegistryFriendlyByteBuf, ConnectRequest> CODEC =
+    public static final StreamCodec<RegistryFriendlyByteBuf, ConnectRequest> CODEC =
             StreamCodec.composite(Version.PACKET_CODEC, ConnectRequest::clientVersion, ConnectRequest::new);
 
     @RegisterMark
     public static class RegisterImpl implements CommonRegister {
+        private static ClientConfig clientConfig;
+
+        static {
+            if (MusicHud.getCurrentEnvironment().getSide() == Environment.Side.CLIENT) {
+                try {
+                    clientConfig = ClientConfig.getInstance();
+                } catch (UnsupportedOperationException e) {
+                    clientConfig = null;
+                }
+            }
+        }
+
         public void register() {
             INetworkRegister.getInstance().autoRegisterPayload(
                     ConnectRequest.class, CODEC,
-                    ServerDataPacketVThreadExecutor.execute((startQRLoginRequest, serverPlayer) -> {
+                    ServerDataPacketVThreadExecutor.execute((startQRLoginRequest, player) -> {
                         ILoginApiService instance = ILoginApiService.getInstance(ApiProvider.NCM);
-                        boolean compatible = Version.capableWith(startQRLoginRequest.clientVersion());
-                        if (MusicHud.getCurrentEnvironment().getSide() == Environment.Side.CLIENT && !ClientConfig.getInstance().getEnableEmbeddedServer()) {
+                        boolean compatible = Version.compatibleWith(startQRLoginRequest.clientVersion());
+                        if (MusicHud.getCurrentEnvironment().getSide() == Environment.Side.CLIENT && !clientConfig.getEnabledInIntegratedServer()) {
                             if (compatible) {
-                                instance.joinUnlogged(serverPlayer);
+                                instance.joinUnlogged(player);
                             }
                             return;
                         }
                         ConnectResponse response = new ConnectResponse(compatible, Version.current, List.of(ApiProvider.NCM));
-                        IServerNetworkService.getInstance().sendToPlayer(serverPlayer, response);
+                        IServerNetworkService.getInstance().sendToPlayer(player, response);
                         if (compatible) {
-                            instance.joinUnlogged(serverPlayer);
-                            MusicPlayerServerService.getInstance().sendSyncPlayingStatusToPlayer(serverPlayer);
+                            instance.joinUnlogged(player);
+                            MusicPlayerServerService.getInstance().sendSyncPlayingStatusToPlayer(player);
                         }
                     })
             );

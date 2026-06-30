@@ -6,10 +6,11 @@ import indi.etern.musichud.beans.music.FormatType;
 import indi.etern.musichud.beans.music.MusicDetail;
 import indi.etern.musichud.beans.music.MusicResourceInfo;
 import indi.etern.musichud.beans.music.Quality;
-import indi.etern.musichud.client.audio.decoder.AudioFormatDetector;
 import indi.etern.musichud.client.audio.decoder.AudioDecoder;
+import indi.etern.musichud.client.audio.decoder.AudioFormatDetector;
 import indi.etern.musichud.client.audio.decoder.AudioDecoderFactory;
 import indi.etern.musichud.client.services.MusicService;
+import indi.etern.musichud.client.ui.hud.renderer.PlayingStatusRenderer;
 import indi.etern.musichud.interfaces.ClientConfig;
 import indi.etern.musichud.network.IClientNetworkService;
 import indi.etern.musichud.network.payloads.requestResponseCycle.GetMusicResourceRequest;
@@ -20,6 +21,7 @@ import net.minecraft.client.Minecraft;
 import net.minecraft.client.resources.language.I18n;
 import net.minecraft.sounds.SoundSource;
 import org.apache.logging.log4j.Logger;
+import org.jetbrains.annotations.NotNull;
 import org.lwjgl.openal.AL10;
 
 import java.io.IOException;
@@ -28,6 +30,7 @@ import java.nio.ByteBuffer;
 import java.time.Duration;
 import java.time.ZonedDateTime;
 import java.util.HashSet;
+import java.util.Objects;
 import java.util.Set;
 import java.util.concurrent.*;
 import java.util.concurrent.atomic.AtomicBoolean;
@@ -39,32 +42,29 @@ public class StreamAudioPlayer {
     private static final int BUFFER_COUNT = 4;
     private static final int BUFFER_SIZE = 65536;
     private static final Logger LOGGER = MusicHud.getLogger(StreamAudioPlayer.class);
+    private static final ClientConfig clientConfig = ClientConfig.getInstance();
     private static volatile StreamAudioPlayer instance = null;
-
     private final int[] buffers = new int[BUFFER_COUNT];
     private final AtomicBoolean initialized = new AtomicBoolean(false);
     private final AtomicReference<Status> status = new AtomicReference<>(Status.IDLE);
-    private final BlockingQueue<byte[]> audioBuffer = new LinkedBlockingQueue<>(30); // 最大30个数据块的缓冲区
-
+    private volatile BlockingQueue<byte[]> audioBuffer = new LinkedBlockingQueue<>(30); // 最大30个数据块的缓冲区
     @Getter
     private final Set<Consumer<Status>> statusChangeListener = new HashSet<>();
     private final AtomicLong totalBufferedBytes = new AtomicLong(0);
-    private final static ClientConfig clientConfig = ClientConfig.getInstance();
-    ZonedDateTime currentStartTime;
     private int source = 0;
     private float lastVolume;
-    private Future<?> playingFuture;
-    private Future<?> downloadFuture;
-    private volatile boolean shouldContinuePlaying = false;
-    private volatile boolean shouldContinueDownloading = false;
-    private volatile AudioDecoder currentDecoder;
-    private volatile long bytesPerSecond = 0;
-    private volatile boolean isBuffering = false;
-    private volatile ZonedDateTime serverStartTime;
+    private volatile CompletableFuture<?> playingFuture;
+    private volatile CompletableFuture<?> downloadFuture;
+    private volatile ZonedDateTime currentStartTime;
     private MusicDetail currentMusicDetail;
+    private AudioDecoder currentDecoder;
+    private long playedBytes = 0;
+    //    private boolean isBuffering = false;
+    private volatile ZonedDateTime serverStartTime;
+    private Future<?> downloadThreadFuture;
+    private Future<?> playThreadFuture;
     private volatile boolean directPlayback = false;
     private volatile MusicResourceInfo directMusicResourceInfo = MusicResourceInfo.NONE;
-    private volatile boolean downloadCompleted = false;
 
     public static StreamAudioPlayer getInstance() {
         if (instance == null) {
@@ -93,120 +93,131 @@ public class StreamAudioPlayer {
     }
 
     protected void fullyRetryCurrent() {
-        cleanup();
+        MusicDetail currentMusicDetail1 = currentMusicDetail;
+        ZonedDateTime startTime = currentStartTime != null ? currentStartTime : serverStartTime;
+        boolean wasDirectPlayback = directPlayback;
+        MusicResourceInfo directResourceInfo = directMusicResourceInfo;
+        stopInternal();
         try {
             Thread.sleep(1000);
         } catch (InterruptedException ignored) {
         } finally {
             LOGGER.info("Fully retrying");
-            if (directPlayback && directMusicResourceInfo != null && !directMusicResourceInfo.equals(MusicResourceInfo.NONE)) {
-                playDirectAsync(directMusicResourceInfo.getUrl(), directMusicResourceInfo.getType(), currentStartTime);
+            if (wasDirectPlayback && directResourceInfo != null && !directResourceInfo.equals(MusicResourceInfo.NONE)) {
+                playDirectAsync(directResourceInfo.getUrl(), directResourceInfo.getType(), startTime);
             } else {
-                playAsync(currentMusicDetail, currentStartTime);
+                playAsyncInternal(currentMusicDetail1, startTime);
             }
         }
     }
 
     public CompletableFuture<ZonedDateTime> playAsync(MusicDetail musicDetail, ZonedDateTime startTime) {
-        currentMusicDetail = musicDetail;
-        currentStartTime = startTime == null ? ZonedDateTime.now() : startTime;
-        directPlayback = false;
-        directMusicResourceInfo = MusicResourceInfo.NONE;
-        return beginPlayback(startTime);
-    }
-
-    public CompletableFuture<ZonedDateTime> playDirectAsync(String identifier, FormatType formatType, ZonedDateTime startTime) {
-        currentMusicDetail = MusicDetail.NONE;
-        currentStartTime = startTime == null ? ZonedDateTime.now() : startTime;
-        directPlayback = true;
-        directMusicResourceInfo = new MusicResourceInfo(
-                0L,
-                AudioFormatDetector.normalizeIdentifier(identifier),
-                0,
-                0L,
-                formatType == null ? FormatType.AUTO : formatType,
-                "",
-                Fee.UNSET,
-                0
-        );
-        return beginPlayback(startTime);
-    }
-
-    private CompletableFuture<ZonedDateTime> beginPlayback(ZonedDateTime startTime) {
         synchronized (StreamAudioPlayer.class) {
-            try {
-                stopInternal(); // 先停止之前的播放
-                setStatus(Status.BUFFERING);
-                downloadCompleted = false;
-
-                source = AL10.alGenSources();
-                checkALError("alGenSources");
-
-                for (int i = 0; i < BUFFER_COUNT; i++) {
-                    buffers[i] = AL10.alGenBuffers();
-                    checkALError("alGenBuffers");
-                }
-
-                // 配置为非空间播放
-                AL10.alSourcei(source, AL10.AL_SOURCE_RELATIVE, AL10.AL_TRUE);
-                AL10.alSource3f(source, AL10.AL_POSITION, 0, 0, 0);
-                AL10.alSourcef(source, AL10.AL_ROLLOFF_FACTOR, 0);
-                checkALError("source configuration");
-                lastVolume = 1;
-
-                initialized.set(true);
-            } catch (Exception e) {
-                cleanup();
-                return CompletableFuture.failedFuture(e);
-            }
-
-            // 清空缓冲区
-            audioBuffer.clear();
-            totalBufferedBytes.set(0);
-            shouldContinuePlaying = true;
-            shouldContinueDownloading = true;
-
-            CompletableFuture<Void> downloadInitializedFuture = new CompletableFuture<>();
-            CompletableFuture<ZonedDateTime> startPlayingFuture = new CompletableFuture<>();
-            downloadFuture = MusicHud.EXECUTOR.submit(() -> {
-                Thread.currentThread().setName("Downloader");
-                try {
-                    downloadAudioWithRetry(startTime != null, downloadInitializedFuture);
-                } catch (Exception e) {
-                    LOGGER.error("Download thread error", e);
-                    setStatus(Status.ERROR);
-                    try {
-                        fullyRetryCurrent();
-                    } catch (RuntimeException e1) {
-                        LOGGER.error("Retry failed: {}: {}", e1.getClass(), e1.getMessage());
-                    }
-                }
-            });
-            downloadInitializedFuture.thenAccept(ignore -> {
-                serverStartTime = startTime == null ? ZonedDateTime.now() : startTime;
-                playingFuture = MusicHud.EXECUTOR.submit(() -> {
-                    Thread.currentThread().setName("Music Player");
-                    try {
-                        playAudioWithRetry(startPlayingFuture);
-                    } catch (Exception e) {
-                        LOGGER.error("Play thread error", e);
-                        if (!startPlayingFuture.isDone()) {
-                            startPlayingFuture.completeExceptionally(e);
-                        }
-                    }
-                });
-            });
-
-            return startPlayingFuture;
+            currentStartTime = startTime == null ? ZonedDateTime.now() : startTime;
+            directPlayback = false;
+            directMusicResourceInfo = MusicResourceInfo.NONE;
+            stopInternal();
+            return playAsyncInternal(musicDetail, startTime);
         }
     }
 
+    public CompletableFuture<ZonedDateTime> playDirectAsync(String identifier, FormatType formatType, ZonedDateTime startTime) {
+        synchronized (StreamAudioPlayer.class) {
+            currentStartTime = startTime == null ? ZonedDateTime.now() : startTime;
+            directPlayback = true;
+            directMusicResourceInfo = new MusicResourceInfo(
+                    0L,
+                    AudioFormatDetector.normalizeIdentifier(identifier),
+                    0,
+                    0L,
+                    formatType == null ? FormatType.AUTO : formatType,
+                    "",
+                    Fee.UNSET,
+                    0
+            );
+            stopInternal();
+            return playAsyncInternal(MusicDetail.NONE, startTime);
+        }
+    }
+
+    private @NotNull CompletableFuture<ZonedDateTime> playAsyncInternal(MusicDetail musicDetail, ZonedDateTime startTime) {
+        try {
+            currentMusicDetail = musicDetail;
+//            currentStartTime = startTime == null ? ZonedDateTime.now() : startTime;
+            setStatus(Status.BUFFERING);
+
+            source = AL10.alGenSources();
+            checkALError("alGenSources");
+
+            for (int i = 0; i < BUFFER_COUNT; i++) {
+                buffers[i] = AL10.alGenBuffers();
+                checkALError("alGenBuffers");
+            }
+
+            // 配置为非空间播放
+            AL10.alSourcei(source, AL10.AL_SOURCE_RELATIVE, AL10.AL_TRUE);
+            AL10.alSource3f(source, AL10.AL_POSITION, 0, 0, 0);
+            AL10.alSourcef(source, AL10.AL_ROLLOFF_FACTOR, 0);
+            checkALError("source configuration");
+            lastVolume = 1;
+
+            initialized.set(true);
+        } catch (Exception e) {
+            stopInternal();
+            try {
+                Thread.sleep(500);
+            } catch (Exception ignored) {
+            }
+            return playAsyncInternal(musicDetail, startTime);
+        }
+
+        CompletableFuture<Void> downloadInitializedFuture = new CompletableFuture<>();
+        CompletableFuture<ZonedDateTime> startPlayingFuture = new CompletableFuture<>();
+        serverStartTime = startTime;
+        downloadFuture = new CompletableFuture<>();
+        playingFuture = new CompletableFuture<>();
+        downloadThreadFuture = MusicHud.EXECUTOR.submit(() -> {
+            Thread.currentThread().setName("MHWorker-Downloader");
+            try {
+                downloadAudioWithRetry(startTime != null, downloadInitializedFuture);
+            } catch (Exception e) {
+                LOGGER.error("Download thread error", e);
+                setStatus(Status.ERROR);
+                try {
+                    fullyRetryCurrent();
+                } catch (RuntimeException e1) {
+                    LOGGER.error("Retry failed: {}: {}", e1.getClass(), e1.getMessage());
+                }
+            } finally {
+                downloadInitializedFuture.complete(null);
+            }
+        });
+        downloadInitializedFuture.thenAccept(ignore -> {
+            playThreadFuture = MusicHud.EXECUTOR.submit(() -> {
+                Thread.currentThread().setName("MH-MusicPlayer");
+                try {
+                    playAudioWithRetry(startPlayingFuture, startTime);
+                } catch (Exception e) {
+                    LOGGER.error("Play thread error: {}", e.getMessage());
+                    if (!startPlayingFuture.isDone()) {
+                        startPlayingFuture.completeExceptionally(e);
+                    }
+                }
+            });
+        });
+
+        return startPlayingFuture;
+    }
+
     @SuppressWarnings("BusyWait")
-    private void playAudioWithRetry(CompletableFuture<ZonedDateTime> startPlayingFuture) {
+    private void playAudioWithRetry(CompletableFuture<ZonedDateTime> startPlayingFuture, ZonedDateTime serverStartTime) {
+        CompletableFuture<?> currentPlayingFuture = playingFuture;
+        CompletableFuture<?> currentDownloadFuture = downloadFuture;
+        BlockingQueue<byte[]> playBuffer = audioBuffer;
         boolean finished = false;
         try {
             // 等待一些数据缓冲
-            while (shouldContinuePlaying && totalBufferedBytes.get() < BUFFER_SIZE * BUFFER_COUNT) {
+            while (currentPlayingFuture != null && !currentPlayingFuture.isDone() && currentPlayingFuture == playingFuture && totalBufferedBytes.get() < BUFFER_SIZE * BUFFER_COUNT) {
                 Thread.sleep(50);
             }
 
@@ -221,7 +232,7 @@ public class StreamAudioPlayer {
                         finished = true;
                     } else {// 从缓冲区填充初始数据
                         for (int i = 0; i < BUFFER_COUNT; i++) {
-                            byte[] audioData = audioBuffer.poll(1, TimeUnit.SECONDS);
+                            byte[] audioData = playBuffer.poll(0, TimeUnit.SECONDS);
                             if (audioData == null) break;
 
                             ByteBuffer directBuffer = ByteBuffer.allocateDirect(audioData.length);
@@ -232,23 +243,23 @@ public class StreamAudioPlayer {
                             int sampleRate = currentDecoder != null ? currentDecoder.getSampleRate() : 44100;
 
                             AL10.alBufferData(buffers[i], format, directBuffer, sampleRate);
-                            checkALError("alBufferData");
+                            checkALError("alBufferData-Pre");
                             AL10.alSourceQueueBuffers(source, buffers[i]);
-                            checkALError("alSourceQueueBuffers");
+                            checkALError("alSourceQueueBuffers-Pre");
 
                             totalBufferedBytes.addAndGet(-audioData.length);
                         }
                         if (clientConfig.getDisableVanillaMusic())
                             Minecraft.getInstance().getSoundManager().stop(null, SoundSource.MUSIC);
-                        startPlayingFuture.complete(serverStartTime);
                         setStatus(Status.PLAYING);
                         AL10.alSourcePlay(source);
-                        checkALError("alSourcePlay");
+                        checkALError("alSourcePlay-Pre");
                     }
 
                 }
                 if (!finished) {// 主播放循环
-                    while (shouldContinuePlaying) {
+                    this.serverStartTime = Objects.requireNonNullElseGet(serverStartTime, ZonedDateTime::now);
+                    while (currentPlayingFuture != null && !currentPlayingFuture.isDone() && currentPlayingFuture == playingFuture) {
                         try {
                             synchronized (StreamAudioPlayer.class) {
                                 updateVolumeIfNecessary();
@@ -256,38 +267,34 @@ public class StreamAudioPlayer {
 
                                 int processed = AL10.alGetSourcei(source, AL10.AL_BUFFERS_PROCESSED);
                                 //noinspection SpellCheckingInspection
-                                checkALError("alGetSourcei");
+                                checkALError("alGetSourcei-Processed");
+
+                                startPlayingFuture.complete(serverStartTime == null ? ZonedDateTime.now() : serverStartTime);
 
                                 while (processed-- > 0) {
                                     int[] buffer = new int[1];
                                     AL10.alSourceUnqueueBuffers(source, buffer);
                                     //noinspection SpellCheckingInspection
-                                    checkALError("alSourceUnqueueBuffers");
+                                    checkALError("alSourceUnqueueBuffers-Main");
 
-                                    // 从缓冲区获取音频数据，最多等待500ms
-                                    byte[] audioData = audioBuffer.poll(500, TimeUnit.MILLISECONDS);
+                                    byte[] audioData = playBuffer.poll(0, TimeUnit.MILLISECONDS);
 
                                     if (audioData == null) {
-                                        // 没有数据可用
-                                        if (audioBuffer.isEmpty() && (downloadCompleted || NowPlayingInfo.getInstance().isCompleted())) {
+                                        if (playBuffer.isEmpty() && (currentDownloadFuture.isDone() || NowPlayingInfo.getInstance().isCompleted())) {
                                             // 播放已完成且缓冲区为空，结束播放
                                             LOGGER.debug("No more audio data available");
-                                            shouldContinuePlaying = false;
-                                            isBuffering = false;
+                                            currentPlayingFuture.complete(null);
                                             setStatus(Status.PLAYING);
                                             break;
-                                        } else if (shouldContinueDownloading) {
+                                        } else if (!currentDownloadFuture.isDone()) {
                                             audioData = new byte[BUFFER_SIZE];
-                                            isBuffering = true;
                                             if (status.get() != Status.ERROR && status.get() != Status.RETRYING) {
                                                 setStatus(Status.BUFFERING);
                                             }
                                         } else {
                                             audioData = new byte[BUFFER_SIZE];
-                                            isBuffering = false;
                                         }
                                     } else {
-                                        isBuffering = false;
                                         setStatus(Status.PLAYING);
                                     }
 
@@ -299,9 +306,9 @@ public class StreamAudioPlayer {
                                     int sampleRate = currentDecoder != null ? currentDecoder.getSampleRate() : 44100;
 
                                     AL10.alBufferData(buffer[0], format, directBuffer, sampleRate);
-                                    checkALError("alBufferData");
+                                    checkALError("alBufferData-Main");
                                     AL10.alSourceQueueBuffers(source, buffer[0]);
-                                    checkALError("alSourceQueueBuffers");
+                                    checkALError("alSourceQueueBuffers-Main");
 
                                     if (audioData.length == BUFFER_SIZE) { // 不是静音数据
                                         totalBufferedBytes.addAndGet(-audioData.length);
@@ -310,19 +317,12 @@ public class StreamAudioPlayer {
 
                                 int state = AL10.alGetSourcei(source, AL10.AL_SOURCE_STATE);
                                 //noinspection SpellCheckingInspection
-                                checkALError("alGetSourcei");
-                                if (state != AL10.AL_PLAYING && shouldContinuePlaying) {
+                                checkALError("alGetSourcei-SourceState");
+                                if (state != AL10.AL_PLAYING && !currentPlayingFuture.isDone() && currentPlayingFuture == playingFuture) {
                                     AL10.alSourcePlay(source);
-                                    checkALError("alSourcePlay");
+                                    checkALError("alSourcePlay-Main");
                                 }
                             }
-
-                            // 检查缓冲状态
-                            if (status.get() != Status.RETRYING && status.get() != Status.ERROR
-                                    && isBuffering && shouldContinueDownloading) {
-                                setStatus(Status.BUFFERING);
-                            }
-
                             Thread.sleep(40);
                         } catch (InterruptedException e) {
                             break;
@@ -346,23 +346,34 @@ public class StreamAudioPlayer {
             }
             fullyRetryCurrent();
         } finally {
+            if (currentPlayingFuture != null) {
+                currentPlayingFuture.complete(null);
+            }
             LOGGER.debug("Play task finished");
         }
     }
 
     @SuppressWarnings("BusyWait")
     private void downloadAudioWithRetry(boolean forceSync, CompletableFuture<Void> downloadInitializedFuture) {
+        CompletableFuture<?> currentPlayingFuture = playingFuture;
+        CompletableFuture<?> currentDownloadFuture = downloadFuture;
+        BlockingQueue<byte[]> localAudioBuffer = audioBuffer;
+
         int localRetryCount = 0;
         boolean forceSyncInternal = forceSync;
 
         MusicResourceInfo musicResourceInfo = MusicResourceInfo.NONE;
-        while (shouldContinueDownloading) {
+        while (!currentDownloadFuture.isDone() && currentDownloadFuture == downloadFuture) {
             try {
                 if (directPlayback) {
                     musicResourceInfo = directMusicResourceInfo;
-                } else if (musicResourceInfo.equals(MusicResourceInfo.NONE) || localRetryCount % 3 == 0) {
+                } else if (musicResourceInfo == null || musicResourceInfo.equals(MusicResourceInfo.NONE) || localRetryCount % 3 == 0) {
                     musicResourceInfo = getCurrentMusicResourceInfo(clientConfig.getPrimaryChosenQuality(), musicResourceInfo).get();
                 }
+                if (musicResourceInfo == null || musicResourceInfo.equals(MusicResourceInfo.NONE)) {
+                    continue;
+                }
+
                 LOGGER.debug("Starting audio download (attempt {})", localRetryCount + 1);
 
                 AudioDecoder decoder = loadAudioDecoder(musicResourceInfo.getUrl(), musicResourceInfo.getType());
@@ -374,75 +385,40 @@ public class StreamAudioPlayer {
                 }
 
                 if (forceSyncInternal) {
-                    int bytesPerSample = getBytesPerSample(decoder.getFormat());
-                    int bytesPerSecond = decoder.getSampleRate() * bytesPerSample;
-
-                    long bytesSkipped = 0;
-                    long startSyncTimestamp = System.currentTimeMillis();
-                    while (shouldContinueDownloading) {
-                        long seconds = Duration.between(serverStartTime, ZonedDateTime.now()).getSeconds();
-                        long skipBytes = seconds
-                                * bytesPerSecond;
-                        if (bytesSkipped >= skipBytes) {
-                            break;
-                        }
-                        byte[] chunk = decoder.readChunk(skipBytes - bytesSkipped);
-                        if (chunk == null) break;
-                        bytesSkipped += chunk.length;
-                    }
-                    long current = System.currentTimeMillis();
-                    LOGGER.debug("Skipped {} bytes in {} millis", bytesSkipped, current - startSyncTimestamp);
+                    syncPlaying(currentDownloadFuture);
                 }
 
                 // 先填充一些数据到缓冲区
                 int initialBuffers = 0;
-                long startTimeForSpeedCalc = System.currentTimeMillis();
-                long totalBytesForSpeedCalc = 0;
-                while (shouldContinueDownloading && initialBuffers < BUFFER_COUNT * 2) {
+                while (!currentDownloadFuture.isDone() && currentDownloadFuture == downloadFuture && initialBuffers < BUFFER_COUNT * 2) {
                     byte[] audioData = decoder.readChunk(BUFFER_SIZE);
                     if (audioData == null) break;
+                    if (currentDownloadFuture.isDone() || currentDownloadFuture != downloadFuture) break;
 
-                    if (!audioBuffer.offer(audioData, 100, TimeUnit.MILLISECONDS)) {
-                        // 缓冲区满，继续尝试
-                        continue;
-                    }
+                    localAudioBuffer.put(audioData);
                     totalBufferedBytes.addAndGet(audioData.length);
                     initialBuffers++;
-                    totalBytesForSpeedCalc += audioData.length;
-
-                    if (initialBuffers == 5) { // 收集5个数据块后计算速度
-                        long elapsedTime = System.currentTimeMillis() - startTimeForSpeedCalc;
-                        if (elapsedTime > 0) {
-                            bytesPerSecond = (totalBytesForSpeedCalc * 1000L) / elapsedTime;
-                            LOGGER.debug("Calculated download speed: {} bytes/sec", bytesPerSecond);
-                        }
-                    }
-
-                    if (calculateBufferedSeconds(decoder.getFormat()) >= 2) {
-                        setStatus(Status.PLAYING);
-                    }
                 }
 
                 // 继续下载剩余数据
-                while (shouldContinueDownloading) {
+                while (!currentDownloadFuture.isDone() && currentDownloadFuture == downloadFuture) {
+                    if (localAudioBuffer.size() <= 1) {
+                        syncPlaying(currentDownloadFuture);
+                    }
+
                     byte[] audioData = decoder.readChunk(BUFFER_SIZE);
-                    if (audioData == null) {
-                        break;
-                    }
+                    if (audioData == null) break;
 
-                    // 如果缓冲区已满，等待一会儿
-                    while (shouldContinueDownloading && audioBuffer.remainingCapacity() == 0) {
-                        Thread.sleep(50);
-                    }
-                    if (!shouldContinueDownloading) break;
+                    if (currentPlayingFuture.isDone() || currentDownloadFuture != downloadFuture) break;
 
-                    audioBuffer.put(audioData);
+                    localAudioBuffer.put(audioData);
+                    playedBytes += audioData.length;
                     totalBufferedBytes.addAndGet(audioData.length);
                 }
 
                 // 下载完成
                 LOGGER.debug("Audio download completed");
-                downloadCompleted = true;
+                currentDownloadFuture.complete(null);
                 break;
             } catch (InterruptedException e) {
                 LOGGER.debug("Download stopped by interruption");
@@ -454,6 +430,7 @@ public class StreamAudioPlayer {
                 if (e instanceof SocketException e1 && e1.getMessage().equals("Closed by interrupt")) break;
                 LOGGER.error("Download error (attempt {})\n{} : {}", localRetryCount + 1, e.getClass().getSimpleName(), e.getMessage());
 
+                playedBytes = 0;
                 forceSyncInternal = true;
                 localRetryCount++;
                 setStatus(Status.RETRYING);
@@ -474,9 +451,37 @@ public class StreamAudioPlayer {
         LOGGER.debug("Download task finished");
     }
 
+    private void syncPlaying(CompletableFuture<?> currentDownloadFuture) {
+        if (serverStartTime == null || currentDecoder == null) return;
+        int bytesPerSample = getBytesPerSample(currentDecoder.getFormat());
+        int bytesPerSecond = currentDecoder.getSampleRate() * bytesPerSample;
+
+        while (!currentDownloadFuture.isDone() && currentDownloadFuture == downloadFuture) {
+            long millis = Duration.between(serverStartTime, ZonedDateTime.now()).toMillis();
+            long skipBytes = millis * bytesPerSecond / 1000;
+            // Compensate for initial buffer latency: when no audio has been
+            // buffered for playback yet, the play thread still needs to fill
+            // BUFFER_SIZE * BUFFER_COUNT bytes before alSourcePlay, causing a
+            // delay between sync and actual audio output. Subtract half the
+            // buffer to avoid audio lagging behind the wall clock.
+            if (playedBytes == 0) {
+                long bufferLatencyBytes = (long) BUFFER_SIZE * BUFFER_COUNT / 2;
+                skipBytes = Math.max(0, skipBytes - bufferLatencyBytes);
+            }
+            if (playedBytes > skipBytes - bytesPerSample) {
+                break;
+            }
+            byte[] chunk = currentDecoder.readChunk(Math.max(0, skipBytes - playedBytes));
+            if (chunk == null) break;
+            playedBytes += chunk.length;
+        }
+    }
+
     private void updateVolumeIfNecessary() {
-        float musicVolume = Minecraft.getInstance().options.getSoundSourceVolume(SoundSource.MUSIC);
+        float musicVolume = clientConfig.getMuted() ? 0 : (float) clientConfig.getSoundVolume() / 100 *
+                                                          (clientConfig.getMixWithVanillaSoundVolume() ? Minecraft.getInstance().options.getSoundSourceVolume(SoundSource.MUSIC) : 1);
         if (lastVolume != musicVolume && source != 0 && AL10.alIsSource(source)) {
+            PlayingStatusRenderer.getInstance().updateStatus(null);
             AL10.alSourcef(source, AL10.AL_GAIN, musicVolume);
             int error = AL10.alGetError();
             if (error != AL10.AL_NO_ERROR) {
@@ -503,16 +508,6 @@ public class StreamAudioPlayer {
             case AL10.AL_FORMAT_STEREO16 -> 4;
             default -> 4;
         };
-    }
-
-    private float calculateBufferedSeconds(int format) {
-        if (bytesPerSecond == 0) return 0;
-        int bytesPerSample = getBytesPerSample(format);
-        long samplesPerSecond = bytesPerSecond / bytesPerSample;
-        if (samplesPerSecond == 0) return 0;
-
-        long bufferedSamples = totalBufferedBytes.get() / bytesPerSample;
-        return (float) bufferedSamples / samplesPerSecond;
     }
 
     private void checkALError(String operation) {
@@ -542,10 +537,16 @@ public class StreamAudioPlayer {
     }
 
     private void stopInternal() {
-        shouldContinuePlaying = false;
-        shouldContinueDownloading = false;
+        if (downloadThreadFuture != null) {
+            downloadThreadFuture.cancel(true);
+            downloadThreadFuture = null;
+        }
 
-        // 取消任务
+        if (playThreadFuture != null) {
+            playThreadFuture.cancel(true);
+            playThreadFuture = null;
+        }
+
         if (playingFuture != null) {
             playingFuture.cancel(true);
             playingFuture = null;
@@ -556,17 +557,8 @@ public class StreamAudioPlayer {
             downloadFuture = null;
         }
 
-        if (currentDecoder != null) {
-            try {
-                currentDecoder.close();
-            } catch (Exception e) {
-                // Ignore
-            }
-            currentDecoder = null;
-        }
-
         lastVolume = 1;
-        downloadCompleted = false;
+        serverStartTime = null;
         cleanup();
     }
 
@@ -598,6 +590,7 @@ public class StreamAudioPlayer {
                     }
 
                     // 3. 解绑所有已处理的缓冲区
+                    //noinspection SpellCheckingInspection
                     int unqueueCount = 0;
                     for (int i = 0; i < processed; i++) {
                         int[] buffer = new int[1];
@@ -640,8 +633,17 @@ public class StreamAudioPlayer {
 
                 initialized.set(false);
                 lastVolume = 1;
-                audioBuffer.clear();
+                audioBuffer = new LinkedBlockingQueue<>(30);
                 totalBufferedBytes.set(0);
+                playedBytes = 0;
+                serverStartTime = null;
+                if (currentDecoder != null) {
+                    try {
+                        currentDecoder.close();
+                    } catch (Exception ignored) {
+                    }
+                    currentDecoder = null;
+                }
                 LOGGER.debug("Cleanup completed");
             } catch (Exception e) {
                 LOGGER.error("Unexpected error during cleanup", e);
@@ -651,24 +653,17 @@ public class StreamAudioPlayer {
         }
     }
 
-    // 获取当前缓冲状态（秒）
-    @SuppressWarnings("unused")
-    public float getBufferedSeconds() {
-        if (currentDecoder == null) return 0;
-        return calculateBufferedSeconds(currentDecoder.getFormat());
-    }
-
     public CompletableFuture<MusicResourceInfo> getCurrentMusicResourceInfo(Quality quality, MusicResourceInfo previous) {
         CompletableFuture<MusicResourceInfo> future = new CompletableFuture<>();
         GetMusicResourceResponse.setReceiver(currentMusicDetail.getId(), value -> {
-            if (value == null || value == MusicResourceInfo.NONE) {
+            if (value == MusicResourceInfo.NONE) {
                 MusicService.getInstance().switchMusic(MusicDetail.NONE, MusicDetail.NONE, null, I18n.get(MusicHud.MOD_ID + ".text.failedToLoadMusicResource"));
                 setStatus(Status.ERROR);
             } else {
                 future.complete(value);
             }
         });
-        String url = previous.getUrl() == null ? "" : previous.getUrl();
+        String url = previous == null || previous.getUrl() == null ? "" : previous.getUrl();
         IClientNetworkService.getInstance().sendToServer(new GetMusicResourceRequest(currentMusicDetail.getId(), quality, url));
         return future;
     }
