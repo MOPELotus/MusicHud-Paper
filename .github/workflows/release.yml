@@ -78,7 +78,18 @@ jobs:
         run: |
           set -euo pipefail
           mkdir -p out/assets out/notes
-          PAPER_JAR="$(find paper/build/libs -maxdepth 1 -type f -name 'music_hud-paper-*-reobf.jar' | sort | tail -n 1)"
+          if [[ "${{ matrix.branch }}" == 26.* ]]; then
+            PAPER_JAR="$(find paper/build/libs -maxdepth 1 -type f \
+              -name 'music_hud-paper-*.jar' \
+              ! -name '*-sources.jar' \
+              ! -name '*-dev-shadow.jar' \
+              ! -name '*-reobf.jar' \
+              | sort | tail -n 1)"
+          else
+            PAPER_JAR="$(find paper/build/libs -maxdepth 1 -type f \
+              -name 'music_hud-paper-*-reobf.jar' \
+              | sort | tail -n 1)"
+          fi
           FABRIC_JAR="$(find fabric/build/libs -maxdepth 1 -type f -name 'music_hud-fabric-*.jar' ! -name '*-sources.jar' ! -name '*-dev-shadow.jar' | sort | tail -n 1)"
           NEOFORGE_JAR="$(find neoforge/build/libs -maxdepth 1 -type f -name 'music_hud-neoforge-*.jar' ! -name '*-sources.jar' ! -name '*-dev-shadow.jar' | sort | tail -n 1)"
           test -n "$PAPER_JAR"
