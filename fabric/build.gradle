@@ -8,6 +8,10 @@ base {
     archivesName = "$rootProject.archives_name-$project.name"
 }
 
+def localModernUiDir = rootProject.hasProperty('local_modernui_dir')
+        ? rootProject.file(rootProject.property('local_modernui_dir'))
+        : rootProject.file('../modernui-mc')
+
 repositories {
     maven {
         name = 'NeoForged'
@@ -38,6 +42,10 @@ repositories {
     }
     flatDir {
         dir rootProject.file('libs')
+    }
+    maven {
+        name = 'dv8tion'
+        url = 'https://m2.dv8tion.net/releases'
     }
 }
 
@@ -72,11 +80,9 @@ dependencies {
     common(project(':common')) { transitive = false }
     shadowBundle(project(':common')) { transitive = false }
 
-    api "fuzs.forgeconfigapiport:forgeconfigapiport-fabric:$rootProject.forge_config_api_port_version"
-
     implementation "maven.modrinth:modmenu:$rootProject.modmenu_version"
 
-    implementation("icyllis.modernui:ModernUI-Fabric:26.2-${rootProject.modernui_version}.+")
+    compileOnly files(new File(localModernUiDir, "fabric/build/libs/ModernUI-Fabric-${rootProject.minecraft_version}-${rootProject.local_modernui_version}.jar"))
     implementation("dev.icyllis:modernui-core:$rootProject.modernui_version") {
         exclude group: "org.slf4j", module: "slf4j-api"
         exclude group: "org.apache.logging.log4j", module: "log4j-core"
@@ -96,12 +102,8 @@ dependencies {
         exclude group: "it.unimi.dsi", module: "fastutil"
         exclude group: "org.commonmark"
     }
-
-    implementation "com.github.umjammer:jlayer:$rootProject.jlayer_version"
-    shadowBundle "com.github.umjammer:jlayer:$rootProject.jlayer_version"
-
-    implementation "org.jflac:jflac-codec:$rootProject.jflac_version"
-    shadowBundle "org.jflac:jflac-codec:$rootProject.jflac_version"
+    implementation "com.sedmelluq:lavaplayer:$rootProject.lavaplayer_version"
+    shadowBundle "com.sedmelluq:lavaplayer:$rootProject.lavaplayer_version"
 
 //    implementation "io.github.selemba1000:JavaMediaTransportControls:$rootProject.jmtc_version"
 //    shadowBundle "io.github.selemba1000:JavaMediaTransportControls:$rootProject.jmtc_version"
@@ -174,7 +176,6 @@ loom {
         }
     }
 }
-
 publishing {
     publications {
         mavenJava(MavenPublication) {

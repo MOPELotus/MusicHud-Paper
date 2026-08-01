@@ -9,6 +9,10 @@ base {
     archivesName = "$rootProject.archives_name-$project.name"
 }
 
+def localModernUiDir = rootProject.hasProperty('local_modernui_dir')
+        ? rootProject.file(rootProject.property('local_modernui_dir'))
+        : rootProject.file('../modernui-mc')
+
 sourceSets {
     main {
         java {
@@ -59,6 +63,10 @@ repositories {
     flatDir {
         dir rootProject.file('libs')
     }
+    maven {
+        name = 'dv8tion'
+        url = 'https://m2.dv8tion.net/releases'
+    }
 }
 
 configurations {
@@ -99,8 +107,6 @@ neoForge {
 }
 
 dependencies {
-    implementation "fuzs.forgeconfigapiport:forgeconfigapiport-common-neoforgeapi:$rootProject.forge_config_api_port_version"
-
     common(project(':common')) { transitive = false }
     coreLib(project(path: ':core')) { transitive = false }
     shadowBundle(project(':common')) { transitive = false }
@@ -108,7 +114,7 @@ dependencies {
 
     compileOnly "net.fabricmc:fabric-loader:$rootProject.fabric_loader_version"
 
-    implementation("icyllis.modernui:ModernUI-NeoForge:26.2-${rootProject.modernui_version}.+")
+    compileOnly files(new File(localModernUiDir, "neoforge/build/libs/ModernUI-NeoForge-${rootProject.minecraft_version}-${rootProject.local_modernui_version}.jar"))
     implementation("dev.icyllis:modernui-core:$rootProject.modernui_version") {
         exclude group: "org.slf4j", module: "slf4j-api"
         exclude group: "org.apache.logging.log4j", module: "log4j-core"
@@ -129,11 +135,9 @@ dependencies {
         exclude group: "org.commonmark"
     }
 
-    implementation "com.github.umjammer:jlayer:$rootProject.jlayer_version"
-    shadowBundle "com.github.umjammer:jlayer:$rootProject.jlayer_version"
-
-    implementation "org.jflac:jflac-codec:$rootProject.jflac_version"
-    shadowBundle "org.jflac:jflac-codec:$rootProject.jflac_version"
+    implementation "com.sedmelluq:lavaplayer:$rootProject.lavaplayer_version"
+    shadowBundle "com.sedmelluq:lavaplayer:$rootProject.lavaplayer_version"
+    forgeRuntimeLibrary "com.sedmelluq:lavaplayer:$rootProject.lavaplayer_version"
 
     compileOnly "org.projectlombok:lombok:$rootProject.lombok_version"
     annotationProcessor "org.projectlombok:lombok:$rootProject.lombok_version"
