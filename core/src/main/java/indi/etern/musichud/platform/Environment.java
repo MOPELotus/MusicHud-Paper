@@ -31,11 +31,11 @@ public class Environment {
     @AllArgsConstructor
     public enum Platform {
         FABRIC(
-                () -> load("indi.etern.musichud.platform.mod.forgeConfig.config.ServerConfigDefinition", ServerConfig.class),
+                () -> load("indi.etern.musichud.platform.mod.config.ServerConfigDefinition", ServerConfig.class),
                 () -> load("indi.etern.musichud.platform.mod.fabric.network.FabricNetworkRegister", INetworkRegister.class),
                 () -> load("indi.etern.musichud.platform.mod.fabric.network.FabricServerNetworkService", IServerNetworkService.class),
                 () -> load("indi.etern.musichud.platform.mod.fabric.event.FabricCommonEventService", ICommonEventService.class),
-                () -> load("indi.etern.musichud.platform.mod.forgeConfig.config.ClientConfigDefinition", ClientConfig.class),
+                () -> load("indi.etern.musichud.platform.mod.config.ClientConfigDefinition", ClientConfig.class),
                 () -> load("indi.etern.musichud.platform.mod.fabric.network.FabricClientNetworkService", IClientNetworkService.class),
                 () -> load("indi.etern.musichud.platform.mod.fabric.event.FabricClientEventService", IClientEventServiceDefinition.class),
                 () -> load("indi.etern.musichud.platform.mod.fabric.registry.FabricKeyRegistryService", IKeyRegistryServiceDefinition.class),
@@ -43,11 +43,11 @@ public class Environment {
                 () -> load("indi.etern.musichud.client.services.LoginService", IClientLoginService.class),
                 () -> load("indi.etern.musichud.client.services.MusicService", IClientMusicService.class)),
         NEOFORGE(
-                () -> load("indi.etern.musichud.platform.mod.forgeConfig.config.ServerConfigDefinition", ServerConfig.class),
+                () -> load("indi.etern.musichud.platform.mod.config.ServerConfigDefinition", ServerConfig.class),
                 () -> load("indi.etern.musichud.platform.mod.neoforge.network.NeoForgeNetworkManager", INetworkRegister.class),
                 () -> load("indi.etern.musichud.platform.mod.neoforge.network.NeoForgeNetworkManager", IServerNetworkService.class),
                 () -> load("indi.etern.musichud.platform.mod.neoforge.event.NeoForgeCommonEventService", ICommonEventService.class),
-                () -> load("indi.etern.musichud.platform.mod.forgeConfig.config.ClientConfigDefinition", ClientConfig.class),
+                () -> load("indi.etern.musichud.platform.mod.config.ClientConfigDefinition", ClientConfig.class),
                 () -> load("indi.etern.musichud.platform.mod.neoforge.network.NeoForgeClientNetworkService", IClientNetworkService.class),
                 () -> load("indi.etern.musichud.platform.mod.neoforge.event.NeoForgeClientEventService", IClientEventServiceDefinition.class),
                 () -> load("indi.etern.musichud.platform.mod.neoforge.registry.NeoForgeKeyRegistryService", IKeyRegistryServiceDefinition.class),
