@@ -20,6 +20,7 @@ import java.util.function.Consumer;
 public class ApiServerManager implements ServerRegister {
     private static final ServerConfig serverConfig = ServerConfig.getInstance();
     private static final Path LOG_DIR = Paths.get("music-hud", "logs");
+    private static final Path TUNEWEAVE_DIR = Paths.get("music-hud", "tuneweave");
     private static ClientConfig clientConfig;
     @Getter
     private static ApiServerManager instance;
@@ -40,6 +41,7 @@ public class ApiServerManager implements ServerRegister {
     @Getter
     private BinaryApiServerStatus binaryApiServerStatus = BinaryApiServerStatus.STOPPED;
     private boolean initialized = false;
+    private volatile Process managedProcess;
 
     public void clearLogs() {
         try (var stream = Files.list(getLogDir())) {
@@ -69,15 +71,22 @@ public class ApiServerManager implements ServerRegister {
             return;
         }
         initialized = true;
-        if (MusicHud.getCurrentEnvironment().getSide() == Environment.Side.CLIENT && clientConfig != null && !clientConfig.getEnabledInIntegratedServer()) {
+        if (MusicHud.getCurrentEnvironment().getSide() == Environment.Side.CLIENT && clientConfig != null
+                && !clientConfig.getEnabledInIntegratedServer() && !clientConfig.getManageTuneWeaveLocally()) {
             return;
         }
         launchApiServerInternal();
     }
 
     public void stopApiServer() {
-        // TuneWeave is an externally owned service.  Never terminate it from
-        // a game client or a Paper server.
+        Process process = managedProcess;
+        if (process != null && process.isAlive()) {
+            process.destroy();
+            if (process.isAlive()) {
+                process.destroyForcibly();
+            }
+        }
+        managedProcess = null;
         setApiStatus(BinaryApiServerStatus.STOPPED);
     }
 
@@ -88,14 +97,72 @@ public class ApiServerManager implements ServerRegister {
     private void launchApiServerInternal() {
         MusicHud.EXECUTOR.execute(() -> {
             Thread.currentThread().setName("MHWorker-API-Launcher");
-            if (TuneWeaveApiClient.isAvailable()) {
-                apiLogger.info("TuneWeave is available at {}", TuneWeaveApiClient.baseUrl());
+            if (isTuneWeaveAvailable()) {
+                apiLogger.info("TuneWeave is available at {}", tuneWeaveBaseUrl());
                 setApiStatus(BinaryApiServerStatus.RUNNING);
+            } else if (shouldManageTuneWeave()) {
+                launchManagedTuneWeave();
             } else {
-                apiLogger.error("TuneWeave is unavailable at {}. Start TuneWeave separately; Music HUD no longer launches the retired NCM binary.", TuneWeaveApiClient.baseUrl());
+                apiLogger.error("TuneWeave is unavailable at {}. Enable local/internal management to download and start it automatically.", tuneWeaveBaseUrl());
                 setApiStatus(BinaryApiServerStatus.STOPPED);
             }
         });
+    }
+
+    private boolean shouldManageTuneWeave() {
+        if (MusicHud.getCurrentEnvironment().getSide() == Environment.Side.CLIENT && clientConfig != null
+                && clientConfig.getManageTuneWeaveLocally()) {
+            return true;
+        }
+        return serverConfig.getManageTuneWeaveInternally();
+    }
+
+    private void launchManagedTuneWeave() {
+        setApiStatus(BinaryApiServerStatus.LAUNCHING);
+        try {
+            TuneWeaveReleaseDownloader.InstalledRelease release = TuneWeaveReleaseDownloader.installOrUpdate(TUNEWEAVE_DIR);
+            Path logFile = getLogDir().resolve("tuneweave.log");
+            Files.createDirectories(logFile.getParent());
+            managedProcess = new ProcessBuilder(release.executable().toAbsolutePath().toString())
+                    .directory(release.executable().getParent().toFile())
+                    .redirectErrorStream(true)
+                    .redirectOutput(ProcessBuilder.Redirect.appendTo(logFile.toFile()))
+                    .start();
+            apiLogger.info("Started managed TuneWeave {} from {}", release.version(), release.executable());
+            for (int attempt = 0; attempt < 20; attempt++) {
+                if (isTuneWeaveAvailable()) {
+                    setApiStatus(BinaryApiServerStatus.RUNNING);
+                    return;
+                }
+                Thread.sleep(500L);
+            }
+            apiLogger.error("Managed TuneWeave started but did not become healthy at {}. See {}", tuneWeaveBaseUrl(), logFile);
+            setApiStatus(BinaryApiServerStatus.STOPPED);
+        } catch (Exception e) {
+            apiLogger.error("Unable to download, verify or start managed TuneWeave", e);
+            setApiStatus(BinaryApiServerStatus.STOPPED);
+        }
+    }
+
+    private boolean isTuneWeaveAvailable() {
+        if (MusicHud.getCurrentEnvironment().getSide() == Environment.Side.CLIENT && clientConfig != null
+                && clientConfig.getManageTuneWeaveLocally()) {
+            try {
+                Class<?> api = Class.forName("indi.etern.musichud.client.services.TuneWeaveClientApi");
+                return (boolean) api.getMethod("isAvailable").invoke(null);
+            } catch (ReflectiveOperationException e) {
+                return false;
+            }
+        }
+        return TuneWeaveApiClient.isAvailable();
+    }
+
+    private String tuneWeaveBaseUrl() {
+        if (MusicHud.getCurrentEnvironment().getSide() == Environment.Side.CLIENT && clientConfig != null
+                && clientConfig.getManageTuneWeaveLocally()) {
+            return clientConfig.getTuneWeaveClientApiBaseUrl();
+        }
+        return TuneWeaveApiClient.baseUrl();
     }
 
     public Path getLogDir() {
