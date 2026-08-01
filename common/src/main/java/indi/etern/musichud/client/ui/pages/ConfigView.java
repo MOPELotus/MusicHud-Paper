@@ -5,8 +5,6 @@ import icyllis.modernui.core.Context;
 import icyllis.modernui.mc.ConfigItem;
 import icyllis.modernui.mc.MuiModApi;
 import icyllis.modernui.mc.ui.PreferencesFragment;
-import icyllis.modernui.text.SpannableString;
-import icyllis.modernui.text.style.URLSpan;
 import icyllis.modernui.view.Gravity;
 import icyllis.modernui.view.View;
 import icyllis.modernui.view.ViewGroup;
@@ -16,8 +14,6 @@ import indi.etern.musichud.beans.api.AutoConnectServerFilterType;
 import indi.etern.musichud.beans.music.Quality;
 import indi.etern.musichud.client.services.LoginService;
 import indi.etern.musichud.client.ui.Theme;
-import indi.etern.musichud.client.ui.ToastUtil;
-import indi.etern.musichud.client.ui.components.Modal;
 import indi.etern.musichud.client.ui.components.DynamicIntegerOption;
 import indi.etern.musichud.client.ui.components.LyricLineView;
 import indi.etern.musichud.client.ui.components.StaggeredLyricScrollView;
@@ -26,30 +22,17 @@ import indi.etern.musichud.client.ui.hud.metadata.HorizontalAlign;
 import indi.etern.musichud.client.ui.hud.metadata.VerticalAlign;
 import indi.etern.musichud.client.ui.screen.MainFragment;
 import indi.etern.musichud.client.ui.screen.MusicHudScreen;
-import indi.etern.musichud.client.ui.utils.ButtonInsetBackgroundFactory;
 import indi.etern.musichud.interfaces.ClientConfig;
 import indi.etern.musichud.interfaces.IClientLoginService;
 import indi.etern.musichud.interfaces.ServerConfig;
-import indi.etern.musichud.server.api.*;
-import indi.etern.musichud.utils.http.ApiClient;
+import indi.etern.musichud.server.api.ApiServerManager;
+import indi.etern.musichud.server.api.MusicPlayerServerService;
 import lombok.Getter;
-import net.minecraft.Util;
 import net.minecraft.client.resources.language.I18n;
 import org.apache.commons.lang3.Range;
-import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
-import org.lwjgl.glfw.GLFW;
-import org.lwjgl.util.tinyfd.TinyFileDialogs;
 
-import java.io.IOException;
-import java.nio.file.Files;
-import java.nio.file.Path;
-import java.nio.file.Paths;
 import java.util.*;
-import java.util.concurrent.CancellationException;
-import java.util.concurrent.CompletableFuture;
-import java.util.concurrent.atomic.AtomicBoolean;
-import java.util.function.Consumer;
 
 import static icyllis.modernui.view.ViewGroup.LayoutParams.MATCH_PARENT;
 import static icyllis.modernui.view.ViewGroup.LayoutParams.WRAP_CONTENT;
@@ -392,15 +375,12 @@ public class ConfigView extends LinearLayout {
             enableInIntegratedServerOption.create(integratedServerCategory);
             ApiServerManager apiServerManager = ApiServerManager.getInstance();
             enableInIntegratedServerOption.setOnChanged(() -> {
-                ILoginApiService loginApiService = ILoginApiService.getInstance(ApiProvider.NCM);
                 if (clientConfig.getEnabledInIntegratedServer()) {
                     if (apiServerManager != null) {
                         apiServerManager.restartApiServer();
                     }
-                    loginApiService.reconnectAll();
                 } else {
                     MusicPlayerServerService.getInstance().reset();
-                    loginApiService.disconnectToAll();
                     if (apiServerManager != null) {
                         apiServerManager.stopApiServer();
                     }
@@ -421,6 +401,33 @@ public class ConfigView extends LinearLayout {
             params1.setMargins(0, dp(6), 0, dp(128));
             view.addView(apiCategory, params1);
 
+            TextView tuneWeaveHint = new TextView(context);
+            tuneWeaveHint.setText("Music HUD 使用独立运行的 TuneWeave 服务；不再下载或启动旧的 NCM API 二进制。\n服务地址需要能被游戏服务器访问。\n默认：http://127.0.0.1:7832");
+            tuneWeaveHint.setTextColor(Theme.SECONDARY_TEXT_COLOR);
+            tuneWeaveHint.setTextSize(Theme.TEXT_SIZE_NORMAL);
+            apiCategory.addView(tuneWeaveHint);
+
+            {
+                LinearLayout inputBox = PreferencesFragment.createInputBox(context, "TuneWeave 服务地址");
+                EditText input = inputBox.findViewById(R.id.input);
+                if (input != null) {
+                    input.setMinimumWidth(dp(256));
+                    input.setTextAlignment(TEXT_ALIGNMENT_TEXT_START);
+                    input.setText(serverConfig.getServerApiBaseUrl());
+                    input.setOnFocusChangeListener((v, focused) -> {
+                        if (!focused) {
+                            serverConfig.setServerApiBaseUrl(input.getText().toString());
+                            serverConfig.save();
+                        }
+                    });
+                }
+                apiCategory.addView(inputBox);
+            }
+
+            /* Retired NCM binary-server controls.  TuneWeave is configured
+             * solely by the address field above and is never downloaded or
+             * managed by the Minecraft client. */
+            /*
             PreferencesFragment.BooleanOption startupBinaryApiServerOption = new PreferencesFragment.BooleanOption(
                     context,
                     I18n.get(MusicHud.MOD_ID + ".config.apiServer.startupBinaryApiServerWhenLaunch"),
@@ -732,12 +739,14 @@ public class ConfigView extends LinearLayout {
                     });
                 }
             });
+            */
         } catch (Exception e) {
             instance = null;
             throw e;
         }
     }
 
+    /*
     private static void updateApiLogLabel(TextView label) {
         long[] stats = ApiServerManager.getInstance().getLogStats();
         String template = I18n.get(MusicHud.MOD_ID + ".text.apiLogInfo");
@@ -1161,4 +1170,5 @@ public class ConfigView extends LinearLayout {
             warning.setVisibility(GONE);
         }
     }
+    */
 }
