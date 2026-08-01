@@ -1,6 +1,2 @@
-serverApiBaseUrl: "http://localhost:3000"
-startupBinaryApiServerWhenLaunch: true
-# Relative paths are resolved from plugins/MusicHud/
-serverApiBinaryExecutablePath: "api"
+serverApiBaseUrl: "http://127.0.0.1:7832"
 pusherVoteAdditionalRate: 0.5
-useRandomCnIp: true

@@ -66,10 +66,21 @@ public class MusicResourceInfo {
             Map<String, String> requestHeaders
     ) {
         MusicResourceInfo result = new MusicResourceInfo(
-                musicDetail.getId(), url, "{}", bitrate, size, FormatType.fromSerializedName(format),
+                musicDetail.getId(), url, "{}", bitrate, size, parseFormat(format),
                 "", Fee.FREE, musicDetail.getDurationMillis());
         result.setRequestHeaders(requestHeaders);
         return result;
+    }
+
+    private static FormatType parseFormat(String format) {
+        if (format == null || format.isBlank()) {
+            return FormatType.AUTO;
+        }
+        try {
+            return FormatType.valueOf(format.trim().toUpperCase(java.util.Locale.ROOT));
+        } catch (IllegalArgumentException ignored) {
+            return FormatType.AUTO;
+        }
     }
 
     public String getUrl() {
