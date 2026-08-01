@@ -1,9 +1,11 @@
 package indi.etern.musichud.client.ui.pages.search;
 
 import icyllis.modernui.core.Context;
+import icyllis.modernui.widget.LinearLayout;
 import indi.etern.musichud.beans.music.Playlist;
 import indi.etern.musichud.client.ui.components.AutoFlowGridLayout;
 import indi.etern.musichud.client.ui.components.MusicCollectionCard;
+import indi.etern.musichud.client.ui.components.MusicHudIconButton;
 import indi.etern.musichud.client.services.UniPlaylistClient;
 import indi.etern.musichud.client.ui.ToastUtil;
 import icyllis.modernui.widget.Toast;
@@ -48,12 +50,12 @@ public class SearchPlaylistResultView extends AutoFlowGridLayout {
 
     private void addItem(Context context, Playlist playlist) {
         MusicCollectionCard child = new MusicCollectionCard(context, playlist);
-        child.setOnLongClickListener(view -> {
-            UniPlaylistClient.importPlaylist(playlist,
+        MusicHudIconButton importButton = new MusicHudIconButton(context, "actions/import", "导入为聚合歌单");
+        importButton.setOnClickListener(view ->
+            UniPlaylistClient.showImportConfirmation(context, playlist,
                     () -> ToastUtil.show(Toast.makeText(context, "已导入到聚合歌单：" + playlist.getName(), Toast.LENGTH_SHORT)),
-                    error -> ToastUtil.show(Toast.makeText(context, error, Toast.LENGTH_SHORT)));
-            return true;
-        });
+                    error -> ToastUtil.show(Toast.makeText(context, error, Toast.LENGTH_SHORT))));
+        child.addView(importButton, new LinearLayout.LayoutParams(child.dp(32), child.dp(32)));
         addView(child);
     }
 }

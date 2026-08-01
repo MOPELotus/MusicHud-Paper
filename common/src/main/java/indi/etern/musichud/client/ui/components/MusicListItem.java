@@ -43,6 +43,7 @@ public class MusicListItem extends LinearLayout {
     @Getter
     private MusicDetail musicDetail;
     private PlayerHeadView pusherHeadView;
+    private LinearLayout actions;
 
     public MusicListItem(Context context) {
         super(context);
@@ -66,6 +67,12 @@ public class MusicListItem extends LinearLayout {
         LayoutParams textsParams = new LayoutParams(0, LayoutParams.WRAP_CONTENT, 1);
         textsParams.setMargins(dp(12), 0, 0, 0);
         addView(musicTexts, textsParams);
+
+        actions = new LinearLayout(context);
+        actions.setOrientation(HORIZONTAL);
+        actions.setGravity(Gravity.CENTER_VERTICAL);
+        actions.setVisibility(GONE);
+        addView(actions, new LayoutParams(WRAP_CONTENT, MATCH_PARENT));
 
         musicName = new TextView(context);
         musicName.setSingleLine(true);
@@ -216,6 +223,16 @@ public class MusicListItem extends LinearLayout {
             pusherHeadView.setVisibility(View.GONE);
             pusherHeadView.setPlayerSkinSupplier(null);
         }
+    }
+
+    public MusicHudIconButton addAction(String icon, String description, View.OnClickListener listener) {
+        MusicHudIconButton action = new MusicHudIconButton(getContext(), icon, description);
+        action.setOnClickListener(listener);
+        LayoutParams params = new LayoutParams(dp(32), dp(32));
+        params.setMargins(dp(2), 0, 0, 0);
+        actions.addView(action, params);
+        actions.setVisibility(VISIBLE);
+        return action;
     }
 
     private static String sourcePlatformLabel(String platform) {
