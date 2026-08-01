@@ -137,7 +137,6 @@ dependencies {
 
     implementation "com.sedmelluq:lavaplayer:$rootProject.lavaplayer_version"
     shadowBundle "com.sedmelluq:lavaplayer:$rootProject.lavaplayer_version"
-    forgeRuntimeLibrary "com.sedmelluq:lavaplayer:$rootProject.lavaplayer_version"
 
     compileOnly "org.projectlombok:lombok:$rootProject.lombok_version"
     annotationProcessor "org.projectlombok:lombok:$rootProject.lombok_version"
