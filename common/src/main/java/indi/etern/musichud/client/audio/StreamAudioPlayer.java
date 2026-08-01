@@ -719,4 +719,3 @@ public class StreamAudioPlayer {
         IDLE, BUFFERING, PLAYING, RETRYING, ERROR
     }
 }
-
