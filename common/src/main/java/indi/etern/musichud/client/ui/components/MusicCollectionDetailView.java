@@ -237,7 +237,6 @@ public class MusicCollectionDetailView extends LinearLayout {
         }
         JsonObject request = new JsonObject();
         request.addProperty("ref", music.getSourceRef());
-        request.addProperty("account", "default");
         indi.etern.musichud.client.services.TuneWeaveUiService.request("favorite-track-add", request,
                 ignored -> ToastUtil.show(Toast.makeText(context, "已收藏：" + music.getName(), Toast.LENGTH_SHORT)),
                 error -> ToastUtil.show(Toast.makeText(context, error, Toast.LENGTH_SHORT)));

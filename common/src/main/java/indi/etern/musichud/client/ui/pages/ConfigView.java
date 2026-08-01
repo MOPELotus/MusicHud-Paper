@@ -402,7 +402,7 @@ public class ConfigView extends LinearLayout {
             view.addView(apiCategory, params1);
 
             TextView tuneWeaveHint = new TextView(context);
-            tuneWeaveHint.setText("Music HUD 使用独立运行的 TuneWeave 服务；不再下载或启动旧的 NCM API 二进制。\n服务地址需要能被游戏服务器访问。\n默认：http://127.0.0.1:7832");
+            tuneWeaveHint.setText("服务器播放队列使用服务器 TuneWeave 地址；账户、收藏和聚合歌单使用下方“本地账户服务地址”。\n本地登录凭证仅保存在当前客户端，不会发送给游戏服务器。\n默认：http://127.0.0.1:7832");
             tuneWeaveHint.setTextColor(Theme.SECONDARY_TEXT_COLOR);
             tuneWeaveHint.setTextSize(Theme.TEXT_SIZE_NORMAL);
             apiCategory.addView(tuneWeaveHint);
@@ -423,6 +423,37 @@ public class ConfigView extends LinearLayout {
                 }
                 apiCategory.addView(inputBox);
             }
+
+            {
+                LinearLayout inputBox = PreferencesFragment.createInputBox(context, "本地账户服务地址");
+                EditText input = inputBox.findViewById(R.id.input);
+                if (input != null) {
+                    input.setMinimumWidth(dp(256));
+                    input.setTextAlignment(TEXT_ALIGNMENT_TEXT_START);
+                    input.setText(clientConfig.getTuneWeaveClientApiBaseUrl());
+                    input.setOnFocusChangeListener((v, focused) -> {
+                        if (!focused) {
+                            clientConfig.setTuneWeaveClientApiBaseUrl(input.getText().toString());
+                            clientConfig.save();
+                        }
+                    });
+                }
+                apiCategory.addView(inputBox);
+            }
+
+            PreferencesFragment.BooleanOption manageLocalTuneWeave = new PreferencesFragment.BooleanOption(
+                    context, "自动下载并管理本地 TuneWeave",
+                    clientConfig::getManageTuneWeaveLocally, clientConfig::setManageTuneWeaveLocally)
+                    .setDefaultValue(false);
+            manageLocalTuneWeave.create(apiCategory);
+            manageLocalTuneWeave.setOnChanged(clientConfig::save);
+
+            PreferencesFragment.BooleanOption manageServerTuneWeave = new PreferencesFragment.BooleanOption(
+                    context, "服务器内部管理 TuneWeave（下载、校验、启动和启动时更新）",
+                    serverConfig::getManageTuneWeaveInternally, serverConfig::setManageTuneWeaveInternally)
+                    .setDefaultValue(false);
+            manageServerTuneWeave.create(apiCategory);
+            manageServerTuneWeave.setOnChanged(serverConfig::save);
 
             /* Retired NCM binary-server controls.  TuneWeave is configured
              * solely by the address field above and is never downloaded or
