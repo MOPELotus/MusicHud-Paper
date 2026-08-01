@@ -1,2 +1,3 @@
 serverApiBaseUrl: "http://127.0.0.1:7832"
+manageTuneWeaveInternally: false
 pusherVoteAdditionalRate: 0.5

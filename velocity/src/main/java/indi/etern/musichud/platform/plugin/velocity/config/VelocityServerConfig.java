@@ -15,6 +15,7 @@ import java.util.Objects;
 public final class VelocityServerConfig implements ServerConfig {
     private static final VelocityServerConfig INSTANCE = new VelocityServerConfig();
     private static final String KEY_API_BASE_URL = "serverApiBaseUrl";
+    private static final String KEY_MANAGE_TUNEWEAVE_INTERNALLY = "manageTuneWeaveInternally";
     private static final String KEY_PUSHER_VOTE_ADDITIONAL_RATE = "pusherVoteAdditionalRate";
     private static final String DEFAULT_API_BASE_URL = "http://127.0.0.1:7832";
     private static final double DEFAULT_PUSHER_VOTE_ADDITIONAL_RATE = 0.5D;
@@ -22,6 +23,7 @@ public final class VelocityServerConfig implements ServerConfig {
     private Path dataDirectory;
     private Path configFile;
     private String serverApiBaseUrl = DEFAULT_API_BASE_URL;
+    private boolean manageTuneWeaveInternally;
     private double pusherVoteAdditionalRate = DEFAULT_PUSHER_VOTE_ADDITIONAL_RATE;
     private boolean configured;
 
@@ -39,6 +41,7 @@ public final class VelocityServerConfig implements ServerConfig {
             Files.createDirectories(dataDirectory);
             Map<String, String> values = readToml();
             setServerApiBaseUrl(values.getOrDefault(KEY_API_BASE_URL, DEFAULT_API_BASE_URL));
+            setManageTuneWeaveInternally(Boolean.parseBoolean(values.getOrDefault(KEY_MANAGE_TUNEWEAVE_INTERNALLY, "false")));
             try {
                 setPusherVoteAdditionalRate(Double.parseDouble(values.getOrDefault(
                         KEY_PUSHER_VOTE_ADDITIONAL_RATE, Double.toString(DEFAULT_PUSHER_VOTE_ADDITIONAL_RATE))));
@@ -87,6 +90,16 @@ public final class VelocityServerConfig implements ServerConfig {
     }
 
     @Override
+    public boolean getManageTuneWeaveInternally() {
+        return manageTuneWeaveInternally;
+    }
+
+    @Override
+    public void setManageTuneWeaveInternally(boolean manageTuneWeaveInternally) {
+        this.manageTuneWeaveInternally = manageTuneWeaveInternally;
+    }
+
+    @Override
     public double getPusherVoteAdditionalRate() {
         return pusherVoteAdditionalRate;
     }
@@ -103,6 +116,7 @@ public final class VelocityServerConfig implements ServerConfig {
             List<String> lines = List.of(
                     "# MusicHud Velocity configuration",
                     KEY_API_BASE_URL + " = \"" + serverApiBaseUrl.replace("\\", "\\\\").replace("\"", "\\\"") + "\"",
+                    KEY_MANAGE_TUNEWEAVE_INTERNALLY + " = " + manageTuneWeaveInternally,
                     KEY_PUSHER_VOTE_ADDITIONAL_RATE + " = " + pusherVoteAdditionalRate
             );
             Files.write(configFile, lines, StandardCharsets.UTF_8);
