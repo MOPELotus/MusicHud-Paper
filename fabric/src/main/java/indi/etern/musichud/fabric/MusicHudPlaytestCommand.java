@@ -18,7 +18,6 @@ final class MusicHudPlaytestCommand {
     static void register() {
         CommandRegistrationCallback.EVENT.register((dispatcher, registryAccess, environment) -> dispatcher.register(
                 Commands.literal("musichud")
-                        .requires(source -> source.hasPermission(2))
                         .then(Commands.literal("playtest")
                                 .then(Commands.literal("stop").executes(context -> stop(context.getSource())))
                                 .then(Commands.argument("identifier", StringArgumentType.greedyString())
