@@ -72,7 +72,7 @@ public class ApiServerManager implements ServerRegister {
         }
         initialized = true;
         if (MusicHud.getCurrentEnvironment().getSide() == Environment.Side.CLIENT && clientConfig != null
-                && !clientConfig.getEnabledInIntegratedServer() && !clientConfig.getManageTuneWeaveLocally()) {
+                && !clientConfig.getEnabledInIntegratedServer()) {
             return;
         }
         launchApiServerInternal();
@@ -85,6 +85,11 @@ public class ApiServerManager implements ServerRegister {
 
     public void restartApiServer() {
         launchApiServerInternal();
+    }
+
+    /** Explicit client-side action from the download dialog. */
+    public void downloadAndStartTuneWeave() {
+        MusicHud.EXECUTOR.execute(this::launchManagedTuneWeave);
     }
 
     private void launchApiServerInternal() {
@@ -103,10 +108,6 @@ public class ApiServerManager implements ServerRegister {
     }
 
     private boolean shouldManageTuneWeave() {
-        if (MusicHud.getCurrentEnvironment().getSide() == Environment.Side.CLIENT && clientConfig != null
-                && clientConfig.getManageTuneWeaveLocally()) {
-            return true;
-        }
         return serverConfig.getManageTuneWeaveInternally();
     }
 
@@ -157,23 +158,10 @@ public class ApiServerManager implements ServerRegister {
     }
 
     private boolean isTuneWeaveAvailable() {
-        if (MusicHud.getCurrentEnvironment().getSide() == Environment.Side.CLIENT && clientConfig != null
-                && clientConfig.getManageTuneWeaveLocally()) {
-            try {
-                Class<?> api = Class.forName("indi.etern.musichud.client.services.TuneWeaveClientApi");
-                return (boolean) api.getMethod("isAvailable").invoke(null);
-            } catch (ReflectiveOperationException e) {
-                return false;
-            }
-        }
         return TuneWeaveApiClient.isAvailable();
     }
 
     private String tuneWeaveBaseUrl() {
-        if (MusicHud.getCurrentEnvironment().getSide() == Environment.Side.CLIENT && clientConfig != null
-                && clientConfig.getManageTuneWeaveLocally()) {
-            return clientConfig.getTuneWeaveClientApiBaseUrl();
-        }
         return TuneWeaveApiClient.baseUrl();
     }
 
