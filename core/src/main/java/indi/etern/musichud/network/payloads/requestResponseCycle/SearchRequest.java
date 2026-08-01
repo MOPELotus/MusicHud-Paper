@@ -6,11 +6,10 @@ import indi.etern.musichud.interfaces.RegisterMark;
 import indi.etern.musichud.network.*;
 import indi.etern.musichud.network.payloads.C2SPayload;
 import indi.etern.musichud.network.payloads.S2CPayload;
-import indi.etern.musichud.server.api.ApiProvider;
-import indi.etern.musichud.server.api.IMusicApiService;
+import indi.etern.musichud.server.api.impl.tuneweave.TuneWeaveMusicApiService;
 import indi.etern.musichud.utils.ServerDataPacketVThreadExecutor;
 
-public record SearchRequest(String query, SearchType searchType, int offset) implements C2SPayload {
+public record SearchRequest(String query, SearchType searchType, int offset, String platform) implements C2SPayload {
     public static final ByteBufCodec<SearchRequest> CODEC = ByteBufCodec.composite(
             Codecs.STRING_UTF8,
             SearchRequest::query,
@@ -18,6 +17,8 @@ public record SearchRequest(String query, SearchType searchType, int offset) imp
             SearchRequest::searchType,
             Codecs.INT,
             SearchRequest::offset,
+            Codecs.STRING_UTF8,
+            SearchRequest::platform,
             SearchRequest::new
     );
 
@@ -28,13 +29,13 @@ public record SearchRequest(String query, SearchType searchType, int offset) imp
             INetworkRegister.getInstance().autoRegisterPayload(SearchRequest.class, CODEC,
                     ServerDataPacketVThreadExecutor.execute((message, player) -> {
                         S2CPayload s2CPayload;
-                        IMusicApiService musicApiService = IMusicApiService.getInstance(ApiProvider.NCM);
+                        TuneWeaveMusicApiService musicApiService = TuneWeaveMusicApiService.getInstance();
                         switch (message.searchType) {
-                            case ARTIST -> s2CPayload = new SearchArtistsResponse(message.offset, musicApiService.searchArtists(message.query, message.offset));
-                            case ALBUM -> s2CPayload = new SearchAlbumsResponse(message.offset, musicApiService.searchAlbums(message.query, message.offset));
-                            case MUSIC -> s2CPayload = new SearchMusicResponse(message.offset, musicApiService.searchMusic(message.query, message.offset));
-                            case PLAYLIST -> s2CPayload = new SearchPlaylistsResponse(message.offset, musicApiService.searchPlaylists(message.query, message.offset));
-                            default -> s2CPayload = new SearchMusicResponse(message.offset, musicApiService.searchMusic(message.query, message.offset));
+                            case ARTIST -> s2CPayload = new SearchArtistsResponse(message.offset, musicApiService.searchArtists(message.query, message.offset, message.platform));
+                            case ALBUM -> s2CPayload = new SearchAlbumsResponse(message.offset, musicApiService.searchAlbums(message.query, message.offset, message.platform));
+                            case MUSIC -> s2CPayload = new SearchMusicResponse(message.offset, musicApiService.searchMusic(message.query, message.offset, message.platform));
+                            case PLAYLIST -> s2CPayload = new SearchPlaylistsResponse(message.offset, musicApiService.searchPlaylists(message.query, message.offset, message.platform));
+                            default -> s2CPayload = new SearchMusicResponse(message.offset, musicApiService.searchMusic(message.query, message.offset, message.platform));
                         }
                         indi.etern.musichud.network.IServerNetworkService.getInstance().sendToPlayer(player, s2CPayload);
                     })

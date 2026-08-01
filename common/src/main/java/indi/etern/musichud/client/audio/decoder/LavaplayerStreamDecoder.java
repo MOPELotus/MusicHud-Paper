@@ -12,10 +12,12 @@ import com.sedmelluq.discord.lavaplayer.tools.FriendlyException;
 import com.sedmelluq.discord.lavaplayer.track.AudioPlaylist;
 import com.sedmelluq.discord.lavaplayer.track.AudioTrack;
 import org.lwjgl.openal.AL10;
+import org.apache.http.HttpRequestInterceptor;
 
 import javax.sound.sampled.AudioInputStream;
 import java.io.IOException;
 import java.util.Objects;
+import java.util.Map;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.TimeUnit;
@@ -25,6 +27,7 @@ public final class LavaplayerStreamDecoder implements AudioDecoder {
     private static final AudioPlayerManager PLAYER_MANAGER = createPlayerManager();
     private static final long LOAD_TIMEOUT_SECONDS = 20;
     private static final long STUCK_TIMEOUT_MILLIS = 10_000L;
+    private static volatile Map<String, String> requestHeaders = Map.of();
 
     private final AudioPlayer player;
     private final AudioTrack track;
@@ -45,6 +48,11 @@ public final class LavaplayerStreamDecoder implements AudioDecoder {
     }
 
     public static LavaplayerStreamDecoder open(String identifier) throws IOException {
+        return open(identifier, Map.of());
+    }
+
+    public static LavaplayerStreamDecoder open(String identifier, Map<String, String> headers) throws IOException {
+        requestHeaders = headers == null ? Map.of() : Map.copyOf(headers);
         AudioTrack track = loadTrack(identifier);
         AudioPlayer player = PLAYER_MANAGER.createPlayer();
         player.setVolume(100);
@@ -134,7 +142,14 @@ public final class LavaplayerStreamDecoder implements AudioDecoder {
     private static AudioPlayerManager createPlayerManager() {
         DefaultAudioPlayerManager manager = new DefaultAudioPlayerManager();
         manager.getConfiguration().setOutputFormat(StandardAudioDataFormats.COMMON_PCM_S16_LE);
-        manager.registerSourceManager(new HttpAudioSourceManager());
+        HttpAudioSourceManager http = new HttpAudioSourceManager();
+        http.configureBuilder(builder -> builder.addInterceptorFirst((HttpRequestInterceptor) (request, context) ->
+                requestHeaders.forEach((name, value) -> {
+                    if (name != null && value != null && !name.isBlank()) {
+                        request.setHeader(name, value);
+                    }
+                })));
+        manager.registerSourceManager(http);
         manager.registerSourceManager(new LocalAudioSourceManager());
         return manager;
     }
