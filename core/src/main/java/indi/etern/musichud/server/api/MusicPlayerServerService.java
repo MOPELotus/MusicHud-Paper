@@ -14,6 +14,7 @@ import indi.etern.musichud.network.payloads.pushMessages.s2c.RefreshMusicQueueMe
 import indi.etern.musichud.network.payloads.pushMessages.s2c.SwitchMusicMessage;
 import indi.etern.musichud.network.payloads.pushMessages.s2c.SyncCurrentPlayingMessage;
 import indi.etern.musichud.network.payloads.pushMessages.s2c.UpdateAllIdlePlaySourcesMessage;
+import indi.etern.musichud.network.payloads.requestResponseCycle.GetInitialStateResponse;
 import lombok.*;
 import org.apache.logging.log4j.Logger;
 
@@ -205,6 +206,21 @@ public class MusicPlayerServerService {
             }
         }
         return instance;
+    }
+
+    /**
+     * Connection state is shared only from Minecraft's player session registry;
+     * TuneWeave account credentials never enter this server-side snapshot.
+     */
+    public GetInitialStateResponse buildInitialStateFor(IPlayerClient player) {
+        return new GetInitialStateResponse(
+                currentMusicDetail,
+                nextIdleMusicDetail,
+                nowPlayingStartTime,
+                new ArrayDeque<>(musicQueue),
+                List.of(),
+                List.of()
+        );
     }
 
     private void updateContinuable(boolean continuable) {

@@ -1,5 +1,6 @@
 package indi.etern.musichud.beans.music;
 
+import com.google.gson.annotations.SerializedName;
 import indi.etern.musichud.MusicHud;
 import indi.etern.musichud.beans.user.Profile;
 import indi.etern.musichud.network.ByteBufCodec;
@@ -9,8 +10,11 @@ import lombok.Getter;
 import lombok.NoArgsConstructor;
 import lombok.Setter;
 
-import java.util.List;
+import java.util.Collection;
+import java.util.LinkedHashSet;
 import java.util.Objects;
+import java.util.SequencedSet;
+import java.util.Set;
 
 @NoArgsConstructor(access = AccessLevel.PUBLIC)
 public class Playlist implements MusicCollection {
@@ -26,11 +30,15 @@ public class Playlist implements MusicCollection {
             Playlist::getCodecCoverImgIdString,
             Codecs.STRING_UTF8,
             Playlist::getCoverImgUrl,
+            Codecs.INT,
+            Playlist::getMusicTrackCount,
+            Codecs.INT,
+            Playlist::getPlayedCount,
             Profile.CODEC,
             Playlist::getCreator,
             Codecs.ofEnum(Privacy.class),
             Playlist::getPrivacy,
-            Codecs.ofList(() -> MusicDetail.CODEC),
+            Codecs.ofCollection(LinkedHashSet::new, () -> MusicDetail.CODEC),
             Playlist::getTracks,
             PusherInfo.CODEC,
             Playlist::getPusherInfo,
@@ -46,12 +54,18 @@ public class Playlist implements MusicCollection {
     String sourceRef = "";
     @Getter
     long coverImgId = -1;
+    @SerializedName("trackCount")
+    @Getter
+    @Setter
+    int musicTrackCount;
+    @SerializedName("playCount")
+    @Getter
+    int playedCount;
     String coverImgId_str = "";
     String coverImgUrl = MusicHud.ICON_BASE64;
     Profile creator = Profile.ANONYMOUS;
     Privacy privacy = Privacy.PUBLIC;
-    @Setter
-    List<MusicDetail> tracks = List.of();
+    SequencedSet<MusicDetail> tracks = new LinkedHashSet<>();
 
     // Not contained in the original API response, set separately
     @Getter
@@ -63,9 +77,11 @@ public class Playlist implements MusicCollection {
             long coverImgId,
             String coverImgId_str,
             String coverImgUrl,
+            int musicTrackCount,
+            int playedCount,
             Profile creator,
             Privacy privacy,
-            List<MusicDetail> tracks,
+            SequencedSet<MusicDetail> tracks,
             PusherInfo pusherInfo
     ) {
         this.id = id;
@@ -78,6 +94,8 @@ public class Playlist implements MusicCollection {
             this.coverImgId_str = coverImgId_str;
         }
         this.coverImgUrl = coverImgUrl;
+        this.musicTrackCount = musicTrackCount;
+        this.playedCount = playedCount;
         this.creator = creator;
         this.privacy = privacy;
         this.tracks = tracks;
@@ -122,7 +140,7 @@ public class Playlist implements MusicCollection {
     }
 
     @Override
-    public List<MusicDetail> getMusicDetails() {
+    public SequencedSet<MusicDetail> getMusicDetails() {
         return getTracks();
     }
 
@@ -160,11 +178,19 @@ public class Playlist implements MusicCollection {
         return Objects.requireNonNullElse(privacy, Privacy.PUBLIC);
     }
 
-    public List<MusicDetail> getTracks() {
+    public SequencedSet<MusicDetail> getTracks() {
         if (tracks == null || tracks.isEmpty()) {
-            return List.of();
+            return new LinkedHashSet<>();
         }
-        return tracks.stream().filter(Objects::nonNull).toList();
+        return tracks.stream().filter(Objects::nonNull)
+                .collect(LinkedHashSet::new, Set::add, LinkedHashSet::addAll);
+    }
+
+    public void setTracks(Collection<MusicDetail> tracks) {
+        this.tracks = tracks == null ? new LinkedHashSet<>() : tracks.stream()
+                .filter(Objects::nonNull)
+                .collect(LinkedHashSet::new, Set::add, LinkedHashSet::addAll);
+        this.musicTrackCount = this.tracks.size();
     }
 
     @Override
@@ -194,7 +220,10 @@ public class Playlist implements MusicCollection {
         playlist.sourceRef = sourceRef;
         playlist.name = name;
         playlist.coverImgId = coverImgId;
+        playlist.coverImgId_str = coverImgId_str;
         playlist.coverImgUrl = coverImgUrl;
+        playlist.musicTrackCount = musicTrackCount;
+        playlist.playedCount = playedCount;
         playlist.tracks = tracks;
         playlist.creator = creator;
         playlist.privacy = privacy;

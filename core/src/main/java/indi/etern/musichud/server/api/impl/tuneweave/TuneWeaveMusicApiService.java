@@ -13,6 +13,9 @@ import indi.etern.musichud.beans.music.MusicResourceInfo;
 import indi.etern.musichud.beans.music.Playlist;
 import indi.etern.musichud.beans.music.PusherInfo;
 import indi.etern.musichud.beans.music.Quality;
+import indi.etern.musichud.beans.music.UserCategoryPlaylists;
+import indi.etern.musichud.beans.music.actions.SubscribableType;
+import indi.etern.musichud.beans.music.actions.SubscribeAction;
 import indi.etern.musichud.server.api.IMusicApiService;
 import org.jetbrains.annotations.Nullable;
 
@@ -21,6 +24,7 @@ import java.nio.charset.StandardCharsets;
 import java.security.MessageDigest;
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
+import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.HashSet;
@@ -92,7 +96,7 @@ public final class TuneWeaveMusicApiService implements IMusicApiService {
         String albumName = string(snapshot, "album", "");
         Album album = albumName.isBlank() ? Album.NONE : new Album(
                 cacheId("album:" + sourceRef), albumName, string(snapshot, "cover_url", ""),
-                new ArrayList<>(), artists, PusherInfo.EMPTY);
+                "", "", 0, new LinkedHashSet<>(), new LinkedHashSet<>(artists), PusherInfo.EMPTY);
         MusicDetail detail = MusicDetail.fromTuneWeave(sourceRef, kind, id,
                 string(snapshot, "title", sourceRef), artists, album,
                 integer(snapshot, "duration_ms", 0), List.of());
@@ -138,6 +142,11 @@ public final class TuneWeaveMusicApiService implements IMusicApiService {
         playlist.setTracks(tracks);
         playlistsById.put(playlist.getId(), playlist);
         return playlist;
+    }
+
+    @Override
+    public Playlist getPlaylistDetail(long id, boolean ignoreCache, @Nullable UUID player) {
+        return getPlaylistDetail(id, player);
     }
 
     @Override
@@ -255,6 +264,11 @@ public final class TuneWeaveMusicApiService implements IMusicApiService {
     }
 
     @Override
+    public Album getAlbumInfoDetail(long id, boolean ignoreCache, UUID playerUUID) {
+        return getAlbumInfoDetail(id, playerUUID);
+    }
+
+    @Override
     public Artist getArtistDetail(long id, UUID playerUUID) {
         Artist cached = artistsById.get(id);
         String reference = sourceRefs.get(id);
@@ -353,13 +367,43 @@ public final class TuneWeaveMusicApiService implements IMusicApiService {
     }
 
     @Override
+    public UserCategoryPlaylists getPlayersUserPlaylists(boolean ignoreCache, UUID playerUUID) {
+        return UserCategoryPlaylists.EMPTY;
+    }
+
+    @Override
     public List<Album> getPlayersUserSubscribedAlbums(UUID playerUUID) {
         return List.of();
     }
 
     @Override
+    public LinkedHashSet<Album> getPlayersUserSubscribedAlbums(boolean ignoreCache, UUID playerUUID) {
+        return new LinkedHashSet<>();
+    }
+
+    @Override
     public List<Artist> getPlayersUserSubscribedArtists(UUID playerUUID) {
         return List.of();
+    }
+
+    @Override
+    public LinkedHashSet<Artist> getPlayersUserSubscribedArtists(boolean ignoreCache, UUID playerUUID) {
+        return new LinkedHashSet<>();
+    }
+
+    @Override
+    public void addToPlaylist(long playlistId, long musicId, UUID uuid) {
+        throw new UnsupportedOperationException("Use TuneWeave Uni playlist routes");
+    }
+
+    @Override
+    public void removeFromPlaylist(long playlistId, long musicId, UUID uuid) {
+        throw new UnsupportedOperationException("Use TuneWeave Uni playlist routes");
+    }
+
+    @Override
+    public void userSubscribe(long id, SubscribableType subscribableType, SubscribeAction action, UUID playerUUID) {
+        throw new UnsupportedOperationException("Use TuneWeave account routes");
     }
 
     @Override
@@ -452,7 +496,7 @@ public final class TuneWeaveMusicApiService implements IMusicApiService {
             artists.add(toArtist(object(element)));
         }
         Album album = new Album(id, string(data, "name", ""), string(data, "cover_url", ""),
-                new ArrayList<>(), artists, PusherInfo.EMPTY);
+                "", "", 0, new LinkedHashSet<>(), new LinkedHashSet<>(artists), PusherInfo.EMPTY);
         albumsById.put(id, album);
         return album;
     }

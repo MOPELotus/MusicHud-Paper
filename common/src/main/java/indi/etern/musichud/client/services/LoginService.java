@@ -14,6 +14,7 @@ import indi.etern.musichud.beans.user.ProfileConfigData;
 import indi.etern.musichud.client.audio.NowPlayingInfo;
 import indi.etern.musichud.client.audio.StreamAudioPlayer;
 import indi.etern.musichud.client.interfaces.IClientEventService;
+import indi.etern.musichud.client.services.music.MusicService;
 import indi.etern.musichud.client.network.vanilla.VanillaPlayerProxy;
 import indi.etern.musichud.client.ui.ToastUtil;
 import indi.etern.musichud.client.ui.pages.account.AccountBaseView;
@@ -27,9 +28,7 @@ import indi.etern.musichud.network.IClientNetworkService;
 import indi.etern.musichud.network.NetworkReceiver;
 import indi.etern.musichud.network.payloads.pushMessages.c2s.LogoutMessage;
 import indi.etern.musichud.network.payloads.pushMessages.s2c.LoginResultMessage;
-import indi.etern.musichud.network.payloads.requestResponseCycle.AnonymousLoginRequest;
 import indi.etern.musichud.network.payloads.requestResponseCycle.ConnectRequest;
-import indi.etern.musichud.network.payloads.requestResponseCycle.CookieLoginRequest;
 import indi.etern.musichud.network.payloads.requestResponseCycle.StartQRLoginResponse;
 import indi.etern.musichud.server.api.MusicPlayerServerService;
 import lombok.AccessLevel;
@@ -97,14 +96,14 @@ public class LoginService implements IClientLoginService {
                     MuiModApi.postToUiThread(() -> {
                         AccountView accountView = AccountView.getInstance();
                         if (accountView != null) {
-                            accountView.refresh();
+                            accountView.refresh(true);
                         }
                     });
                 } else {
                     MuiModApi.postToUiThread(() -> {
                         AccountView accountView = AccountView.getInstance();
                         if (accountView != null) {
-                            accountView.refresh();
+                            accountView.refresh(true);
                         }
                         LoginView loginView = LoginView.getInstance();
                         if (loginView != null) {
@@ -132,16 +131,6 @@ public class LoginService implements IClientLoginService {
         return instance;
     }
 
-    private static void loginToServerByCookieWithRefreshCheck() {
-        LoginCookieInfo loginCookieInfo = LoginCookieInfo.clientCurrentCookie();
-        if (loginCookieInfo.generateTime().plus(refreshInterval).isBefore(ZonedDateTime.now())) {
-            logger.info("Refreshing Login Cookie");
-            IClientNetworkService.getInstance().sendToServer(new CookieLoginRequest(loginCookieInfo, true));
-        } else {
-            IClientNetworkService.getInstance().sendToServer(new CookieLoginRequest(loginCookieInfo, false));
-        }
-    }
-
     @Override
     public boolean isLogined() {
         // Platform authentication belongs to TuneWeave. This legacy service now
@@ -158,7 +147,6 @@ public class LoginService implements IClientLoginService {
         }
     }
 
-    @Override
     public void connectToExternalServer() {
         if (clientConfig.getEnable()) {
             clientNetworkService.sendToServer(new ConnectRequest(Version.current));
@@ -171,15 +159,6 @@ public class LoginService implements IClientLoginService {
             connectionType = type;
         }
         logger.debug("Music HUD connection established; platform login is managed by TuneWeave");
-    }
-
-    private void loginAsAnonymousToServer() {
-        LoginCookieInfo loginCookieInfo = LoginCookieInfo.clientCurrentCookie();
-        if (loginCookieInfo.type() == LoginType.ANONYMOUS) {
-            clientNetworkService.sendToServer(new CookieLoginRequest(loginCookieInfo, false));
-        } else {
-            clientNetworkService.sendToServer(AnonymousLoginRequest.REQUEST);
-        }
     }
 
     @Override

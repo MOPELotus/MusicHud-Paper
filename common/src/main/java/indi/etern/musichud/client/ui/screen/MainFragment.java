@@ -17,12 +17,12 @@ import icyllis.modernui.view.ViewGroup;
 import icyllis.modernui.widget.*;
 import indi.etern.musichud.MusicHud;
 import indi.etern.musichud.beans.music.Artist;
-import indi.etern.musichud.client.ui.beans.LyricLine;
+import indi.etern.musichud.client.ui.dto.LyricLine;
 import indi.etern.musichud.beans.music.MusicDetail;
 import indi.etern.musichud.client.audio.NowPlayingInfo;
 import indi.etern.musichud.client.audio.StreamAudioPlayer;
 import indi.etern.musichud.client.services.LoginService;
-import indi.etern.musichud.client.services.MusicService;
+import indi.etern.musichud.client.services.music.MusicService;
 import indi.etern.musichud.client.ui.Theme;
 import indi.etern.musichud.client.ui.components.*;
 import indi.etern.musichud.client.ui.pages.ConfigView;
@@ -30,7 +30,7 @@ import indi.etern.musichud.client.ui.pages.HomeView;
 import indi.etern.musichud.client.ui.pages.UniPlaylistView;
 import indi.etern.musichud.client.ui.pages.account.AccountBaseView;
 import indi.etern.musichud.client.ui.pages.search.SearchView;
-import indi.etern.musichud.client.ui.utils.ButtonInsetBackgroundFactory;
+import indi.etern.musichud.client.ui.utils.ui.ButtonInsetBackgroundFactory;
 import indi.etern.musichud.client.ui.utils.PlayerInfoUtil;
 import indi.etern.musichud.interfaces.ClientConfig;
 import indi.etern.musichud.interfaces.IClientLoginService;
@@ -122,7 +122,7 @@ public class MainFragment extends Fragment {
                 instance.albumImage.loadUrl(musicDetail.getAlbum().getThumbnailPicUrl(240));
                 instance.titleText.setText(musicDetail.getName());
                 PlayerInfo pusherPlayerInfo = NowPlayingInfo.getInstance().getPusherPlayerInfo();
-                String name = pusherPlayerInfo != null ? pusherPlayerInfo.getProfile().name() : null;
+                String name = pusherPlayerInfo != null ? pusherPlayerInfo.getProfile().getName() : null;
                 if (name == null || name.isEmpty()) {
                     instance.pusherHeadView.setVisibility(View.GONE);
                     instance.pusherText.setText("");
@@ -270,16 +270,16 @@ public class MainFragment extends Fragment {
 
                 var sideMenu = new SideMenu(context, routerContainer);
                 if (Minecraft.getInstance().player != null) {//in game
-                    var homeNav = sideMenu.createNavigationPage(I18n.get(MusicHud.MOD_ID + ".text.page.home"), HomeView::new);
-                    var searchNav = sideMenu.createNavigationPage(I18n.get(MusicHud.MOD_ID + ".text.page.search"), SearchView::new);
-                    var uniPlaylistNav = sideMenu.createNavigationPage("聚合歌单", UniPlaylistView::new);
-                    var accountNav = sideMenu.createNavigationPage(I18n.get(MusicHud.MOD_ID + ".text.page.account"), AccountBaseView::new);
-                    var settingsNav = sideMenu.createNavigationPage(I18n.get(MusicHud.MOD_ID + ".text.page.setting"), ConfigView::new);
+                    var homeNav = sideMenu.createNavigationPage("Home", "/assets/music_hud/textures/gui/icons/house.png", I18n.get(MusicHud.MOD_ID + ".text.page.home"), HomeView::new);
+                    var searchNav = sideMenu.createNavigationPage("Search", "/assets/music_hud/textures/gui/icons/search.png", I18n.get(MusicHud.MOD_ID + ".text.page.search"), SearchView::new);
+                    var uniPlaylistNav = sideMenu.createNavigationPage("UniPlaylist", "/assets/music_hud/textures/gui/icons/list_music.png", "聚合歌单", UniPlaylistView::new);
+                    var accountNav = sideMenu.createNavigationPage("Account", "/assets/music_hud/textures/gui/icons/square_user_round.png", I18n.get(MusicHud.MOD_ID + ".text.page.account"), AccountBaseView::new);
+                    var settingsNav = sideMenu.createNavigationPage("Settings", "/assets/music_hud/textures/gui/icons/settings.png", I18n.get(MusicHud.MOD_ID + ".text.page.setting"), ConfigView::new);
                     SideMenu.NavigationMeta defaultMeta = List.of(homeNav, searchNav, uniPlaylistNav, accountNav, settingsNav)
                             .get(Math.min(defaultSelectedIndex, 4));
                     defaultMeta.select();
                 } else {
-                    var settingsNav = sideMenu.createNavigationPage(I18n.get(MusicHud.MOD_ID + ".text.page.setting"), ConfigView::new);
+                    var settingsNav = sideMenu.createNavigationPage("Settings", "/assets/music_hud/textures/gui/icons/settings.png", I18n.get(MusicHud.MOD_ID + ".text.page.setting"), ConfigView::new);
                     settingsNav.select();
                 }
 

@@ -52,7 +52,6 @@ public record ConnectResponse(boolean accepted, Version serverVersion,
                         LOGGER.info("Connecting {}", payload.accepted() ? "accepted" : "denied");
                         if (payload.accepted()) {
                             if (Version.compatibleWith(payload.serverVersion)) {
-                                MusicHud.EXECUTOR.execute(IClientMusicService.getInstance()::checkAndResetInitialSync);
                                 if (clientDistUtil.inIntegratedServer()
                                         && MusicHud.getConnectStatus() != MusicHud.ConnectStatus.CONNECTED
                                         && clientConfig != null && clientConfig.getEnableIsolatedMode()) {

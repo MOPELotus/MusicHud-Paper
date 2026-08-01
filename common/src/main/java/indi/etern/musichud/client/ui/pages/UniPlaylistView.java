@@ -15,7 +15,7 @@ import indi.etern.musichud.client.services.TuneWeaveUiService;
 import indi.etern.musichud.client.services.UniPlaylistClient;
 import indi.etern.musichud.client.ui.Theme;
 import indi.etern.musichud.client.ui.ToastUtil;
-import indi.etern.musichud.client.ui.utils.ButtonInsetBackgroundFactory;
+import indi.etern.musichud.client.ui.utils.ui.ButtonInsetBackgroundFactory;
 
 import java.util.ArrayList;
 import java.util.List;

@@ -16,11 +16,11 @@ import indi.etern.musichud.MusicHud;
 import indi.etern.musichud.beans.music.Artist;
 import indi.etern.musichud.beans.music.MusicCollection;
 import indi.etern.musichud.beans.music.MusicDetail;
-import indi.etern.musichud.client.services.MusicService;
+import indi.etern.musichud.client.services.music.MusicService;
 import indi.etern.musichud.client.services.UniPlaylistClient;
 import indi.etern.musichud.client.ui.Theme;
 import indi.etern.musichud.client.ui.ToastUtil;
-import indi.etern.musichud.client.ui.utils.ButtonInsetBackgroundFactory;
+import indi.etern.musichud.client.ui.utils.ui.ButtonInsetBackgroundFactory;
 import indi.etern.musichud.client.ui.utils.image.ImageUtils;
 import net.minecraft.client.resources.language.I18n;
 
@@ -188,12 +188,12 @@ public class MusicCollectionDetailView extends LinearLayout {
         progressBar.setIndeterminate(true);
         MusicService.getInstance().loadMoreMusicOfCollection(musicCollection, ignoreCache).thenAcceptAsync(playlistDetail -> {
             MuiModApi.postToUiThread(() -> {
-                type.setText(I18n.get(collectionNameI18n) + "  " + I18n.get(MusicHud.MOD_ID + ".text.totalCount").replace("{}", String.valueOf(playlistDetail.size())));
-                if (!playlistDetail.isEmpty()) {
+                type.setText(I18n.get(collectionNameI18n) + "  " + I18n.get(MusicHud.MOD_ID + ".text.totalCount").replace("{}", String.valueOf(playlistDetail.musicDetails().size())));
+                if (!playlistDetail.musicDetails().isEmpty()) {
                     addToIdleSourceListButton.setVisibility(View.VISIBLE);
                 }
                 progressBar.setVisibility(View.GONE);
-                for (MusicDetail musicDetail : playlistDetail) {
+                for (MusicDetail musicDetail : playlistDetail.musicDetails()) {
                     addItem(context, musicDetail);
                 }
             });
