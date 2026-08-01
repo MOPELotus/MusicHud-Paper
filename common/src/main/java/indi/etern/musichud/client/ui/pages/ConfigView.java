@@ -446,7 +446,18 @@ public class ConfigView extends LinearLayout {
                     clientConfig::getManageTuneWeaveLocally, clientConfig::setManageTuneWeaveLocally)
                     .setDefaultValue(false);
             manageLocalTuneWeave.create(apiCategory);
-            manageLocalTuneWeave.setOnChanged(clientConfig::save);
+            manageLocalTuneWeave.setOnChanged(() -> {
+                clientConfig.save();
+                ApiServerManager manager = ApiServerManager.getInstance();
+                if (manager == null) {
+                    return;
+                }
+                if (clientConfig.getManageTuneWeaveLocally()) {
+                    manager.restartApiServer();
+                } else {
+                    manager.stopApiServer();
+                }
+            });
 
             PreferencesFragment.BooleanOption manageServerTuneWeave = new PreferencesFragment.BooleanOption(
                     context, "服务器内部管理 TuneWeave（下载、校验、启动和启动时更新）",

@@ -46,6 +46,9 @@ public final class TuneWeaveReleaseDownloader {
         if (file.isBlank() || downloadUrl.isBlank() || checksumUrl.isBlank()) {
             throw new IOException("TuneWeave release manifest is missing artifact download or checksum metadata");
         }
+        if (!Path.of(file).getFileName().toString().equals(file)) {
+            throw new IOException("TuneWeave release manifest contains an unsafe artifact file name");
+        }
         Path installDirectory = root.resolve(version);
         Path executable = installDirectory.resolve(file);
         String expected = getChecksum(checksumUrl);

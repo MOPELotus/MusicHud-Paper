@@ -79,14 +79,7 @@ public class ApiServerManager implements ServerRegister {
     }
 
     public void stopApiServer() {
-        Process process = managedProcess;
-        if (process != null && process.isAlive()) {
-            process.destroy();
-            if (process.isAlive()) {
-                process.destroyForcibly();
-            }
-        }
-        managedProcess = null;
+        stopManagedProcess();
         setApiStatus(BinaryApiServerStatus.STOPPED);
     }
 
@@ -128,6 +121,7 @@ public class ApiServerManager implements ServerRegister {
                     .redirectErrorStream(true)
                     .redirectOutput(ProcessBuilder.Redirect.appendTo(logFile.toFile()))
                     .start();
+            Runtime.getRuntime().addShutdownHook(new Thread(this::stopManagedProcess, "MusicHud-TuneWeave-Shutdown"));
             apiLogger.info("Started managed TuneWeave {} from {}", release.version(), release.executable());
             for (int attempt = 0; attempt < 20; attempt++) {
                 if (isTuneWeaveAvailable()) {
@@ -137,10 +131,28 @@ public class ApiServerManager implements ServerRegister {
                 Thread.sleep(500L);
             }
             apiLogger.error("Managed TuneWeave started but did not become healthy at {}. See {}", tuneWeaveBaseUrl(), logFile);
+            stopManagedProcess();
             setApiStatus(BinaryApiServerStatus.STOPPED);
         } catch (Exception e) {
             apiLogger.error("Unable to download, verify or start managed TuneWeave", e);
             setApiStatus(BinaryApiServerStatus.STOPPED);
+        }
+    }
+
+    private void stopManagedProcess() {
+        Process process = managedProcess;
+        managedProcess = null;
+        if (process == null || !process.isAlive()) {
+            return;
+        }
+        process.destroy();
+        try {
+            if (!process.waitFor(3, java.util.concurrent.TimeUnit.SECONDS)) {
+                process.destroyForcibly();
+            }
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
+            process.destroyForcibly();
         }
     }
 
