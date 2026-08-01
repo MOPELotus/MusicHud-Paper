@@ -18,3 +18,4 @@ rootProject.name = 'music_hud'
 
 include 'core'
 include 'paper'
+include 'velocity'

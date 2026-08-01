@@ -1,0 +1,70 @@
+plugins {
+    id 'java-library'
+    id 'com.gradleup.shadow'
+}
+
+base {
+    archivesName = "$rootProject.archives_name-velocity"
+}
+
+configurations {
+    core {
+        canBeResolved = true
+        canBeConsumed = false
+    }
+    shadowBundle {
+        canBeResolved = true
+        canBeConsumed = false
+    }
+    compileClasspath.extendsFrom core
+    runtimeClasspath.extendsFrom core
+}
+
+repositories {
+    mavenCentral()
+    maven { url = 'https://repo.papermc.io/repository/maven-public/' }
+}
+
+dependencies {
+    core(project(path: ':core'))
+    shadowBundle(project(path: ':core')) { transitive = false }
+
+    compileOnly "com.velocitypowered:velocity-api:$rootProject.velocity_api_version"
+    annotationProcessor "com.velocitypowered:velocity-api:$rootProject.velocity_api_version"
+    compileOnly "io.netty:netty-buffer:$rootProject.netty_version"
+    compileOnly "io.netty:netty-codec:$rootProject.netty_version"
+
+    implementation "org.apache.logging.log4j:log4j-api:2.24.1"
+    implementation "org.apache.logging.log4j:log4j-core:2.24.1"
+    shadowBundle "org.apache.logging.log4j:log4j-api:2.24.1"
+    shadowBundle "org.apache.logging.log4j:log4j-core:2.24.1"
+
+    compileOnly "org.projectlombok:lombok:$rootProject.lombok_version"
+    annotationProcessor "org.projectlombok:lombok:$rootProject.lombok_version"
+    testImplementation "org.junit.jupiter:junit-jupiter:$rootProject.junit_version"
+    testRuntimeOnly "org.junit.platform:junit-platform-launcher"
+}
+
+java {
+    withSourcesJar()
+    sourceCompatibility = JavaVersion.VERSION_21
+    targetCompatibility = JavaVersion.VERSION_21
+}
+
+tasks.withType(JavaCompile).configureEach {
+    options.release = 21
+    options.encoding = 'UTF-8'
+}
+
+tasks.withType(Test).configureEach {
+    useJUnitPlatform()
+}
+
+tasks.shadowJar {
+    configurations = [project.configurations.shadowBundle]
+    archiveClassifier = ''
+}
+
+tasks.assemble {
+    dependsOn tasks.shadowJar
+}
