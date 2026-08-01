@@ -28,10 +28,6 @@ public record UrlMeta<T>(
     public URI toURI() {
         String uri = serverConfig.getServerApiBaseUrl() + url;
         List<String> query = new ArrayList<>();
-        if (serverConfig.getUseRandomCnIp()) {
-            //noinspection SpellCheckingInspection
-            query.add("randomCNIP=true");
-        }
         if (noCache) {
             query.add("timestamp=" + System.currentTimeMillis());
         }

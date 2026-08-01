@@ -190,9 +190,13 @@ public class MusicListItem extends LinearLayout {
         DateTimeFormatter formatter = duration.toHoursPart() >= 1 ?
                 timeFormatterWithHour :
                 timeFormatter;
-        durationText.setText(formatter.format(
-                LocalTime.MIDNIGHT.plusSeconds(duration.toSeconds())
-        ));
+        String durationLabel = formatter.format(LocalTime.MIDNIGHT.plusSeconds(duration.toSeconds()));
+        String sourceRef = musicDetail.getSourceRef();
+        int separator = sourceRef.indexOf(':');
+        if (separator > 0) {
+            durationLabel += " · " + sourcePlatformLabel(sourceRef.substring(0, separator));
+        }
+        durationText.setText(durationLabel);
 
         if (showPusherInfo) {
             PusherInfo pusherInfo = musicDetail.getPusherInfo();
@@ -212,5 +216,17 @@ public class MusicListItem extends LinearLayout {
             pusherHeadView.setVisibility(View.GONE);
             pusherHeadView.setPlayerSkinSupplier(null);
         }
+    }
+
+    private static String sourcePlatformLabel(String platform) {
+        return switch (platform) {
+            case "netease" -> "网易云";
+            case "qq" -> "QQ";
+            case "bilibili" -> "B 站音频";
+            case "kugou" -> "酷狗";
+            case "kuwo" -> "酷我";
+            case "migu" -> "咪咕";
+            default -> platform;
+        };
     }
 }
