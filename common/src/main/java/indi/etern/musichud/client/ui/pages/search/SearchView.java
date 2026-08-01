@@ -11,6 +11,7 @@ import icyllis.modernui.view.KeyEvent;
 import icyllis.modernui.view.View;
 import icyllis.modernui.widget.Button;
 import icyllis.modernui.widget.EditText;
+import icyllis.modernui.widget.HorizontalScrollView;
 import icyllis.modernui.widget.LinearLayout;
 import icyllis.modernui.widget.TextView;
 import indi.etern.musichud.MusicHud;
@@ -53,6 +54,7 @@ public class SearchView extends LinearLayout {
     private EditText searchTextInput;
     private SearchResultTabPage searchResultTabPage;
     private LinearLayout platformSelector;
+    private HorizontalScrollView platformSelectorScroll;
     private final List<JsonObject> platforms = new ArrayList<>();
     private String selectedPlatform = "";
     @Getter
@@ -105,12 +107,15 @@ public class SearchView extends LinearLayout {
 
         top.addView(new View(context), new LayoutParams(0, WRAP_CONTENT, 2));
 
+        platformSelectorScroll = new HorizontalScrollView(context);
+        platformSelectorScroll.setFillViewport(true);
         platformSelector = new LinearLayout(context);
         platformSelector.setOrientation(HORIZONTAL);
         platformSelector.setGravity(Gravity.CENTER);
         LayoutParams platformParams = new LayoutParams(MATCH_PARENT, WRAP_CONTENT);
         platformParams.setMargins(dp(32), dp(12), dp(32), 0);
-        addView(platformSelector, platformParams);
+        platformSelectorScroll.addView(platformSelector, new LayoutParams(WRAP_CONTENT, WRAP_CONTENT));
+        addView(platformSelectorScroll, platformParams);
         loadSearchPlatforms();
 
         searchResultTabPage = new SearchResultTabPage(context);
@@ -225,12 +230,14 @@ public class SearchView extends LinearLayout {
         for (JsonObject platform : platforms) {
             String id = string(platform, "platform");
             Button button = new Button(getContext());
-            button.setText(platformBadge(id));
-            button.setTextSize(Theme.TEXT_SIZE_NORMAL);
-            button.setTextColor(id.equals(selectedPlatform) ? Theme.EMPHASIZE_TEXT_COLOR : Theme.PRIMARY_COLOR);
+            button.setText(platformIcon(id));
+            button.setTextSize(Theme.TEXT_SIZE_LARGE);
+            button.setContentDescription(platformName(id));
+            button.setTooltipText(platformName(id));
+            button.setTextColor(id.equals(selectedPlatform) ? Theme.EMPHASIZE_TEXT_COLOR : platformColor(id));
             button.setSelected(id.equals(selectedPlatform));
             button.setBackground(ButtonInsetBackgroundFactory.builder().cornerRadius(dp(4)).inset(dp(1))
-                    .padding(new ButtonInsetBackgroundFactory.Padding(dp(8), 0, dp(8), 0)).build().newBackgroundDrawable());
+                    .padding(new ButtonInsetBackgroundFactory.Padding(dp(6), 0, dp(6), 0)).build().newBackgroundDrawable());
             button.setOnClickListener(view -> {
                 if (!id.equals(selectedPlatform)) {
                     selectedPlatform = id;
@@ -240,21 +247,45 @@ public class SearchView extends LinearLayout {
                     }
                 }
             });
-            LayoutParams params = new LayoutParams(WRAP_CONTENT, WRAP_CONTENT);
+            LayoutParams params = new LayoutParams(dp(36), dp(36));
             params.setMargins(0, 0, dp(8), 0);
             platformSelector.addView(button, params);
         }
     }
 
-    private static String platformBadge(String id) {
+    private static String platformIcon(String id) {
         return switch (id) {
-            case "netease" -> "♫ 网易云";
-            case "qq" -> "Q♪ QQ";
-            case "bilibili" -> "▷ B 站";
-            case "kugou" -> "K 酷狗";
-            case "kuwo" -> "W 酷我";
-            case "migu" -> "M 咪咕";
+            case "netease" -> "♬";
+            case "qq" -> "Q";
+            case "bilibili" -> "▷";
+            case "kugou" -> "K";
+            case "kuwo" -> "W";
+            case "migu" -> "M";
+            default -> "•";
+        };
+    }
+
+    private static String platformName(String id) {
+        return switch (id) {
+            case "netease" -> "网易云音乐";
+            case "qq" -> "QQ 音乐";
+            case "bilibili" -> "哔哩哔哩";
+            case "kugou" -> "酷狗音乐";
+            case "kuwo" -> "酷我音乐";
+            case "migu" -> "咪咕音乐";
             default -> id;
+        };
+    }
+
+    private static int platformColor(String id) {
+        return switch (id) {
+            case "netease" -> 0xFFE84040;
+            case "qq" -> 0xFF35B86B;
+            case "bilibili" -> 0xFFFF7EB5;
+            case "kugou" -> 0xFF4A90E2;
+            case "kuwo" -> 0xFFFFB432;
+            case "migu" -> 0xFFE85555;
+            default -> Theme.PRIMARY_COLOR;
         };
     }
 
