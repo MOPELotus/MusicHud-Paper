@@ -254,6 +254,10 @@ public class SearchView extends LinearLayout {
             case "netease" -> "platforms/netease";
             case "qq" -> "platforms/qq";
             case "bilibili" -> "platforms/bilibili";
+            case "kugou" -> "platforms/kugou";
+            case "kuwo" -> "platforms/kuwo";
+            case "migu" -> "platforms/migu";
+            case "soda" -> "platforms/soda";
             default -> "platforms/music";
         };
     }
