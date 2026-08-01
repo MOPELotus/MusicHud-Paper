@@ -7,10 +7,10 @@ import indi.etern.musichud.beans.music.MusicDetail;
 import indi.etern.musichud.beans.music.MusicResourceInfo;
 import indi.etern.musichud.beans.music.Quality;
 import indi.etern.musichud.client.audio.decoder.*;
-import indi.etern.musichud.client.services.music.MusicService;
+import indi.etern.musichud.client.services.MusicService;
 import indi.etern.musichud.client.ui.hud.renderer.PlayingStatusRenderer;
 import indi.etern.musichud.interfaces.ClientConfig;
-import indi.etern.musichud.network.RequestResponseManager;
+import indi.etern.musichud.network.IClientNetworkService;
 import indi.etern.musichud.network.payloads.requestResponseCycle.GetMusicResourceRequest;
 import indi.etern.musichud.network.payloads.requestResponseCycle.GetMusicResourceResponse;
 import lombok.Getter;
@@ -699,24 +699,23 @@ public class StreamAudioPlayer {
     }
 
     public CompletableFuture<MusicResourceInfo> getCurrentMusicResourceInfo(Quality quality, MusicResourceInfo previous) {
+        CompletableFuture<MusicResourceInfo> future = new CompletableFuture<>();
+        GetMusicResourceResponse.setReceiver(currentMusicDetail.getId(), value -> {
+            if (value == MusicResourceInfo.NONE) {
+                MusicService.getInstance().switchMusic(MusicDetail.NONE, MusicDetail.NONE, null,
+                        I18n.get(MusicHud.MOD_ID + ".text.failedToLoadMusicResource"));
+                setStatus(Status.ERROR);
+                future.completeExceptionally(new RuntimeException("Failed to load music resource"));
+            } else {
+                future.complete(value);
+            }
+        });
         String url = previous == null || previous.getUrl() == null ? "" : previous.getUrl();
-        return RequestResponseManager.send(
-                        new GetMusicResourceRequest(currentMusicDetail.getId(), quality, url),
-                        GetMusicResourceResponse.class,
-                        Duration.ofSeconds(10))
-                .thenApply(GetMusicResourceResponse::getMusicResourceInfo)
-                .thenCompose(value -> {
-                    if (value == MusicResourceInfo.NONE) {
-                        MusicService.getInstance().switchMusic(MusicDetail.NONE, MusicDetail.NONE, null, I18n.get(MusicHud.MOD_ID + ".text.failedToLoadMusicResource"));
-                        setStatus(Status.ERROR);
-                        return CompletableFuture.failedFuture(new RuntimeException("Failed to load music resource"));
-                    }
-                    return CompletableFuture.completedFuture(value);
-                });
+        IClientNetworkService.getInstance().sendToServer(new GetMusicResourceRequest(currentMusicDetail.getId(), quality, url));
+        return future;
     }
 
     public enum Status {
         IDLE, BUFFERING, PLAYING, RETRYING, ERROR
     }
 }
-
