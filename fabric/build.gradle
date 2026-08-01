@@ -32,6 +32,10 @@ repositories {
     flatDir {
         dir rootProject.file('libs')
     }
+    maven {
+        name = 'dv8tion'
+        url = 'https://m2.dv8tion.net/releases'
+    }
 }
 
 configurations {
@@ -65,8 +69,6 @@ dependencies {
     common(project(':common')) { transitive = false }
     shadowBundle(project(':common')) { transitive = false }
 
-    api "fuzs.forgeconfigapiport:forgeconfigapiport-fabric:$rootProject.forge_config_api_port_version"
-
     implementation "com.terraformersmc:modmenu:$rootProject.modmenu_version"
 
     implementation("icyllis.modernui:ModernUI-Fabric:26.1.2-${rootProject.modernui_version}.+")
@@ -90,11 +92,8 @@ dependencies {
         exclude group: "org.commonmark"
     }
 
-    implementation "com.github.umjammer:jlayer:$rootProject.jlayer_version"
-    shadowBundle "com.github.umjammer:jlayer:$rootProject.jlayer_version"
-
-    implementation "org.jflac:jflac-codec:$rootProject.jflac_version"
-    shadowBundle "org.jflac:jflac-codec:$rootProject.jflac_version"
+    implementation "com.sedmelluq:lavaplayer:$rootProject.lavaplayer_version"
+    shadowBundle "com.sedmelluq:lavaplayer:$rootProject.lavaplayer_version"
 
 //    implementation "io.github.selemba1000:JavaMediaTransportControls:$rootProject.jmtc_version"
 //    shadowBundle "io.github.selemba1000:JavaMediaTransportControls:$rootProject.jmtc_version"
@@ -167,7 +166,6 @@ loom {
         }
     }
 }
-
 publishing {
     publications {
         mavenJava(MavenPublication) {

@@ -48,6 +48,10 @@ repositories {
     flatDir {
         dir rootProject.file('libs')
     }
+    maven {
+        name = 'dv8tion'
+        url = 'https://m2.dv8tion.net/releases'
+    }
 }
 
 configurations {
@@ -88,8 +92,6 @@ neoForge {
 }
 
 dependencies {
-    implementation "fuzs.forgeconfigapiport:forgeconfigapiport-common-neoforgeapi:$rootProject.forge_config_api_port_version"
-
     common(project(':common')) { transitive = false }
     coreLib(project(path: ':core')) { transitive = false }
     shadowBundle(project(':common')) { transitive = false }
@@ -118,11 +120,8 @@ dependencies {
         exclude group: "org.commonmark"
     }
 
-    implementation "com.github.umjammer:jlayer:$rootProject.jlayer_version"
-    shadowBundle "com.github.umjammer:jlayer:$rootProject.jlayer_version"
-
-    implementation "org.jflac:jflac-codec:$rootProject.jflac_version"
-    shadowBundle "org.jflac:jflac-codec:$rootProject.jflac_version"
+    implementation "com.sedmelluq:lavaplayer:$rootProject.lavaplayer_version"
+    shadowBundle "com.sedmelluq:lavaplayer:$rootProject.lavaplayer_version"
 
     compileOnly "org.projectlombok:lombok:$rootProject.lombok_version"
     annotationProcessor "org.projectlombok:lombok:$rootProject.lombok_version"
