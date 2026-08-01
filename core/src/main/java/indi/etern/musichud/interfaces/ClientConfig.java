@@ -102,25 +102,12 @@ public interface ClientConfig {
     void setClientAccountConfig(ProfileConfigData clientAccountConfig);
 
     /**
-     * Base URL of the TuneWeave instance used by this game client for account
-     * and personal library operations. It deliberately does not inherit the
-     * multiplayer server's address.
-     */
-    String getTuneWeaveClientApiBaseUrl();
-
-    void setTuneWeaveClientApiBaseUrl(String tuneWeaveClientApiBaseUrl);
-
-    /**
      * Opaque TuneWeave caller credentials encoded as a local JSON map. These
      * values must never be included in a Minecraft payload.
      */
     String getTuneWeaveClientCredentials();
 
     void setTuneWeaveClientCredentials(String tuneWeaveClientCredentials);
-
-    boolean getManageTuneWeaveLocally();
-
-    void setManageTuneWeaveLocally(boolean manageTuneWeaveLocally);
 
     boolean getEnabledInIntegratedServer();
 
