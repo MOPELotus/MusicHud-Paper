@@ -14,6 +14,7 @@ import indi.etern.musichud.client.services.TuneWeaveUiService;
 import indi.etern.musichud.client.services.TuneWeaveClientCredentials;
 import indi.etern.musichud.client.ui.Theme;
 import indi.etern.musichud.client.ui.ToastUtil;
+import indi.etern.musichud.client.ui.components.MusicHudIconButton;
 import indi.etern.musichud.client.ui.components.UrlImageView;
 import indi.etern.musichud.client.ui.utils.ui.ButtonInsetBackgroundFactory;
 
@@ -89,12 +90,8 @@ public final class TuneWeaveAccountView extends LinearLayout {
         platformSelector.removeAllViews();
         for (JsonObject item : platforms) {
             String id = string(item, "platform");
-            Button badge = button(platformIcon(id));
-            badge.setTextSize(Theme.TEXT_SIZE_LARGE);
-            badge.setContentDescription(platformName(id));
-            badge.setTooltipText(platformName(id));
-            badge.setTextColor(id.equals(selectedPlatform) ? Theme.EMPHASIZE_TEXT_COLOR : platformColor(id));
-            badge.setSelected(id.equals(selectedPlatform));
+            MusicHudIconButton badge = new MusicHudIconButton(getContext(), platformIconResource(id), platformName(id));
+            badge.setAlpha(id.equals(selectedPlatform) ? 1f : 0.56f);
             badge.setOnClickListener(view -> selectPlatform(id));
             platformSelector.addView(badge, margins(new LayoutParams(dp(36), dp(36)), 0, 0, dp(8), 0));
         }
@@ -192,17 +189,7 @@ public final class TuneWeaveAccountView extends LinearLayout {
                 status("暂无内容", false);
             }
             for (JsonObject item : items) {
-                TextView line = new TextView(getContext());
-                JsonObject resource = resource(item);
-                line.setText(firstString(resource, "name", "title", "ref"));
-                line.setTextSize(Theme.TEXT_SIZE_NORMAL);
-                line.setTextColor(Theme.NORMAL_TEXT_COLOR);
-                String reference = firstString(resource, "ref", "track_ref");
-                if (!reference.isBlank()) {
-                    line.setClickable(true);
-                    configureLibraryAction(line, item, reference, kind);
-                }
-                accountContent.addView(line, margins(new LayoutParams(MATCH_PARENT, WRAP_CONTENT), 0, dp(8), 0, 0));
+                addLibraryItem(item, kind);
             }
             Button back = button("返回账户");
             back.setOnClickListener(view -> loadProfile());
@@ -210,20 +197,75 @@ public final class TuneWeaveAccountView extends LinearLayout {
         }, this::showLogin);
     }
 
-    private void configureLibraryAction(TextView line, JsonObject item, String reference, LibraryKind kind) {
+    private void addLibraryItem(JsonObject item, LibraryKind kind) {
+        JsonObject resource = resource(item);
+        String reference = firstString(resource, "ref", "track_ref");
+        LinearLayout row = new LinearLayout(getContext());
+        row.setOrientation(HORIZONTAL);
+        row.setGravity(Gravity.CENTER_VERTICAL);
+        row.setPadding(dp(8), dp(8), dp(8), dp(8));
+        row.setBackground(ButtonInsetBackgroundFactory.builder().cornerRadius(dp(10)).inset(dp(1))
+                .padding(new ButtonInsetBackgroundFactory.Padding(0, 0, 0, 0)).build().newBackgroundDrawable());
+
+        TextView mark = new TextView(getContext());
+        mark.setText(kind == LibraryKind.PLAYLIST ? "♫" : "♪");
+        mark.setTextSize(Theme.TEXT_SIZE_LARGE);
+        mark.setTextColor(Theme.PRIMARY_COLOR);
+        mark.setGravity(Gravity.CENTER);
+        mark.setBackground(ButtonInsetBackgroundFactory.builder().cornerRadius(dp(7)).inset(0)
+                .padding(new ButtonInsetBackgroundFactory.Padding(0, 0, 0, 0)).build().newBackgroundDrawable());
+        row.addView(mark, new LayoutParams(dp(48), dp(48)));
+
+        LinearLayout textColumn = new LinearLayout(getContext());
+        textColumn.setOrientation(VERTICAL);
+        TextView name = new TextView(getContext());
+        name.setText(firstString(resource, "name", "title", "ref"));
+        name.setTextSize(Theme.TEXT_SIZE_LARGE);
+        name.setTextColor(Theme.NORMAL_TEXT_COLOR);
+        name.setSingleLine(true);
+        textColumn.addView(name);
+        TextView source = new TextView(getContext());
+        source.setText(reference);
+        source.setTextSize(Theme.TEXT_SIZE_NORMAL);
+        source.setTextColor(Theme.SECONDARY_TEXT_COLOR);
+        source.setSingleLine(true);
+        textColumn.addView(source);
+        row.addView(textColumn, margins(new LayoutParams(0, WRAP_CONTENT, 1), dp(12), 0, dp(4), 0));
+
+        configureLibraryActions(row, item, reference, kind);
+        accountContent.addView(row, margins(new LayoutParams(MATCH_PARENT, WRAP_CONTENT), 0, dp(8), 0, 0));
+    }
+
+    private void configureLibraryActions(LinearLayout row, JsonObject item, String reference, LibraryKind kind) {
+        if (reference.isBlank()) return;
         switch (kind) {
-            case PLAYLIST -> line.setOnClickListener(view -> importPlatformPlaylist(item));
-            case ALBUM -> line.setOnClickListener(view -> queueCollection(reference, "album"));
-            case ARTIST -> line.setOnClickListener(view -> queueCollection(reference, "artist"));
-            case FAVORITE_TRACK -> {
-                line.setOnClickListener(view -> queueTrack(reference, string(resource(item), "type")));
-                line.setOnLongClickListener(view -> {
-                    changeFavorite(reference, false);
-                    return true;
-                });
+            case PLAYLIST -> {
+                MusicHudIconButton importButton = new MusicHudIconButton(getContext(), "actions/import", "导入为聚合歌单");
+                importButton.setOnClickListener(view -> importPlatformPlaylist(item));
+                row.addView(importButton, new LayoutParams(dp(34), dp(34)));
             }
-            case TRACK, HISTORY_TRACK -> line.setOnClickListener(view -> queueTrack(reference, string(resource(item), "type")));
+            case ALBUM -> row.setOnClickListener(view -> queueCollection(reference, "album"));
+            case ARTIST -> row.setOnClickListener(view -> queueCollection(reference, "artist"));
+            case FAVORITE_TRACK -> {
+                row.setOnClickListener(view -> queueTrack(reference, string(resource(item), "type")));
+                addTrackActions(row, reference, string(resource(item), "type"), false);
+            }
+            case TRACK, HISTORY_TRACK -> {
+                row.setOnClickListener(view -> queueTrack(reference, string(resource(item), "type")));
+                addTrackActions(row, reference, string(resource(item), "type"), true);
+            }
         }
+    }
+
+    private void addTrackActions(LinearLayout row, String reference, String type, boolean canFavorite) {
+        MusicHudIconButton addToUni = new MusicHudIconButton(getContext(), "actions/playlist_plus", "添加到聚合歌单");
+        addToUni.setOnClickListener(view -> indi.etern.musichud.client.services.UniPlaylistClient.showReferencePicker(
+                getContext(), reference, "video".equals(type) ? "video" : "track",
+                () -> ToastUtil.show("已加入聚合歌单"), this::statusError));
+        row.addView(addToUni, new LayoutParams(dp(34), dp(34)));
+        MusicHudIconButton favorite = new MusicHudIconButton(getContext(), canFavorite ? "actions/heart_outline" : "actions/heart", canFavorite ? "收藏歌曲" : "取消收藏");
+        favorite.setOnClickListener(view -> changeFavorite(reference, canFavorite));
+        row.addView(favorite, new LayoutParams(dp(34), dp(34)));
     }
 
     private void queueTrack(String reference, String type) {
@@ -251,23 +293,11 @@ public final class TuneWeaveAccountView extends LinearLayout {
     }
 
     private void importPlatformPlaylist(JsonObject item) {
-        String reference = string(item, "ref");
-        String[] parts = reference.split(":", 2);
-        if (parts.length != 2) {
-            statusError("歌单引用格式无效：" + reference);
-            return;
-        }
-        JsonObject request = new JsonObject();
-        request.addProperty("name", firstString(item, "name", "title", "ref"));
-        JsonArray sources = new JsonArray();
-        JsonObject source = new JsonObject();
-        source.addProperty("platform", parts[0]);
-        source.addProperty("type", "playlist");
-        source.addProperty("id", parts[1]);
-        sources.add(source);
-        request.add("sources", sources);
-        TuneWeaveUiService.request("uni-import", request,
-                ignored -> ToastUtil.show("已导入为聚合歌单"), this::statusError);
+        JsonObject resource = resource(item);
+        String reference = firstString(resource, "ref", "playlist_ref");
+        indi.etern.musichud.client.services.UniPlaylistClient.showImportConfirmation(
+                getContext(), reference, firstString(resource, "name", "title", "ref"),
+                () -> ToastUtil.show("已导入为聚合歌单"), this::statusError);
     }
 
     private void showLogin(String reason) {
@@ -393,15 +423,12 @@ public final class TuneWeaveAccountView extends LinearLayout {
         return false;
     }
 
-    private static String platformIcon(String id) {
+    private static String platformIconResource(String id) {
         return switch (id) {
-            case "netease" -> "♬";
-            case "qq" -> "Q";
-            case "bilibili" -> "▷";
-            case "kugou" -> "K";
-            case "kuwo" -> "W";
-            case "migu" -> "M";
-            default -> "•";
+            case "netease" -> "platforms/netease";
+            case "qq" -> "platforms/qq";
+            case "bilibili" -> "platforms/bilibili";
+            default -> "platforms/music";
         };
     }
 
@@ -414,18 +441,6 @@ public final class TuneWeaveAccountView extends LinearLayout {
             case "kuwo" -> "酷我音乐";
             case "migu" -> "咪咕音乐";
             default -> id;
-        };
-    }
-
-    private static int platformColor(String id) {
-        return switch (id) {
-            case "netease" -> 0xFFE84040;
-            case "qq" -> 0xFF35B86B;
-            case "bilibili" -> 0xFFFF7EB5;
-            case "kugou" -> 0xFF4A90E2;
-            case "kuwo" -> 0xFFFFB432;
-            case "migu" -> 0xFFE85555;
-            default -> Theme.PRIMARY_COLOR;
         };
     }
 

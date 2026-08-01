@@ -236,6 +236,15 @@ public class MusicListItem extends LinearLayout {
         likeButton.bindMusicList(musicService.getMusicTrackState(musicDetail).currentUsersLikeList());
     }
 
+    public MusicHudIconButton addAction(String icon, String description, View.OnClickListener listener) {
+        MusicHudIconButton action = new MusicHudIconButton(getContext(), icon, description);
+        action.setOnClickListener(listener);
+        LayoutParams params = new LayoutParams(dp(32), dp(32));
+        params.setMargins(dp(2), 0, 0, 0);
+        buttonsLayout.addView(action, params);
+        return action;
+    }
+
     private static String sourcePlatformLabel(String platform) {
         return switch (platform) {
             case "netease" -> "网易云";

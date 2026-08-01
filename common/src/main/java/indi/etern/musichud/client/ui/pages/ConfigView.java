@@ -19,7 +19,7 @@ import indi.etern.musichud.client.ui.components.DynamicIntegerOption;
 import indi.etern.musichud.client.ui.components.LyricLineView;
 import indi.etern.musichud.client.ui.components.Modal;
 import indi.etern.musichud.client.ui.components.StaggeredLyricScrollView;
-import indi.etern.musichud.client.ui.utils.ButtonInsetBackgroundFactory;
+import indi.etern.musichud.client.ui.utils.ui.ButtonInsetBackgroundFactory;
 import indi.etern.musichud.client.ui.hud.HudRendererManager;
 import indi.etern.musichud.client.ui.hud.metadata.HorizontalAlign;
 import indi.etern.musichud.client.ui.hud.metadata.VerticalAlign;
@@ -57,7 +57,7 @@ public class ConfigView extends LinearLayout {
         content.addView(description);
         TextView title = new TextView(context);
         title.setText("下载 TuneWeave");
-        Modal dialog = new Modal(context, content, title,
+        Modal dialog = new Modal(context, title, content,
                 new Modal.ActionButton("取消", (button, modal) -> modal.dismiss()),
                 new Modal.ActionButton("下载并启动", (button, modal) -> {
                     modal.dismiss();
