@@ -41,9 +41,7 @@ public class ClientConfigDefinition implements ClientConfig {
     private int hudCornerRadius = 8;
     private String clientCookie = "";
     private String clientAccountConfig = "";
-    private String tuneWeaveClientApiBaseUrl = "http://127.0.0.1:7832";
     private String tuneWeaveClientCredentials = "{}";
-    private boolean manageTuneWeaveLocally;
     private boolean enabledInIntegratedServer = true;
     private boolean enableAutoConnect = true;
     private boolean enableIsolatedMode = true;
@@ -82,9 +80,7 @@ public class ClientConfigDefinition implements ClientConfig {
         hudCornerRadius = SimpleTomlConfig.getInt(values, "hudCornerRadius", hudCornerRadius);
         clientCookie = SimpleTomlConfig.getString(values, "clientCookie", clientCookie);
         clientAccountConfig = SimpleTomlConfig.getString(values, "clientAccountConfig", clientAccountConfig);
-        tuneWeaveClientApiBaseUrl = SimpleTomlConfig.getString(values, "tuneWeaveClientApiBaseUrl", tuneWeaveClientApiBaseUrl);
         tuneWeaveClientCredentials = SimpleTomlConfig.getString(values, "tuneWeaveClientCredentials", tuneWeaveClientCredentials);
-        manageTuneWeaveLocally = SimpleTomlConfig.getBoolean(values, "manageTuneWeaveLocally", manageTuneWeaveLocally);
         enabledInIntegratedServer = SimpleTomlConfig.getBoolean(
                 values,
                 "enabledInIntegratedServer",
@@ -217,20 +213,9 @@ public class ClientConfigDefinition implements ClientConfig {
     }
 
     @Override
-    public void setTuneWeaveClientApiBaseUrl(String tuneWeaveClientApiBaseUrl) {
-        this.tuneWeaveClientApiBaseUrl = tuneWeaveClientApiBaseUrl == null || tuneWeaveClientApiBaseUrl.isBlank()
-                ? "http://127.0.0.1:7832" : tuneWeaveClientApiBaseUrl.trim();
-    }
-
-    @Override
     public void setTuneWeaveClientCredentials(String tuneWeaveClientCredentials) {
         this.tuneWeaveClientCredentials = tuneWeaveClientCredentials == null || tuneWeaveClientCredentials.isBlank()
                 ? "{}" : tuneWeaveClientCredentials;
-    }
-
-    @Override
-    public void setManageTuneWeaveLocally(boolean manageTuneWeaveLocally) {
-        this.manageTuneWeaveLocally = manageTuneWeaveLocally;
     }
 
     @Override
@@ -374,18 +359,8 @@ public class ClientConfigDefinition implements ClientConfig {
     }
 
     @Override
-    public String getTuneWeaveClientApiBaseUrl() {
-        return tuneWeaveClientApiBaseUrl;
-    }
-
-    @Override
     public String getTuneWeaveClientCredentials() {
         return tuneWeaveClientCredentials;
-    }
-
-    @Override
-    public boolean getManageTuneWeaveLocally() {
-        return manageTuneWeaveLocally;
     }
 
     @Override
@@ -448,9 +423,7 @@ public class ClientConfigDefinition implements ClientConfig {
                 new SimpleTomlConfig.Entry("hudCornerRadius", "HUD rounded corner radius", hudCornerRadius),
                 new SimpleTomlConfig.Entry("clientCookie", "Client NCM cookie json", clientCookie),
                 new SimpleTomlConfig.Entry("clientAccountConfig", "Client account config json", clientAccountConfig),
-                new SimpleTomlConfig.Entry("tuneWeaveClientApiBaseUrl", "TuneWeave address used for this client's local accounts", tuneWeaveClientApiBaseUrl),
                 new SimpleTomlConfig.Entry("tuneWeaveClientCredentials", "Local TuneWeave caller credentials JSON; never sent to a game server", tuneWeaveClientCredentials),
-                new SimpleTomlConfig.Entry("manageTuneWeaveLocally", "Automatically download, verify and run local TuneWeave for this client", manageTuneWeaveLocally),
                 new SimpleTomlConfig.Entry("enabledInIntegratedServer", "Enable embedded server for singleplayer or LAN multiplayer", enabledInIntegratedServer),
                 new SimpleTomlConfig.Entry("enableAutoConnect", "Enable auto connect", enableAutoConnect),
                 new SimpleTomlConfig.Entry("enableClientOnlyMode", "Enable client-only isolated mode", enableIsolatedMode),
