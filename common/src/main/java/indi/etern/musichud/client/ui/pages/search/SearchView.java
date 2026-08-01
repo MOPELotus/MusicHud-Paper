@@ -1,5 +1,8 @@
 package indi.etern.musichud.client.ui.pages.search;
 
+import com.google.gson.JsonArray;
+import com.google.gson.JsonElement;
+import com.google.gson.JsonObject;
 import icyllis.modernui.R;
 import icyllis.modernui.core.Context;
 import icyllis.modernui.graphics.drawable.Drawable;
@@ -16,6 +19,7 @@ import indi.etern.musichud.beans.music.Album;
 import indi.etern.musichud.beans.music.Artist;
 import indi.etern.musichud.beans.music.MusicDetail;
 import indi.etern.musichud.beans.music.Playlist;
+import indi.etern.musichud.client.services.TuneWeaveUiService;
 import indi.etern.musichud.client.ui.Theme;
 import indi.etern.musichud.client.ui.utils.ButtonInsetBackgroundFactory;
 import indi.etern.musichud.interfaces.ClientConfig;
@@ -31,6 +35,7 @@ import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.ArrayList;
 import java.util.concurrent.CompletableFuture;
 import java.util.function.Consumer;
 
@@ -47,6 +52,9 @@ public class SearchView extends LinearLayout {
     private static final ClientConfig clientConfig = ClientConfig.getInstance();
     private EditText searchTextInput;
     private SearchResultTabPage searchResultTabPage;
+    private LinearLayout platformSelector;
+    private final List<JsonObject> platforms = new ArrayList<>();
+    private String selectedPlatform = "";
     @Getter
     private String searchText;
     private static final IClientNetworkService clientNetworkService = IClientNetworkService.getInstance();
@@ -97,6 +105,14 @@ public class SearchView extends LinearLayout {
 
         top.addView(new View(context), new LayoutParams(0, WRAP_CONTENT, 2));
 
+        platformSelector = new LinearLayout(context);
+        platformSelector.setOrientation(HORIZONTAL);
+        platformSelector.setGravity(Gravity.CENTER);
+        LayoutParams platformParams = new LayoutParams(MATCH_PARENT, WRAP_CONTENT);
+        platformParams.setMargins(dp(32), dp(12), dp(32), 0);
+        addView(platformSelector, platformParams);
+        loadSearchPlatforms();
+
         searchResultTabPage = new SearchResultTabPage(context);
 
         LayoutParams resultAreaParams = new LayoutParams(MATCH_PARENT, 0, 1);
@@ -139,7 +155,7 @@ public class SearchView extends LinearLayout {
             searchMeta1.pendingFuture = new CompletableFuture<>();
             searchMetas.put(searchType, searchMeta1);
             searchRefreshListeners.forEach(listener -> listener.accept(searchMeta1));
-            clientNetworkService.sendToServer(new SearchRequest(searchText, searchType, 0));
+            clientNetworkService.sendToServer(new SearchRequest(searchText, searchType, 0, selectedPlatform));
         }
     }
 
@@ -153,8 +169,101 @@ public class SearchView extends LinearLayout {
             int offset = searchMeta.nextOffset;
             searchMeta.pendingFuture = new CompletableFuture<>();
             searchRefreshListeners.forEach(listener -> listener.accept(searchMeta));
-            clientNetworkService.sendToServer(new SearchRequest(text, searchType, offset));
+            clientNetworkService.sendToServer(new SearchRequest(text, searchType, offset, selectedPlatform));
         }
+    }
+
+    /** Loads only registered music providers; the server receives the chosen ID directly. */
+    private void loadSearchPlatforms() {
+        if (platformSelector == null) {
+            return;
+        }
+        platformSelector.removeAllViews();
+        TextView loading = new TextView(getContext());
+        loading.setText("正在读取音乐平台…");
+        loading.setTextColor(Theme.SECONDARY_TEXT_COLOR);
+        platformSelector.addView(loading);
+        TuneWeaveUiService.request("platforms", new JsonObject(), data -> {
+            platforms.clear();
+            JsonArray array = data != null && data.isJsonArray() ? data.getAsJsonArray() : new JsonArray();
+            for (JsonElement element : array) {
+                if (!element.isJsonObject()) {
+                    continue;
+                }
+                JsonObject platform = element.getAsJsonObject();
+                String id = string(platform, "platform");
+                if (booleanValue(platform, "registered") && !"uni".equals(id)) {
+                    platforms.add(platform);
+                }
+            }
+            if (platforms.isEmpty()) {
+                platformSelector.removeAllViews();
+                TextView unavailable = new TextView(getContext());
+                unavailable.setText("TuneWeave 没有注册可搜索的平台");
+                unavailable.setTextColor(Theme.ERROR_TEXT_COLOR);
+                platformSelector.addView(unavailable);
+                return;
+            }
+            if (selectedPlatform.isBlank() || platforms.stream()
+                    .noneMatch(platform -> selectedPlatform.equals(string(platform, "platform")))) {
+                JsonObject defaultPlatform = platforms.stream().filter(platform -> booleanValue(platform, "default"))
+                        .findFirst().orElse(platforms.getFirst());
+                selectedPlatform = string(defaultPlatform, "platform");
+            }
+            rebuildSearchPlatformSelector();
+        }, error -> {
+            platformSelector.removeAllViews();
+            TextView unavailable = new TextView(getContext());
+            unavailable.setText(error);
+            unavailable.setTextColor(Theme.ERROR_TEXT_COLOR);
+            platformSelector.addView(unavailable);
+        });
+    }
+
+    private void rebuildSearchPlatformSelector() {
+        platformSelector.removeAllViews();
+        for (JsonObject platform : platforms) {
+            String id = string(platform, "platform");
+            Button button = new Button(getContext());
+            button.setText(platformBadge(id));
+            button.setTextSize(Theme.TEXT_SIZE_NORMAL);
+            button.setTextColor(id.equals(selectedPlatform) ? Theme.EMPHASIZE_TEXT_COLOR : Theme.PRIMARY_COLOR);
+            button.setSelected(id.equals(selectedPlatform));
+            button.setBackground(ButtonInsetBackgroundFactory.builder().cornerRadius(dp(4)).inset(dp(1))
+                    .padding(new ButtonInsetBackgroundFactory.Padding(dp(8), 0, dp(8), 0)).build().newBackgroundDrawable());
+            button.setOnClickListener(view -> {
+                if (!id.equals(selectedPlatform)) {
+                    selectedPlatform = id;
+                    rebuildSearchPlatformSelector();
+                    if (searchTextInput != null && !searchTextInput.getText().toString().isBlank()) {
+                        refreshSearch(true);
+                    }
+                }
+            });
+            LayoutParams params = new LayoutParams(WRAP_CONTENT, WRAP_CONTENT);
+            params.setMargins(0, 0, dp(8), 0);
+            platformSelector.addView(button, params);
+        }
+    }
+
+    private static String platformBadge(String id) {
+        return switch (id) {
+            case "netease" -> "♫ 网易云";
+            case "qq" -> "Q♪ QQ";
+            case "bilibili" -> "▷ B 站";
+            case "kugou" -> "K 酷狗";
+            case "kuwo" -> "W 酷我";
+            case "migu" -> "M 咪咕";
+            default -> id;
+        };
+    }
+
+    private static String string(JsonObject object, String key) {
+        return object.has(key) && !object.get(key).isJsonNull() ? object.get(key).getAsString() : "";
+    }
+
+    private static boolean booleanValue(JsonObject object, String key) {
+        return object.has(key) && !object.get(key).isJsonNull() && object.get(key).getAsBoolean();
     }
 
     private void refreshSearchMeta(int offset, List<?> result, SearchType searchType) {

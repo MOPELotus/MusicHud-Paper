@@ -1,5 +1,7 @@
 package indi.etern.musichud.server.api;
 
 public enum ApiProvider {
-    NCM
+    /** Retained for decoding pre-TuneWeave connection packets. */
+    NCM,
+    TUNEWEAVE
 }
