@@ -15,6 +15,7 @@ public class ServerConfigDefinition implements ServerConfig {
     private static final ServerConfigDefinition instance = new ServerConfigDefinition();
 
     private String serverApiBaseUrl = "http://127.0.0.1:7832";
+    private boolean manageTuneWeaveInternally;
     private double pusherVoteAdditionalRate = 0.5;
     @Setter
     @Getter
@@ -27,6 +28,7 @@ public class ServerConfigDefinition implements ServerConfig {
         Path path = SimpleTomlConfig.path(FILE_NAME);
         Map<String, String> values = SimpleTomlConfig.read(path);
         serverApiBaseUrl = SimpleTomlConfig.getString(values, "serverApiBaseUrl", serverApiBaseUrl);
+        manageTuneWeaveInternally = SimpleTomlConfig.getBoolean(values, "manageTuneWeaveInternally", manageTuneWeaveInternally);
         pusherVoteAdditionalRate = clamp(SimpleTomlConfig.getDouble(
                 values, "pusherVoteAdditionalRate", pusherVoteAdditionalRate));
         configured = true;
@@ -45,6 +47,16 @@ public class ServerConfigDefinition implements ServerConfig {
     }
 
     @Override
+    public boolean getManageTuneWeaveInternally() {
+        return manageTuneWeaveInternally;
+    }
+
+    @Override
+    public void setManageTuneWeaveInternally(boolean manageTuneWeaveInternally) {
+        this.manageTuneWeaveInternally = manageTuneWeaveInternally;
+    }
+
+    @Override
     public double getPusherVoteAdditionalRate() {
         return pusherVoteAdditionalRate;
     }
@@ -58,6 +70,7 @@ public class ServerConfigDefinition implements ServerConfig {
     public synchronized void save() {
         SimpleTomlConfig.write(SimpleTomlConfig.path(FILE_NAME), List.of(
                 new SimpleTomlConfig.Entry("serverApiBaseUrl", "TuneWeave service base URL", serverApiBaseUrl),
+                new SimpleTomlConfig.Entry("manageTuneWeaveInternally", "Automatically download, verify, launch and update the local TuneWeave service", manageTuneWeaveInternally),
                 new SimpleTomlConfig.Entry("pusherVoteAdditionalRate", "Skip vote threshold added by the current pusher (0.0 - 1.0)", pusherVoteAdditionalRate)
         ));
     }
