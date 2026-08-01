@@ -60,7 +60,7 @@ public class LoginApiService implements ILoginApiService {
 
     private static void sendSuccessLoginResultTo(IPlayerClient player, LoginCookieInfo loginCookieInfo, Profile profile) {
         serverNetworkService.sendToPlayer(player, new LoginResultMessage(true, "", loginCookieInfo, profile));
-        MusicPlayerServerService.getInstance().sendUpdateAllIdlePlaySourcesMessageTo(Collections.singleton(loginApiService.getLoginInfoByPlayerUUID(player.getUUID())));
+        MusicPlayerServerService.getInstance().sendUpdateAllIdlePlaySourcesMessageTo(Collections.singleton(player));
     }
 
     void sendLoginFailResult(IPlayerClient player, Exception e) {
@@ -113,7 +113,7 @@ public class LoginApiService implements ILoginApiService {
     public void joinUnlogged(IPlayerClient player) {
         playerInfoMap.put(player.getUUID(), ILoginApiService.PlayerLoginInfo.of(player, LoginCookieInfo.UNLOGGED));
         loginStateChangeListeners.forEach(mapConsumer -> mapConsumer.accept(playerInfoMap.values()));
-        MusicPlayerServerService.getInstance().sendUpdateAllIdlePlaySourcesMessageTo(Collections.singleton(loginApiService.getLoginInfoByPlayerUUID(player.getUUID())));
+        MusicPlayerServerService.getInstance().sendUpdateAllIdlePlaySourcesMessageTo(Collections.singleton(player));
     }
 
     @Override
@@ -377,12 +377,16 @@ public class LoginApiService implements ILoginApiService {
 
     @Override
     public void disconnectToAll() {
-        serverNetworkService.sendToPlayerInfos(playerInfoMap.values(), new ConnectResponse(false, Version.current, List.of(ApiProvider.NCM)));
+        serverNetworkService.sendToPlayers(playerInfoMap.values().stream()
+                .map(PlayerLoginInfo::getPlayer).filter(Objects::nonNull).toList(),
+                new ConnectResponse(false, Version.current, List.of(ApiProvider.TUNEWEAVE)));
     }
 
     @Override
     public void reconnectAll() {
-        serverNetworkService.sendToPlayerInfos(playerInfoMap.values(), new ConnectResponse(true, Version.current, List.of(ApiProvider.NCM)));
+        serverNetworkService.sendToPlayers(playerInfoMap.values().stream()
+                .map(PlayerLoginInfo::getPlayer).filter(Objects::nonNull).toList(),
+                new ConnectResponse(true, Version.current, List.of(ApiProvider.TUNEWEAVE)));
     }
 
     @Override
@@ -421,7 +425,7 @@ public class LoginApiService implements ILoginApiService {
                 );
             }
         }
-        MusicPlayerServerService.getInstance().sendUpdateAllIdlePlaySourcesMessageTo(Collections.singleton(getLoginInfoByPlayerUUID(player.getUUID())));
+        MusicPlayerServerService.getInstance().sendUpdateAllIdlePlaySourcesMessageTo(Collections.singleton(player));
     }
 
     record ValidationCodeRequest(int ctcode, long phone) {

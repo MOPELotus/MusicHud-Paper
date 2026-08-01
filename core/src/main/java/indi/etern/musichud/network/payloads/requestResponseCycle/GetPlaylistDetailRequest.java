@@ -5,42 +5,32 @@ import indi.etern.musichud.interfaces.CommonRegister;
 import indi.etern.musichud.interfaces.RegisterMark;
 import indi.etern.musichud.network.ByteBufCodec;
 import indi.etern.musichud.network.Codecs;
-import indi.etern.musichud.network.RequestHandlerRegistry;
-import indi.etern.musichud.network.RequestResponseCodecs;
-import indi.etern.musichud.network.ResponseResult;
-import indi.etern.musichud.network.payloads.ApiRequestPayload;
+import indi.etern.musichud.network.INetworkRegister;
+import indi.etern.musichud.network.IServerNetworkService;
+import indi.etern.musichud.network.payloads.C2SPayload;
 import indi.etern.musichud.server.api.ApiProvider;
 import indi.etern.musichud.server.api.IMusicApiService;
-import lombok.AllArgsConstructor;
-import lombok.Getter;
+import indi.etern.musichud.utils.ServerDataPacketVThreadExecutor;
 
-@Getter
-@AllArgsConstructor
-public class GetPlaylistDetailRequest extends ApiRequestPayload {
-    public static final ByteBufCodec<GetPlaylistDetailRequest> CODEC = RequestResponseCodecs.withCycleId(
-            ByteBufCodec.composite(
-                    Codecs.LONG,
-                    GetPlaylistDetailRequest::getId,
-                    Codecs.BOOL,
-                    GetPlaylistDetailRequest::isIgnoreCache,
-                    GetPlaylistDetailRequest::new
-            )
+public record GetPlaylistDetailRequest(long id) implements C2SPayload {
+    public static final ByteBufCodec<GetPlaylistDetailRequest> CODEC = ByteBufCodec.composite(
+            Codecs.LONG,
+            GetPlaylistDetailRequest::id,
+            GetPlaylistDetailRequest::new
     );
-
-    private final long id;
-    private final boolean ignoreCache;
 
     @RegisterMark
     public static class RegisterImpl implements CommonRegister {
         public void register() {
-            RequestHandlerRegistry.autoRegisterPayload(GetPlaylistDetailRequest.class, CODEC, (request, player) -> {
-                Playlist playlistDetail = IMusicApiService.getInstance(ApiProvider.NCM)
-                        .getPlaylistDetail(request.getId(), request.isIgnoreCache(), player.getUUID());
-                if (playlistDetail != null) {
-                    return ResponseResult.of(new GetPlaylistDetailResponse(playlistDetail));
-                }
-                return ResponseResult.ignore();
-            });
+            INetworkRegister.getInstance().autoRegisterPayload(
+                    GetPlaylistDetailRequest.class, CODEC,
+                    ServerDataPacketVThreadExecutor.execute((playlistDetailRequest, player) -> {
+                        Playlist playlistDetail = IMusicApiService.getInstance(ApiProvider.TUNEWEAVE).getPlaylistDetail(playlistDetailRequest.id, player.getUUID());
+                        if (playlistDetail != null) {
+                            IServerNetworkService.getInstance().sendToPlayer(player,new GetPlaylistDetailResponse(playlistDetail));
+                        }
+                    })
+            );
         }
     }
 }

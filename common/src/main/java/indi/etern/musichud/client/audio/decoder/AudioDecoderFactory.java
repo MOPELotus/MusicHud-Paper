@@ -5,6 +5,7 @@ import indi.etern.musichud.beans.music.FormatType;
 import org.apache.logging.log4j.Logger;
 
 import java.io.IOException;
+import java.util.Map;
 
 public final class AudioDecoderFactory {
     private static final Logger LOGGER = MusicHud.getLogger(AudioDecoderFactory.class);
@@ -14,9 +15,13 @@ public final class AudioDecoderFactory {
     }
 
     public static AudioDecoder open(String identifier, FormatType declaredFormat) {
+        return open(identifier, declaredFormat, Map.of());
+    }
+
+    public static AudioDecoder open(String identifier, FormatType declaredFormat, Map<String, String> requestHeaders) {
         String normalizedIdentifier = AudioFormatDetector.normalizeIdentifier(identifier);
         try {
-            return LavaplayerStreamDecoder.open(normalizedIdentifier);
+            return LavaplayerStreamDecoder.open(normalizedIdentifier, requestHeaders);
         } catch (IOException e) {
             throw new RuntimeException("Failed to open audio decoder for: " + normalizedIdentifier, e);
         }

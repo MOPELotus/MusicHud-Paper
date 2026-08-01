@@ -30,6 +30,7 @@ import java.nio.ByteBuffer;
 import java.time.Duration;
 import java.time.ZonedDateTime;
 import java.util.HashSet;
+import java.util.Map;
 import java.util.Objects;
 import java.util.Set;
 import java.util.concurrent.*;
@@ -80,6 +81,10 @@ public class StreamAudioPlayer {
 
     private AudioDecoder loadAudioDecoder(String identifier, FormatType formatType) {
         return AudioDecoderFactory.open(identifier, formatType);
+    }
+
+    private AudioDecoder loadAudioDecoder(String identifier, FormatType formatType, Map<String, String> requestHeaders) {
+        return AudioDecoderFactory.open(identifier, formatType, requestHeaders);
     }
 
     public Status getStatus() {
@@ -135,6 +140,7 @@ public class StreamAudioPlayer {
         directMusicResourceInfo = new MusicResourceInfo(
                 0L,
                 AudioFormatDetector.normalizeIdentifier(identifier),
+                "{}",
                 0,
                 0L,
                 formatType == null ? FormatType.AUTO : formatType,
@@ -393,7 +399,7 @@ public class StreamAudioPlayer {
 
                 LOGGER.debug("Starting audio download (attempt {})", localRetryCount + 1);
 
-                AudioDecoder decoder = loadAudioDecoder(musicResourceInfo.getUrl(), musicResourceInfo.getType());
+                AudioDecoder decoder = loadAudioDecoder(musicResourceInfo.getUrl(), musicResourceInfo.getType(), musicResourceInfo.getRequestHeaders());
                 if (currentDownloadFuture.isDone() || currentDownloadFuture != downloadFuture) {
                     decoder.close();
                     break;

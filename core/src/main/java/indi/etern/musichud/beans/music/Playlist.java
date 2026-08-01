@@ -1,6 +1,5 @@
 package indi.etern.musichud.beans.music;
 
-import com.google.gson.annotations.SerializedName;
 import indi.etern.musichud.MusicHud;
 import indi.etern.musichud.beans.user.Profile;
 import indi.etern.musichud.network.ByteBufCodec;
@@ -10,22 +9,31 @@ import lombok.Getter;
 import lombok.NoArgsConstructor;
 import lombok.Setter;
 
-import java.util.*;
+import java.util.List;
+import java.util.Objects;
 
 @NoArgsConstructor(access = AccessLevel.PUBLIC)
 public class Playlist implements MusicCollection {
+    private static final String TUNEWEAVE_REFERENCE_MARKER = "__MUSIC_HUD_TUNEWEAVE_REF__:";
     public static final ByteBufCodec<Playlist> CODEC = ByteBufCodec.composite(
-            Codecs.LONG, Playlist::getId,
-            Codecs.STRING_UTF8, Playlist::getName,
-            Codecs.LONG, Playlist::getCoverImgId,
-            Codecs.STRING_UTF8, Playlist::getCoverImgId_str,
-            Codecs.STRING_UTF8, Playlist::getCoverImgUrl,
-            Codecs.INT, Playlist::getMusicTrackCount,
-            Codecs.INT, Playlist::getPlayedCount,
-            Profile.CODEC, Playlist::getCreator,
-            Codecs.ofEnum(Privacy.class), Playlist::getPrivacy,
-            Codecs.ofCollection(LinkedHashSet::new, () -> MusicDetail.CODEC), Playlist::getTracks,
-            PusherInfo.CODEC, Playlist::getPusherInfo,
+            Codecs.LONG,
+            Playlist::getId,
+            Codecs.STRING_UTF8,
+            Playlist::getName,
+            Codecs.LONG,
+            Playlist::getCoverImgId,
+            Codecs.STRING_UTF8,
+            Playlist::getCodecCoverImgIdString,
+            Codecs.STRING_UTF8,
+            Playlist::getCoverImgUrl,
+            Profile.CODEC,
+            Playlist::getCreator,
+            Codecs.ofEnum(Privacy.class),
+            Playlist::getPrivacy,
+            Codecs.ofList(() -> MusicDetail.CODEC),
+            Playlist::getTracks,
+            PusherInfo.CODEC,
+            Playlist::getPusherInfo,
             Playlist::new
     );
 
@@ -35,26 +43,19 @@ public class Playlist implements MusicCollection {
     long id = -1;
     String name = "";
     @Getter
+    String sourceRef = "";
+    @Getter
     long coverImgId = -1;
-    @SerializedName("trackCount")
-    @Getter
-    @Setter
-    int musicTrackCount;
-    @SerializedName("playCount")
-    @Getter
-    int playedCount;
     String coverImgId_str = "";
     String coverImgUrl = MusicHud.ICON_BASE64;
     Profile creator = Profile.ANONYMOUS;
     Privacy privacy = Privacy.PUBLIC;
     @Setter
-    SequencedSet<MusicDetail> tracks = new LinkedHashSet<>(0);
+    List<MusicDetail> tracks = List.of();
 
     // Not contained in the original API response, set separately
     @Getter
     PusherInfo pusherInfo = PusherInfo.EMPTY;
-
-    private boolean nullFiltered = false;
 
     protected Playlist(
             long id,
@@ -62,20 +63,21 @@ public class Playlist implements MusicCollection {
             long coverImgId,
             String coverImgId_str,
             String coverImgUrl,
-            int musicTrackCount,
-            int playedCount,
             Profile creator,
             Privacy privacy,
-            SequencedSet<MusicDetail> tracks,
+            List<MusicDetail> tracks,
             PusherInfo pusherInfo
     ) {
         this.id = id;
         this.name = name;
         this.coverImgId = coverImgId;
-        this.coverImgId_str = coverImgId_str;
+        if (coverImgId_str != null && coverImgId_str.startsWith(TUNEWEAVE_REFERENCE_MARKER)) {
+            this.sourceRef = coverImgId_str.substring(TUNEWEAVE_REFERENCE_MARKER.length());
+            this.coverImgId_str = "";
+        } else {
+            this.coverImgId_str = coverImgId_str;
+        }
         this.coverImgUrl = coverImgUrl;
-        this.musicTrackCount = musicTrackCount;
-        this.playedCount = playedCount;
         this.creator = creator;
         this.privacy = privacy;
         this.tracks = tracks;
@@ -96,6 +98,15 @@ public class Playlist implements MusicCollection {
         return playlist;
     }
 
+    public static Playlist fromTuneWeave(long id, String sourceRef, String name, String coverUrl) {
+        Playlist playlist = new Playlist();
+        playlist.id = id;
+        playlist.sourceRef = Objects.requireNonNullElse(sourceRef, "");
+        playlist.name = Objects.requireNonNullElse(name, "");
+        playlist.coverImgUrl = Objects.requireNonNullElse(coverUrl, MusicHud.ICON_BASE64);
+        return playlist;
+    }
+
     public String getName() {
         return Objects.requireNonNullElse(name, "");
     }
@@ -111,12 +122,22 @@ public class Playlist implements MusicCollection {
     }
 
     @Override
-    public SequencedSet<MusicDetail> getMusicDetails() {
+    public List<MusicDetail> getMusicDetails() {
         return getTracks();
     }
 
     public String getCoverImgId_str() {
         return Objects.requireNonNullElse(coverImgId_str, "");
+    }
+
+    /**
+     * The legacy wire structure has nine fields and its codec deliberately
+     * skips arity ten.  A TuneWeave playlist never has an NCM cover-id string,
+     * so reserve that unused slot for its canonical reference while retaining
+     * full compatibility for legacy playlists.
+     */
+    private String getCodecCoverImgIdString() {
+        return sourceRef.isBlank() ? getCoverImgId_str() : TUNEWEAVE_REFERENCE_MARKER + sourceRef;
     }
 
     public String getCoverImgUrl() {
@@ -139,20 +160,11 @@ public class Playlist implements MusicCollection {
         return Objects.requireNonNullElse(privacy, Privacy.PUBLIC);
     }
 
-    public SequencedSet<MusicDetail> getTracks() {
+    public List<MusicDetail> getTracks() {
         if (tracks == null || tracks.isEmpty()) {
-            return new LinkedHashSet<>(0);
+            return List.of();
         }
-        if (!nullFiltered) {
-            filterTracksNullItem();
-            nullFiltered = true;
-        }
-        return tracks;
-    }
-
-    private void filterTracksNullItem() {
-        tracks = tracks.stream().filter(Objects::nonNull)
-                .collect(LinkedHashSet::new, Set::add, LinkedHashSet::addAll);
+        return tracks.stream().filter(Objects::nonNull).toList();
     }
 
     @Override
@@ -179,6 +191,7 @@ public class Playlist implements MusicCollection {
     public Playlist copyWithPusherInfo(PusherInfo pusherInfo) {
         Playlist playlist = new Playlist();
         playlist.id = id;
+        playlist.sourceRef = sourceRef;
         playlist.name = name;
         playlist.coverImgId = coverImgId;
         playlist.coverImgUrl = coverImgUrl;

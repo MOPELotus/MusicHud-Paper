@@ -3,36 +3,33 @@ package indi.etern.musichud.network.payloads.requestResponseCycle;
 import indi.etern.musichud.beans.music.Album;
 import indi.etern.musichud.interfaces.CommonRegister;
 import indi.etern.musichud.interfaces.RegisterMark;
-import indi.etern.musichud.network.*;
-import indi.etern.musichud.network.payloads.ApiRequestPayload;
+import indi.etern.musichud.network.ByteBufCodec;
+import indi.etern.musichud.network.INetworkRegister;
+import indi.etern.musichud.network.IServerNetworkService;
+import indi.etern.musichud.network.payloads.C2SPayload;
 import indi.etern.musichud.server.api.ApiProvider;
 import indi.etern.musichud.server.api.IMusicApiService;
-import lombok.AllArgsConstructor;
-import lombok.Getter;
+import indi.etern.musichud.utils.ServerDataPacketVThreadExecutor;
+import lombok.AccessLevel;
+import lombok.NoArgsConstructor;
 
-import java.util.LinkedHashSet;
+import java.util.List;
 
-@Getter
-@AllArgsConstructor
-public class GetUserAlbumsRequest extends ApiRequestPayload {
-    public static final ByteBufCodec<GetUserAlbumsRequest> CODEC = RequestResponseCodecs.withCycleId(
-            ByteBufCodec.composite(
-                    Codecs.BOOL,
-                    GetUserAlbumsRequest::isIgnoreCache,
-                    GetUserAlbumsRequest::new
-            )
-    );
-
-    private final boolean ignoreCache;
+@NoArgsConstructor(access = AccessLevel.PUBLIC)
+public class GetUserAlbumsRequest implements C2SPayload {
+    public static final GetUserAlbumsRequest REQUEST = new GetUserAlbumsRequest();
+    public static final ByteBufCodec<GetUserAlbumsRequest> CODEC = ByteBufCodec.unit(REQUEST);
 
     @RegisterMark
     public static class RegisterImpl implements CommonRegister {
         public void register() {
-            RequestHandlerRegistry.autoRegisterPayload(GetUserAlbumsRequest.class, CODEC, (request, player) -> {
-                LinkedHashSet<Album> playersUserAlbums = IMusicApiService.getInstance(ApiProvider.NCM)
-                        .getPlayersUserSubscribedAlbums(request.isIgnoreCache(), player.getUUID());
-                return ResponseResult.of(new GetUserAlbumsResponse(playersUserAlbums));
-            });
+            INetworkRegister.getInstance().autoRegisterPayload(
+                    GetUserAlbumsRequest.class, CODEC,
+                    ServerDataPacketVThreadExecutor.execute((getUserPlaylistRequest, player) -> {
+                        List<Album> playersUserAlbums = IMusicApiService.getInstance(ApiProvider.TUNEWEAVE).getPlayersUserSubscribedAlbums(player.getUUID());
+                        IServerNetworkService.getInstance().sendToPlayer(player, new GetUserAlbumsResponse(playersUserAlbums));
+                    })
+            );
         }
     }
 }

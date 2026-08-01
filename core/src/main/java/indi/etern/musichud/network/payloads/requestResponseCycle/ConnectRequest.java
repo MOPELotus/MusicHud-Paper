@@ -10,8 +10,8 @@ import indi.etern.musichud.network.INetworkRegister;
 import indi.etern.musichud.network.IServerNetworkService;
 import indi.etern.musichud.network.payloads.C2SPayload;
 import indi.etern.musichud.platform.Environment;
-import indi.etern.musichud.server.api.ApiProvider;
-import indi.etern.musichud.server.api.ILoginApiService;
+import indi.etern.musichud.server.api.MusicPlayerServerService;
+import indi.etern.musichud.server.api.PlayerSessionRegistry;
 import indi.etern.musichud.utils.ServerDataPacketVThreadExecutor;
 
 import java.util.List;
@@ -38,19 +38,15 @@ public record ConnectRequest(Version clientVersion) implements C2SPayload {
             INetworkRegister.getInstance().autoRegisterPayload(
                     ConnectRequest.class, CODEC,
                     ServerDataPacketVThreadExecutor.execute((startQRLoginRequest, player) -> {
-                        ILoginApiService instance = ILoginApiService.getInstance(ApiProvider.NCM);
                         boolean compatible = Version.compatibleWith(startQRLoginRequest.clientVersion());
                         if (MusicHud.getCurrentEnvironment().getSide() == Environment.Side.CLIENT && !clientConfig.getEnabledInIntegratedServer()) {
-                            if (compatible) {
-                                instance.joinUnlogged(player);
-                            }
                             return;
                         }
-                        indi.etern.musichud.network.payloads.requestResponseCycle.ConnectResponse response = new ConnectResponse(compatible, Version.current, List.of(ApiProvider.NCM));
+                        indi.etern.musichud.network.payloads.requestResponseCycle.ConnectResponse response = new ConnectResponse(compatible, Version.current, List.of(indi.etern.musichud.server.api.ApiProvider.TUNEWEAVE));
                         IServerNetworkService.getInstance().sendToPlayer(player, response);
                         if (compatible) {
-                            instance.joinUnlogged(player);
-//                            MusicPlayerServerService.getInstance().sendSyncPlayingStatusToPlayer(player);
+                            PlayerSessionRegistry.getInstance().join(player);
+                            MusicPlayerServerService.getInstance().sendSyncPlayingStatusToPlayer(player);
                         }
                     })
             );

@@ -17,19 +17,20 @@ import icyllis.modernui.view.ViewGroup;
 import icyllis.modernui.widget.*;
 import indi.etern.musichud.MusicHud;
 import indi.etern.musichud.beans.music.Artist;
-import indi.etern.musichud.client.ui.dto.LyricLine;
+import indi.etern.musichud.client.ui.beans.LyricLine;
 import indi.etern.musichud.beans.music.MusicDetail;
 import indi.etern.musichud.client.audio.NowPlayingInfo;
 import indi.etern.musichud.client.audio.StreamAudioPlayer;
 import indi.etern.musichud.client.services.LoginService;
-import indi.etern.musichud.client.services.music.MusicService;
+import indi.etern.musichud.client.services.MusicService;
 import indi.etern.musichud.client.ui.Theme;
 import indi.etern.musichud.client.ui.components.*;
 import indi.etern.musichud.client.ui.pages.ConfigView;
 import indi.etern.musichud.client.ui.pages.HomeView;
+import indi.etern.musichud.client.ui.pages.UniPlaylistView;
 import indi.etern.musichud.client.ui.pages.account.AccountBaseView;
 import indi.etern.musichud.client.ui.pages.search.SearchView;
-import indi.etern.musichud.client.ui.utils.ui.ButtonInsetBackgroundFactory;
+import indi.etern.musichud.client.ui.utils.ButtonInsetBackgroundFactory;
 import indi.etern.musichud.client.ui.utils.PlayerInfoUtil;
 import indi.etern.musichud.interfaces.ClientConfig;
 import indi.etern.musichud.interfaces.IClientLoginService;
@@ -74,15 +75,11 @@ public class MainFragment extends Fragment {
     @Setter
     private int defaultSelectedIndex = 0;
     private ProgressBar progressBar;
-    private VoteSkipButton skipCurrentButton;
+    private TextView progressText;
+    private Button skipCurrentButton;
     private TextView serverConnectStatus;
     private Button switchServerConnectButton;
     private PlayerHeadView pusherHeadView;
-    private LinearLayout buttonsLayout;
-    private TextView playedTimeText;
-    private TextView totalTimeText;
-    private ToggleTrackLikeStateButton likeButton;
-    private ModifyPlaylistTrackModalButton addToPlaylistButton;
 
     public MainFragment() {
     }
@@ -118,17 +115,14 @@ public class MainFragment extends Fragment {
                 instance.pusherHeadView.setVisibility(View.GONE);
                 instance.pusherText.setText("");
                 instance.progressBar.setVisibility(View.GONE);
-                instance.playedTimeText.setText("");
-                instance.totalTimeText.setText("");
-                instance.buttonsLayout.setVisibility(View.GONE);
-                instance.likeButton.bindMusicList(null);
-                instance.addToPlaylistButton.bindMusicDetail(null);
+                instance.progressText.setText("");
+                instance.skipCurrentButton.setVisibility(View.GONE);
             } else {
                 instance.titleText.setTextColor(Theme.NORMAL_TEXT_COLOR);
                 instance.albumImage.loadUrl(musicDetail.getAlbum().getThumbnailPicUrl(240));
                 instance.titleText.setText(musicDetail.getName());
                 PlayerInfo pusherPlayerInfo = NowPlayingInfo.getInstance().getPusherPlayerInfo();
-                String name = pusherPlayerInfo != null ? pusherPlayerInfo.getProfile().getName() : null;
+                String name = pusherPlayerInfo != null ? pusherPlayerInfo.getProfile().name() : null;
                 if (name == null || name.isEmpty()) {
                     instance.pusherHeadView.setVisibility(View.GONE);
                     instance.pusherText.setText("");
@@ -155,6 +149,8 @@ public class MainFragment extends Fragment {
                             .padding(new ButtonInsetBackgroundFactory.Padding(0, 0, 0, 0))
                             .build().newBackgroundDrawable();
                     artistButton.setBackground(background);
+                    artistButton.setFocusable(true);
+                    artistButton.setClickable(true);
                     artistButton.setTextAlignment(View.TEXT_ALIGNMENT_TEXT_START);
                     artistButton.setTextColor(Theme.PRIMARY_COLOR);
                     artistButton.setTextSize(Theme.TEXT_SIZE_NORMAL);
@@ -178,6 +174,8 @@ public class MainFragment extends Fragment {
                         .padding(new ButtonInsetBackgroundFactory.Padding(0, 0, 0, 0))
                         .build().newBackgroundDrawable();
                 albumButton.setBackground(background);
+                albumButton.setFocusable(true);
+                albumButton.setClickable(true);
                 albumButton.setTextColor(Theme.PRIMARY_COLOR);
                 albumButton.setTextSize(Theme.TEXT_SIZE_NORMAL);
                 albumButton.setTextAlignment(View.TEXT_ALIGNMENT_TEXT_START);
@@ -192,11 +190,12 @@ public class MainFragment extends Fragment {
                 });
                 instance.albumContainer.addView(albumButton);
 
-                instance.skipCurrentButton.reset();
+                instance.skipCurrentButton.setText(I18n.get(MusicHud.MOD_ID + ".button.voteForSkip"));
+                instance.skipCurrentButton.setTextColor(Theme.NORMAL_TEXT_COLOR);
+                instance.skipCurrentButton.setEnabled(true);
+                instance.skipCurrentButton.setVisibility(clientConfig.getEnable() ? View.VISIBLE : View.GONE);
                 instance.progressBar.setVisibility(View.VISIBLE);
-                instance.likeButton.bindMusicList(MusicService.getInstance().getMusicTrackState(musicDetail).currentUsersLikeList());
-                instance.addToPlaylistButton.bindMusicDetail(musicDetail);
-                instance.buttonsLayout.setVisibility(View.VISIBLE);
+                instance.skipCurrentButton.setVisibility(View.VISIBLE);
                 startProgressUpdater(musicDetail);
             }
             HomeView homeView = HomeView.getInstance();
@@ -208,23 +207,25 @@ public class MainFragment extends Fragment {
 
     private static void startProgressUpdater(MusicDetail musicDetail) {
         NowPlayingInfo nowPlayingInfo = NowPlayingInfo.getInstance();
-        Duration musicDuration = nowPlayingInfo.getMusicDuration();
-        DateTimeFormatter formatter = musicDuration.toHoursPart() >= 1 ?
-                DateTimeFormatter.ofPattern("HH:mm:ss") :
-                DateTimeFormatter.ofPattern("mm:ss");
-        String totalTimeString = formatter.format(LocalTime.MIDNIGHT.plusSeconds(musicDuration.toSeconds()));
         MusicHud.EXECUTOR.execute(() -> {
             do {
                 if (instance == null || instance.progressBar == null) {
                     return;
                 }
                 Duration playedDuration = nowPlayingInfo.getPlayedDuration();
-                String playedTimeString = formatter.format(LocalTime.MIDNIGHT.plusSeconds(playedDuration.toSeconds()));
+                Duration musicDuration = nowPlayingInfo.getMusicDuration();
+                DateTimeFormatter formatter = musicDuration.toHoursPart() >= 1 ?
+                        DateTimeFormatter.ofPattern("HH:mm:ss") :
+                        DateTimeFormatter.ofPattern("mm:ss");
+                String playtimeText = formatter.format(
+                        LocalTime.MIDNIGHT.plusSeconds(playedDuration.toSeconds())
+                ) + " / " + formatter.format(
+                        LocalTime.MIDNIGHT.plusSeconds(musicDuration.toSeconds())
+                );
                 MuiModApi.postToUiThread(() -> {
                     if (instance != null && instance.progressBar != null) {
                         instance.progressBar.setProgress((int) (nowPlayingInfo.getProgressRate() * 100));
-                        instance.playedTimeText.setText(playedTimeString);
-                        instance.totalTimeText.setText(totalTimeString);
+                        instance.progressText.setText(playtimeText);
                     }
                 });
                 try {
@@ -269,19 +270,16 @@ public class MainFragment extends Fragment {
 
                 var sideMenu = new SideMenu(context, routerContainer);
                 if (Minecraft.getInstance().player != null) {//in game
-                    var homeNav = sideMenu.createNavigationPage("Home", "/assets/music_hud/textures/gui/icons/house.png",
-                            I18n.get(MusicHud.MOD_ID + ".text.page.home"), HomeView::new);
-                    var searchNav = sideMenu.createNavigationPage("Search", "/assets/music_hud/textures/gui/icons/search.png",
-                            I18n.get(MusicHud.MOD_ID + ".text.page.search"), SearchView::new);
-                    var accountNav = sideMenu.createNavigationPage("Account", "/assets/music_hud/textures/gui/icons/square_user_round.png",
-                            I18n.get(MusicHud.MOD_ID + ".text.page.account"), AccountBaseView::new);
-                    var settingsNav = sideMenu.createNavigationPage("Settings", "/assets/music_hud/textures/gui/icons/settings.png",
-                            I18n.get(MusicHud.MOD_ID + ".text.page.setting"), ConfigView::new);
-                    SideMenu.NavigationMeta defaultMeta = List.of(homeNav, searchNav, accountNav, settingsNav).get(defaultSelectedIndex);
+                    var homeNav = sideMenu.createNavigationPage(I18n.get(MusicHud.MOD_ID + ".text.page.home"), HomeView::new);
+                    var searchNav = sideMenu.createNavigationPage(I18n.get(MusicHud.MOD_ID + ".text.page.search"), SearchView::new);
+                    var uniPlaylistNav = sideMenu.createNavigationPage("聚合歌单", UniPlaylistView::new);
+                    var accountNav = sideMenu.createNavigationPage(I18n.get(MusicHud.MOD_ID + ".text.page.account"), AccountBaseView::new);
+                    var settingsNav = sideMenu.createNavigationPage(I18n.get(MusicHud.MOD_ID + ".text.page.setting"), ConfigView::new);
+                    SideMenu.NavigationMeta defaultMeta = List.of(homeNav, searchNav, uniPlaylistNav, accountNav, settingsNav)
+                            .get(Math.min(defaultSelectedIndex, 4));
                     defaultMeta.select();
                 } else {
-                    var settingsNav = sideMenu.createNavigationPage("Settings", "/assets/music_hud/textures/gui/icons/settings.png",
-                            I18n.get(MusicHud.MOD_ID + ".text.page.setting"), ConfigView::new);
+                    var settingsNav = sideMenu.createNavigationPage(I18n.get(MusicHud.MOD_ID + ".text.page.setting"), ConfigView::new);
                     settingsNav.select();
                 }
 
@@ -368,58 +366,46 @@ public class MainFragment extends Fragment {
                 params2.setMargins(0, sideContent.dp(1), 0, sideContent.dp(-4));
                 musicInfo.addView(progressBar, params2);
 
-                LinearLayout progressTexts = new LinearLayout(context);
-                progressTexts.setOrientation(LinearLayout.HORIZONTAL);
+                progressText = new TextView(context);
+                progressText.setTextColor(Theme.SECONDARY_TEXT_COLOR);
+                progressText.setTextSize(Theme.TEXT_SIZE_NORMAL);
                 LinearLayout.LayoutParams params3 = new LinearLayout.LayoutParams(MATCH_PARENT, base.dp(16));
-                params3.setMargins(0, sideContent.dp(6), 0, 0);
-                musicInfo.addView(progressTexts, params3);
+                params3.setMargins(0, sideContent.dp(4), 0, 0);
+                musicInfo.addView(progressText, params3);
 
-                playedTimeText = new TextView(context);
-                playedTimeText.setTextColor(Theme.SECONDARY_TEXT_COLOR);
-                playedTimeText.setTextSize(Theme.TEXT_SIZE_NORMAL);
-                progressTexts.addView(playedTimeText, new LinearLayout.LayoutParams(WRAP_CONTENT, WRAP_CONTENT, 0));
-
-                progressTexts.addView(new View(context), new LinearLayout.LayoutParams(WRAP_CONTENT, MATCH_PARENT, 1));
-
-                totalTimeText = new TextView(context);
-                totalTimeText.setTextColor(Theme.SECONDARY_TEXT_COLOR);
-                totalTimeText.setTextSize(Theme.TEXT_SIZE_NORMAL);
-                progressTexts.addView(totalTimeText, new LinearLayout.LayoutParams(WRAP_CONTENT, WRAP_CONTENT, 0));
-
-                buttonsLayout = new LinearLayout(context);
-                buttonsLayout.setOrientation(LinearLayout.HORIZONTAL);
-
-                ButtonInsetBackgroundFactory backgroundFactory = ButtonInsetBackgroundFactory.builder()
-                        .backgroundColor(Theme.GHOST_BUTTON_STATES)
-                        .padding(new ButtonInsetBackgroundFactory.Padding(buttonsLayout.dp(2), buttonsLayout.dp(1), buttonsLayout.dp(2), buttonsLayout.dp(1)))
-                        .cornerRadius(buttonsLayout.dp(4)).build();
-                {
-                    likeButton = new ToggleTrackLikeStateButton(context);
-                    likeButton.setBackground(backgroundFactory.newBackgroundDrawable());
-                    buttonsLayout.addView(likeButton, new LinearLayout.LayoutParams(0, MATCH_PARENT, 1));
-                }
-                {
-                    addToPlaylistButton = new ModifyPlaylistTrackModalButton(context);
-                    addToPlaylistButton.setBackground(backgroundFactory.newBackgroundDrawable());
-                    buttonsLayout.addView(addToPlaylistButton, new LinearLayout.LayoutParams(0, MATCH_PARENT, 1));
-                }
-                {
-                    skipCurrentButton = new VoteSkipButton(context);
-                    skipCurrentButton.setBackground(backgroundFactory.newBackgroundDrawable());
-                    buttonsLayout.addView(skipCurrentButton, new LinearLayout.LayoutParams(0, MATCH_PARENT, 1));
-                }
+                skipCurrentButton = new Button(context);
+                skipCurrentButton.setFocusable(true);
+                skipCurrentButton.setClickable(true);
+                skipCurrentButton.setTextSize(Theme.TEXT_SIZE_NORMAL);
+                skipCurrentButton.setTextColor(Theme.NORMAL_TEXT_COLOR);
+                skipCurrentButton.setGravity(Gravity.CENTER);
+                skipCurrentButton.setText(I18n.get(MusicHud.MOD_ID + ".button.voteForSkip"));
 
                 NowPlayingInfo nowPlayingInfo = NowPlayingInfo.getInstance();
                 MusicDetail currentlyPlayingMusicDetail = nowPlayingInfo.getCurrentlyPlayingMusicDetail();
                 MusicDetail nextToPlayMusicDetail = nowPlayingInfo.getNextToPlayIdleMusicDetail();
 
-                LinearLayout.LayoutParams buttonsParams = new LinearLayout.LayoutParams(MATCH_PARENT, buttonsLayout.dp(40));
-                buttonsParams.setMargins(0, sideContent.dp(2), 0, 0);
+                skipCurrentButton.setHeight(skipCurrentButton.dp(40));
+
+                var background = ButtonInsetBackgroundFactory.builder()
+                        .padding(new ButtonInsetBackgroundFactory.Padding(skipCurrentButton.dp(2), skipCurrentButton.dp(1), skipCurrentButton.dp(2), skipCurrentButton.dp(1)))
+                        .cornerRadius(skipCurrentButton.dp(4)).build().newBackgroundDrawable();
+                skipCurrentButton.setBackground(background);
+                skipCurrentButton.setOnClickListener((v) -> {
+                    MusicService.getInstance().voteForSkipCurrent();
+                    MuiModApi.postToUiThread(() -> {
+                        skipCurrentButton.setTextColor(Theme.SECONDARY_TEXT_COLOR);
+                        skipCurrentButton.setText(I18n.get(MusicHud.MOD_ID + ".text.voted"));
+                        skipCurrentButton.setEnabled(false);
+                    });
+                });
+                LinearLayout.LayoutParams buttonParams = new LinearLayout.LayoutParams(MATCH_PARENT, WRAP_CONTENT);
+                buttonParams.setMargins(0, sideContent.dp(2), 0, 0);
 
                 var params1 = new LinearLayout.LayoutParams(MATCH_PARENT, WRAP_CONTENT);
                 params1.setMargins(sideContent.dp(8), sideContent.dp(4), sideContent.dp(8), sideContent.dp(24));
 
-                musicInfo.addView(buttonsLayout, buttonsParams);
+                musicInfo.addView(skipCurrentButton, buttonParams);
                 musicInfo.setMinimumHeight(sideContent.dp(132));
 
                 sideContent.addView(musicInfo, params1);
@@ -433,16 +419,18 @@ public class MainFragment extends Fragment {
 
                 sideScrollView.addView(sideContent, sideParams);
 
+
                 LinearLayout serverConnectPanel = new LinearLayout(context);
                 serverConnectPanel.setOrientation(LinearLayout.VERTICAL);
-                serverConnectPanel.setGravity(Gravity.CENTER_VERTICAL);
 
                 serverConnectStatus = new TextView(context);
                 serverConnectStatus.setTextSize(Theme.TEXT_SIZE_NORMAL);
                 serverConnectStatus.setTextColor(Theme.SECONDARY_TEXT_COLOR);
-                serverConnectPanel.addView(serverConnectStatus, new LinearLayout.LayoutParams(WRAP_CONTENT, WRAP_CONTENT));
+                serverConnectPanel.addView(serverConnectStatus, new LinearLayout.LayoutParams(MATCH_PARENT, WRAP_CONTENT));
 
                 switchServerConnectButton = new Button(context);
+                switchServerConnectButton.setFocusable(true);
+                switchServerConnectButton.setClickable(true);
                 switchServerConnectButton.setTextSize(Theme.TEXT_SIZE_NORMAL);
                 switchServerConnectButton.setTextColor(Theme.NORMAL_TEXT_COLOR);
                 switchServerConnectButton.setText(I18n.get(MusicHud.MOD_ID + ".button.logout"));
