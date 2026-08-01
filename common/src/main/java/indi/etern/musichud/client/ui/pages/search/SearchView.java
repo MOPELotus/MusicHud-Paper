@@ -22,6 +22,7 @@ import indi.etern.musichud.beans.music.MusicDetail;
 import indi.etern.musichud.beans.music.Playlist;
 import indi.etern.musichud.client.services.TuneWeaveUiService;
 import indi.etern.musichud.client.ui.Theme;
+import indi.etern.musichud.client.ui.components.MusicHudIconButton;
 import indi.etern.musichud.client.ui.utils.ButtonInsetBackgroundFactory;
 import indi.etern.musichud.interfaces.ClientConfig;
 import indi.etern.musichud.network.IClientNetworkService;
@@ -229,13 +230,8 @@ public class SearchView extends LinearLayout {
         platformSelector.removeAllViews();
         for (JsonObject platform : platforms) {
             String id = string(platform, "platform");
-            Button button = new Button(getContext());
-            button.setText(platformIcon(id));
-            button.setTextSize(Theme.TEXT_SIZE_LARGE);
-            button.setContentDescription(platformName(id));
-            button.setTooltipText(platformName(id));
-            button.setTextColor(id.equals(selectedPlatform) ? Theme.EMPHASIZE_TEXT_COLOR : platformColor(id));
-            button.setSelected(id.equals(selectedPlatform));
+            MusicHudIconButton button = new MusicHudIconButton(getContext(), platformIconResource(id), platformName(id));
+            button.setAlpha(id.equals(selectedPlatform) ? 1f : 0.56f);
             button.setBackground(ButtonInsetBackgroundFactory.builder().cornerRadius(dp(4)).inset(dp(1))
                     .padding(new ButtonInsetBackgroundFactory.Padding(dp(6), 0, dp(6), 0)).build().newBackgroundDrawable());
             button.setOnClickListener(view -> {
@@ -253,15 +249,12 @@ public class SearchView extends LinearLayout {
         }
     }
 
-    private static String platformIcon(String id) {
+    private static String platformIconResource(String id) {
         return switch (id) {
-            case "netease" -> "♬";
-            case "qq" -> "Q";
-            case "bilibili" -> "▷";
-            case "kugou" -> "K";
-            case "kuwo" -> "W";
-            case "migu" -> "M";
-            default -> "•";
+            case "netease" -> "platforms/netease";
+            case "qq" -> "platforms/qq";
+            case "bilibili" -> "platforms/bilibili";
+            default -> "platforms/music";
         };
     }
 
@@ -274,18 +267,6 @@ public class SearchView extends LinearLayout {
             case "kuwo" -> "酷我音乐";
             case "migu" -> "咪咕音乐";
             default -> id;
-        };
-    }
-
-    private static int platformColor(String id) {
-        return switch (id) {
-            case "netease" -> 0xFFE84040;
-            case "qq" -> 0xFF35B86B;
-            case "bilibili" -> 0xFFFF7EB5;
-            case "kugou" -> 0xFF4A90E2;
-            case "kuwo" -> 0xFFFFB432;
-            case "migu" -> 0xFFE85555;
-            default -> Theme.PRIMARY_COLOR;
         };
     }
 

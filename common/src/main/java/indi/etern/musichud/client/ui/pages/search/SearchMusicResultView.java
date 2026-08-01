@@ -69,16 +69,11 @@ public class SearchMusicResultView extends LinearLayout {
             MusicService.getInstance().sendPushMusicToQueue(musicDetail);
             ToastUtil.show(Toast.makeText(context, I18n.get(MusicHud.MOD_ID + ".text.pushedMusicToPlaylist") + "\n" + musicDetail.getName() + " - " + artistsName, Toast.LENGTH_SHORT));
         });
-        musicLayout.setOnLongClickListener(view -> {
-            if (UniPlaylistClient.getActivePlaylistRef().isBlank()) {
-                favorite(musicDetail, context);
-            } else {
-                UniPlaylistClient.addTrack(musicDetail,
+        musicLayout.addAction("actions/playlist_plus", "添加到聚合歌单", view ->
+                UniPlaylistClient.showTrackPicker(context, musicDetail,
                         () -> ToastUtil.show(Toast.makeText(context, "已加入聚合歌单：" + musicDetail.getName(), Toast.LENGTH_SHORT)),
-                        error -> ToastUtil.show(Toast.makeText(context, error, Toast.LENGTH_SHORT)));
-            }
-            return true;
-        });
+                        error -> ToastUtil.show(Toast.makeText(context, error, Toast.LENGTH_SHORT))));
+        musicLayout.addAction("actions/heart_outline", "收藏歌曲", view -> favorite(musicDetail, context));
         addView(musicLayout, new LayoutParams(LayoutParams.MATCH_PARENT, LayoutParams.WRAP_CONTENT));
     }
 
