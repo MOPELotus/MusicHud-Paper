@@ -87,6 +87,7 @@ java {
 tasks.withType(JavaCompile).configureEach {}
 
 processResources {
+    dependsOn(rootProject.tasks.named('generateUiIcons'))
     inputs.property("version", rootProject.version)
     filteringCharset "UTF-8"
 
@@ -94,6 +95,9 @@ processResources {
     from(sourceSets.main.resources.srcDirs) {
         exclude "META-INF/mods.toml"
         exclude "fabric.mod.json"
+    }
+    from(rootProject.file('common/build/generated/resources/platform-icons')) {
+        into 'assets/music_hud/textures/gui/icons'
     }
 }
 
