@@ -7,6 +7,7 @@ import icyllis.modernui.core.Context;
 import icyllis.modernui.view.Gravity;
 import icyllis.modernui.widget.Button;
 import icyllis.modernui.widget.EditText;
+import icyllis.modernui.widget.HorizontalScrollView;
 import icyllis.modernui.widget.LinearLayout;
 import icyllis.modernui.widget.TextView;
 import indi.etern.musichud.client.services.TuneWeaveUiService;
@@ -47,10 +48,13 @@ public final class TuneWeaveAccountView extends LinearLayout {
         help.setTextColor(Theme.SECONDARY_TEXT_COLOR);
         addView(help, margins(new LayoutParams(MATCH_PARENT, WRAP_CONTENT), 0, dp(8), 0, 0));
 
+        HorizontalScrollView platformSelectorScroll = new HorizontalScrollView(context);
+        platformSelectorScroll.setFillViewport(true);
         platformSelector = new LinearLayout(context);
         platformSelector.setOrientation(HORIZONTAL);
         platformSelector.setGravity(Gravity.CENTER_VERTICAL);
-        addView(platformSelector, margins(new LayoutParams(MATCH_PARENT, WRAP_CONTENT), 0, dp(16), 0, 0));
+        platformSelectorScroll.addView(platformSelector, new LayoutParams(WRAP_CONTENT, WRAP_CONTENT));
+        addView(platformSelectorScroll, margins(new LayoutParams(MATCH_PARENT, WRAP_CONTENT), 0, dp(16), 0, 0));
 
         accountContent = new LinearLayout(context);
         accountContent.setOrientation(VERTICAL);
@@ -85,18 +89,21 @@ public final class TuneWeaveAccountView extends LinearLayout {
         platformSelector.removeAllViews();
         for (JsonObject item : platforms) {
             String id = string(item, "platform");
-            Button badge = button(platformBadge(id));
-            badge.setTextColor(id.equals(selectedPlatform) ? Theme.EMPHASIZE_TEXT_COLOR : Theme.PRIMARY_COLOR);
+            Button badge = button(platformIcon(id));
+            badge.setTextSize(Theme.TEXT_SIZE_LARGE);
+            badge.setContentDescription(platformName(id));
+            badge.setTooltipText(platformName(id));
+            badge.setTextColor(id.equals(selectedPlatform) ? Theme.EMPHASIZE_TEXT_COLOR : platformColor(id));
             badge.setSelected(id.equals(selectedPlatform));
             badge.setOnClickListener(view -> selectPlatform(id));
-            platformSelector.addView(badge, margins(new LayoutParams(WRAP_CONTENT, WRAP_CONTENT), 0, 0, dp(8), 0));
+            platformSelector.addView(badge, margins(new LayoutParams(dp(36), dp(36)), 0, 0, dp(8), 0));
         }
         loadProfile();
     }
 
     private void loadProfile() {
         accountContent.removeAllViews();
-        status("正在读取 " + displayName(selectedPlatform) + " 账户…", false);
+        status("正在读取 " + platformName(selectedPlatform) + " 账户…", false);
         TuneWeaveUiService.request("account-profile", accountRequest(), this::showProfile, error -> showLogin(error));
     }
 
@@ -265,7 +272,7 @@ public final class TuneWeaveAccountView extends LinearLayout {
 
     private void showLogin(String reason) {
         accountContent.removeAllViews();
-        status("尚未登录 " + displayName(selectedPlatform) + "\n" + reason, true);
+        status("尚未登录 " + platformName(selectedPlatform) + "\n" + reason, true);
         if (selectedPlatformSupports("qr_login")) {
             Button qr = button("二维码登录");
             qr.setOnClickListener(view -> startQrLogin());
@@ -287,7 +294,7 @@ public final class TuneWeaveAccountView extends LinearLayout {
             qrTransactionId = string(result, "transaction_id");
             accountContent.removeAllViews();
             TextView text = new TextView(getContext());
-            text.setText("请使用 " + displayName(selectedPlatform) + " 扫码登录，然后点击“检查登录状态”。");
+            text.setText("请使用 " + platformName(selectedPlatform) + " 扫码登录，然后点击“检查登录状态”。");
             text.setTextColor(Theme.NORMAL_TEXT_COLOR);
             accountContent.addView(text);
             UrlImageView qrImage = new UrlImageView(getContext());
@@ -386,22 +393,40 @@ public final class TuneWeaveAccountView extends LinearLayout {
         return false;
     }
 
-    private static String platformBadge(String id) {
+    private static String platformIcon(String id) {
         return switch (id) {
-            // Text marks keep the selector self-contained: no remote brand
-            // image is fetched before the player has explicitly connected.
-            case "netease" -> "♫  网易云音乐";
-            case "qq" -> "Q♪  QQ 音乐";
-            case "bilibili" -> "▷  哔哩哔哩";
-            case "kugou" -> "K  酷狗音乐";
-            case "kuwo" -> "W  酷我音乐";
-            case "migu" -> "M  咪咕音乐";
+            case "netease" -> "♬";
+            case "qq" -> "Q";
+            case "bilibili" -> "▷";
+            case "kugou" -> "K";
+            case "kuwo" -> "W";
+            case "migu" -> "M";
+            default -> "•";
+        };
+    }
+
+    private static String platformName(String id) {
+        return switch (id) {
+            case "netease" -> "网易云音乐";
+            case "qq" -> "QQ 音乐";
+            case "bilibili" -> "哔哩哔哩";
+            case "kugou" -> "酷狗音乐";
+            case "kuwo" -> "酷我音乐";
+            case "migu" -> "咪咕音乐";
             default -> id;
         };
     }
 
-    private static String displayName(String id) {
-        return platformBadge(id);
+    private static int platformColor(String id) {
+        return switch (id) {
+            case "netease" -> 0xFFE84040;
+            case "qq" -> 0xFF35B86B;
+            case "bilibili" -> 0xFFFF7EB5;
+            case "kugou" -> 0xFF4A90E2;
+            case "kuwo" -> 0xFFFFB432;
+            case "migu" -> 0xFFE85555;
+            default -> Theme.PRIMARY_COLOR;
+        };
     }
 
     private static List<JsonObject> objects(JsonElement data) {
