@@ -22,6 +22,11 @@ public interface ServerConfig {
 
     void setServerApiBaseUrl(String serverApiBaseUrl);
 
+    /** Whether this installation owns the local TuneWeave process. */
+    boolean getManageTuneWeaveInternally();
+
+    void setManageTuneWeaveInternally(boolean manageTuneWeaveInternally);
+
     double getPusherVoteAdditionalRate();
 
     void setPusherVoteAdditionalRate(double pusherVoteAdditionalRate);
