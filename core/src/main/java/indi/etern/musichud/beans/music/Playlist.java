@@ -14,6 +14,7 @@ import java.util.Objects;
 
 @NoArgsConstructor(access = AccessLevel.PUBLIC)
 public class Playlist implements MusicCollection {
+    private static final String TUNEWEAVE_REFERENCE_MARKER = "__MUSIC_HUD_TUNEWEAVE_REF__:";
     public static final ByteBufCodec<Playlist> CODEC = ByteBufCodec.composite(
             Codecs.LONG,
             Playlist::getId,
@@ -22,7 +23,7 @@ public class Playlist implements MusicCollection {
             Codecs.LONG,
             Playlist::getCoverImgId,
             Codecs.STRING_UTF8,
-            Playlist::getCoverImgId_str,
+            Playlist::getCodecCoverImgIdString,
             Codecs.STRING_UTF8,
             Playlist::getCoverImgUrl,
             Profile.CODEC,
@@ -41,6 +42,8 @@ public class Playlist implements MusicCollection {
     @Getter
     long id = -1;
     String name = "";
+    @Getter
+    String sourceRef = "";
     @Getter
     long coverImgId = -1;
     String coverImgId_str = "";
@@ -68,7 +71,12 @@ public class Playlist implements MusicCollection {
         this.id = id;
         this.name = name;
         this.coverImgId = coverImgId;
-        this.coverImgId_str = coverImgId_str;
+        if (coverImgId_str != null && coverImgId_str.startsWith(TUNEWEAVE_REFERENCE_MARKER)) {
+            this.sourceRef = coverImgId_str.substring(TUNEWEAVE_REFERENCE_MARKER.length());
+            this.coverImgId_str = "";
+        } else {
+            this.coverImgId_str = coverImgId_str;
+        }
         this.coverImgUrl = coverImgUrl;
         this.creator = creator;
         this.privacy = privacy;
@@ -87,6 +95,15 @@ public class Playlist implements MusicCollection {
     public static Playlist empty(long id) {
         Playlist playlist = new Playlist();
         playlist.id = id;
+        return playlist;
+    }
+
+    public static Playlist fromTuneWeave(long id, String sourceRef, String name, String coverUrl) {
+        Playlist playlist = new Playlist();
+        playlist.id = id;
+        playlist.sourceRef = Objects.requireNonNullElse(sourceRef, "");
+        playlist.name = Objects.requireNonNullElse(name, "");
+        playlist.coverImgUrl = Objects.requireNonNullElse(coverUrl, MusicHud.ICON_BASE64);
         return playlist;
     }
 
@@ -111,6 +128,16 @@ public class Playlist implements MusicCollection {
 
     public String getCoverImgId_str() {
         return Objects.requireNonNullElse(coverImgId_str, "");
+    }
+
+    /**
+     * The legacy wire structure has nine fields and its codec deliberately
+     * skips arity ten.  A TuneWeave playlist never has an NCM cover-id string,
+     * so reserve that unused slot for its canonical reference while retaining
+     * full compatibility for legacy playlists.
+     */
+    private String getCodecCoverImgIdString() {
+        return sourceRef.isBlank() ? getCoverImgId_str() : TUNEWEAVE_REFERENCE_MARKER + sourceRef;
     }
 
     public String getCoverImgUrl() {
@@ -164,6 +191,7 @@ public class Playlist implements MusicCollection {
     public Playlist copyWithPusherInfo(PusherInfo pusherInfo) {
         Playlist playlist = new Playlist();
         playlist.id = id;
+        playlist.sourceRef = sourceRef;
         playlist.name = name;
         playlist.coverImgId = coverImgId;
         playlist.coverImgUrl = coverImgUrl;
