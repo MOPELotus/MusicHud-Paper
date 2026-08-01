@@ -7,6 +7,13 @@ architectury {
     fabric()
 }
 
+repositories {
+    maven {
+        name = 'dv8tion'
+        url = 'https://m2.dv8tion.net/releases'
+    }
+}
+
 configurations {
     common {
         canBeResolved = true
@@ -39,24 +46,14 @@ dependencies {
     shadowBundle(project(path: ':common', configuration: 'transformProductionFabric')) { transitive = false }
     shadowBundle(project(path: ':core')) { transitive = false }
 
-    // Forge Config Api Port for Fabric
-    modApi "fuzs.forgeconfigapiport:forgeconfigapiport-fabric:$rootProject.forge_config_api_port_version"
-
-    modApi("me.shedaniel.cloth:cloth-config-fabric:$rootProject.cloth_config_version") {
-        exclude(group: "net.fabricmc.fabric-api")
-    }
-
     modImplementation "com.terraformersmc:modmenu:$rootProject.modmenu_version"
 
     // ModernUI Fabric (replaced by fork JAR in run/client/mods/)
     compileOnly("icyllis.modernui:ModernUI-Fabric:1.21.8-${rootProject.modernui_version}.+")
     // modImplementation("icyllis.modernui:ModernUI-Fabric:1.21.8-${rootProject.modernui_version}.+")
 
-    implementation "com.github.umjammer:jlayer:$rootProject.jlayer_version"
-    shadowBundle "com.github.umjammer:jlayer:$rootProject.jlayer_version"
-
-    implementation "org.jflac:jflac-codec:$rootProject.jflac_version"
-    shadowBundle "org.jflac:jflac-codec:$rootProject.jflac_version"
+    implementation "com.sedmelluq:lavaplayer:$rootProject.lavaplayer_version"
+    shadowBundle "com.sedmelluq:lavaplayer:$rootProject.lavaplayer_version"
 
 //    implementation "io.github.selemba1000:JavaMediaTransportControls:$rootProject.jmtc_version"
 //    shadowBundle "io.github.selemba1000:JavaMediaTransportControls:$rootProject.jmtc_version"
