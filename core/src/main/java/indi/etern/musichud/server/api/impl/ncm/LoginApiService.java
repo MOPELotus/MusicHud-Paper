@@ -379,14 +379,16 @@ public class LoginApiService implements ILoginApiService {
     public void disconnectToAll() {
         serverNetworkService.sendToPlayers(playerInfoMap.values().stream()
                 .map(PlayerLoginInfo::getPlayer).filter(Objects::nonNull).toList(),
-                new ConnectResponse(false, Version.current, List.of(ApiProvider.TUNEWEAVE)));
+                new ConnectResponse(false, Version.current, List.of(ApiProvider.TUNEWEAVE),
+                        indi.etern.musichud.server.api.impl.tuneweave.TuneWeaveEndpoint.serverBaseUrl()));
     }
 
     @Override
     public void reconnectAll() {
         serverNetworkService.sendToPlayers(playerInfoMap.values().stream()
                 .map(PlayerLoginInfo::getPlayer).filter(Objects::nonNull).toList(),
-                new ConnectResponse(true, Version.current, List.of(ApiProvider.TUNEWEAVE)));
+                new ConnectResponse(true, Version.current, List.of(ApiProvider.TUNEWEAVE),
+                        indi.etern.musichud.server.api.impl.tuneweave.TuneWeaveEndpoint.serverBaseUrl()));
     }
 
     @Override

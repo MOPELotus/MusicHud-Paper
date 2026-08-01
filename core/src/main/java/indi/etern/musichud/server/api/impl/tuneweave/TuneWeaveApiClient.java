@@ -3,7 +3,6 @@ package indi.etern.musichud.server.api.impl.tuneweave;
 import com.google.gson.JsonElement;
 import com.google.gson.JsonObject;
 import com.google.gson.JsonParser;
-import indi.etern.musichud.interfaces.ServerConfig;
 import indi.etern.musichud.utils.http.ApiClient;
 
 import java.net.URI;
@@ -17,8 +16,6 @@ import java.util.Map;
 
 /** Small, strict client for TuneWeave's {@code /v1} JSON envelope. */
 public final class TuneWeaveApiClient {
-    private static final ServerConfig SERVER_CONFIG = ServerConfig.getInstance();
-
     private TuneWeaveApiClient() {
     }
 
@@ -72,11 +69,7 @@ public final class TuneWeaveApiClient {
     }
 
     public static String baseUrl() {
-        String configured = SERVER_CONFIG.getServerApiBaseUrl();
-        if (configured == null || configured.isBlank()) {
-            return "http://127.0.0.1:7832";
-        }
-        return configured.endsWith("/") ? configured.substring(0, configured.length() - 1) : configured;
+        return TuneWeaveEndpoint.serverBaseUrl();
     }
 
     private static JsonElement request(String method, String path, Map<String, String> query, JsonElement payload) {

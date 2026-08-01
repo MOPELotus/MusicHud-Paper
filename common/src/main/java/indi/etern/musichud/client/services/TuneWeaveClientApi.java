@@ -3,7 +3,7 @@ package indi.etern.musichud.client.services;
 import com.google.gson.JsonElement;
 import com.google.gson.JsonObject;
 import com.google.gson.JsonParser;
-import indi.etern.musichud.interfaces.ClientConfig;
+import indi.etern.musichud.server.api.impl.tuneweave.TuneWeaveEndpoint;
 import indi.etern.musichud.utils.http.ApiClient;
 
 import java.net.URI;
@@ -68,7 +68,7 @@ public final class TuneWeaveClientApi {
         } catch (TuneWeaveClientException e) {
             throw e;
         } catch (Exception e) {
-            throw new TuneWeaveClientException("无法连接到客户端 TuneWeave 服务（" + baseUrl() + "）", e);
+            throw new TuneWeaveClientException("无法连接到 TuneWeave 服务（" + baseUrl() + "）", e);
         }
     }
 
@@ -86,11 +86,7 @@ public final class TuneWeaveClientApi {
     }
 
     public static String baseUrl() {
-        String configured = ClientConfig.getInstance().getTuneWeaveClientApiBaseUrl();
-        if (configured == null || configured.isBlank()) {
-            return "http://127.0.0.1:7832";
-        }
-        return configured.endsWith("/") ? configured.substring(0, configured.length() - 1) : configured;
+        return TuneWeaveEndpoint.clientBaseUrl();
     }
 
     private static String message(JsonObject envelope, int status) {
