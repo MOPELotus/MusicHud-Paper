@@ -6,7 +6,6 @@ import com.google.gson.JsonObject;
 import icyllis.modernui.animation.ColorEvaluator;
 import icyllis.modernui.animation.ValueAnimator;
 import icyllis.modernui.core.Context;
-import icyllis.modernui.graphics.Color;
 import icyllis.modernui.graphics.drawable.InsetDrawable;
 import icyllis.modernui.graphics.drawable.ShapeDrawable;
 import icyllis.modernui.mc.ui.ClampingScrollView;
@@ -333,8 +332,8 @@ public final class UniPlaylistPickerModal {
             int targetName = value ? 0xFF000000 : Theme.NORMAL_TEXT_COLOR;
             int targetCount = value ? 0xFF333333 : Theme.SECONDARY_TEXT_COLOR;
             int initialBackground = currentBackground;
-            int initialName = Color.toArgb(name.getCurrentTextColor());
-            int initialCount = Color.toArgb(count.getCurrentTextColor());
+            int initialName = name.getCurrentTextColor();
+            int initialCount = count.getCurrentTextColor();
             currentBackground = targetBackground;
             animation = ValueAnimator.ofFloat(0f, 1f);
             animation.addUpdateListener(valueAnimator -> {
