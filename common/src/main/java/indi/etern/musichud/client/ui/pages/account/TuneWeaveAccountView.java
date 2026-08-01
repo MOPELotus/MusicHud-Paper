@@ -10,6 +10,7 @@ import icyllis.modernui.widget.EditText;
 import icyllis.modernui.widget.LinearLayout;
 import icyllis.modernui.widget.TextView;
 import indi.etern.musichud.client.services.TuneWeaveUiService;
+import indi.etern.musichud.client.services.TuneWeaveClientCredentials;
 import indi.etern.musichud.client.ui.Theme;
 import indi.etern.musichud.client.ui.ToastUtil;
 import indi.etern.musichud.client.ui.components.UrlImageView;
@@ -21,7 +22,7 @@ import java.util.List;
 import static icyllis.modernui.view.ViewGroup.LayoutParams.MATCH_PARENT;
 import static icyllis.modernui.view.ViewGroup.LayoutParams.WRAP_CONTENT;
 
-/** Account selector for TuneWeave server-managed accounts. */
+/** Account selector backed by client-local TuneWeave caller credentials. */
 public final class TuneWeaveAccountView extends LinearLayout {
     private final LinearLayout platformSelector;
     private final LinearLayout accountContent;
@@ -41,7 +42,7 @@ public final class TuneWeaveAccountView extends LinearLayout {
         addView(title);
 
         TextView help = new TextView(context);
-        help.setText("选择已启用的平台。账户由 TuneWeave 服务端保管，Minecraft 客户端不会接收登录凭证。");
+        help.setText("选择已启用的平台。登录凭证只保存在此 Minecraft 客户端，可跨单人、局域网和服务器复用，不会发送给游戏服务器。");
         help.setTextSize(Theme.TEXT_SIZE_NORMAL);
         help.setTextColor(Theme.SECONDARY_TEXT_COLOR);
         addView(help, margins(new LayoutParams(MATCH_PARENT, WRAP_CONTENT), 0, dp(8), 0, 0));
@@ -256,7 +257,6 @@ public final class TuneWeaveAccountView extends LinearLayout {
         source.addProperty("platform", parts[0]);
         source.addProperty("type", "playlist");
         source.addProperty("id", parts[1]);
-        source.addProperty("account", "default");
         sources.add(source);
         request.add("sources", sources);
         TuneWeaveUiService.request("uni-import", request,
@@ -271,7 +271,7 @@ public final class TuneWeaveAccountView extends LinearLayout {
             qr.setOnClickListener(view -> startQrLogin());
             accountContent.addView(qr, margins(new LayoutParams(WRAP_CONTENT, WRAP_CONTENT), 0, dp(16), 0, 0));
         } else {
-            status("该平台未声明二维码登录能力，请先在 TuneWeave 服务端完成登录。", false);
+            status("该平台未声明二维码登录能力，请在本地 TuneWeave 中完成登录。", false);
         }
         if (!qrTransactionId.isBlank()) {
             Button poll = button("检查登录状态");
@@ -305,6 +305,13 @@ public final class TuneWeaveAccountView extends LinearLayout {
         TuneWeaveUiService.request("qr-poll", request, data -> {
             JsonObject state = object(data);
             if ("confirmed".equals(string(state, "state"))) {
+                JsonObject credential = object(state.get("caller_credential"));
+                String value = string(credential, "value");
+                if (value.isBlank()) {
+                    statusError("TuneWeave 未返回客户端凭证；请确认登录请求使用了 client 凭证模式。");
+                    return;
+                }
+                TuneWeaveClientCredentials.put(selectedPlatform, value);
                 qrTransactionId = "";
                 loadProfile();
             } else {
@@ -315,6 +322,7 @@ public final class TuneWeaveAccountView extends LinearLayout {
 
     private void logout() {
         TuneWeaveUiService.request("auth-logout", accountRequest(), ignored -> {
+            TuneWeaveClientCredentials.remove(selectedPlatform);
             qrTransactionId = "";
             showLogin("账户已退出");
         }, this::statusError);
@@ -323,7 +331,6 @@ public final class TuneWeaveAccountView extends LinearLayout {
     private JsonObject accountRequest() {
         JsonObject request = new JsonObject();
         request.addProperty("platform", selectedPlatform);
-        request.addProperty("account", "default");
         return request;
     }
 
