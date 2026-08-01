@@ -10,6 +10,7 @@ import indi.etern.musichud.network.NetworkReceiver;
 import indi.etern.musichud.network.payloads.S2CPayload;
 import indi.etern.musichud.platform.Environment;
 import indi.etern.musichud.server.api.ApiProvider;
+import indi.etern.musichud.server.api.impl.tuneweave.TuneWeaveEndpoint;
 import indi.etern.musichud.utils.IClientDistUtil;
 
 import java.util.List;
@@ -17,7 +18,7 @@ import java.util.List;
 import static indi.etern.musichud.MusicHud.LOGGER;
 
 public record ConnectResponse(boolean accepted, Version serverVersion,
-                              List<ApiProvider> availableApis) implements S2CPayload {
+                              List<ApiProvider> availableApis, String tuneWeaveBaseUrl) implements S2CPayload {
     public static final ByteBufCodec<ConnectResponse> CODEC =
             ByteBufCodec.composite(
                     Codecs.BOOL,
@@ -26,6 +27,8 @@ public record ConnectResponse(boolean accepted, Version serverVersion,
                     ConnectResponse::serverVersion,
                     Codecs.ofList(() -> Codecs.ofEnum(ApiProvider.class)),
                     ConnectResponse::availableApis,
+                    Codecs.STRING_UTF8,
+                    ConnectResponse::tuneWeaveBaseUrl,
                     ConnectResponse::new
             );
 
@@ -51,6 +54,7 @@ public record ConnectResponse(boolean accepted, Version serverVersion,
                     if (MusicHud.getConnectStatus() == MusicHud.ConnectStatus.NOT_CONNECTED) {
                         LOGGER.info("Connecting {}", payload.accepted() ? "accepted" : "denied");
                         if (payload.accepted()) {
+                            TuneWeaveEndpoint.setConnectedServerBaseUrl(payload.tuneWeaveBaseUrl());
                             if (Version.compatibleWith(payload.serverVersion)) {
                                 MusicHud.EXECUTOR.execute(IClientMusicService.getInstance()::checkAndResetInitialSync);
                                 if (!clientDistUtil.inIntegratedServer()
@@ -65,9 +69,11 @@ public record ConnectResponse(boolean accepted, Version serverVersion,
                                 MusicHud.setConnectStatus(MusicHud.ConnectStatus.INCOMPATIBLE);
                             }
                         } else {
+                            TuneWeaveEndpoint.clearConnectedServerBaseUrl();
                             MusicHud.setConnectStatus(MusicHud.ConnectStatus.INCOMPATIBLE);
                         }
                     } else if (!payload.accepted()) {
+                        TuneWeaveEndpoint.clearConnectedServerBaseUrl();
                         LOGGER.info("Disconnected");
                         clientLoginService.disconnectToExternalOrIntegratedServer();
                     }
