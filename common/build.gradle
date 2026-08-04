@@ -62,6 +62,7 @@ dependencies {
 
     compileOnly "org.projectlombok:lombok:$rootProject.lombok_version"
     annotationProcessor "org.projectlombok:lombok:$rootProject.lombok_version"
+    annotationProcessor project(':processor')
     testCompileOnly "org.projectlombok:lombok:$rootProject.lombok_version"
     testAnnotationProcessor "org.projectlombok:lombok:$rootProject.lombok_version"
 
@@ -84,7 +85,9 @@ java {
     withSourcesJar()
 }
 
-tasks.withType(JavaCompile).configureEach {}
+tasks.withType(JavaCompile).configureEach {
+    options.compilerArgs += ['-Amusichud.module=' + project.name]
+}
 
 processResources {
     inputs.property("version", rootProject.version)
