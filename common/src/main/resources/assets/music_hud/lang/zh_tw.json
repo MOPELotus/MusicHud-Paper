@@ -8,6 +8,7 @@
   "music_hud.login.mobile": "手機 App",
   "music_hud.text.login.waitingForScan": "請使用所選應用程式掃描 QR Code",
   "music_hud.text.login.scanned": "已掃描，請在應用程式內確認登入",
+  "music_hud.text.sendCodeFirst": "請先取得驗證碼",
   "music_hud.button.addToIdlePlaySource": "新增到閒置播放來源",
   "music_hud.button.back": "返回",
   "music_hud.button.cancel": "取消",

@@ -8,13 +8,10 @@ import icyllis.modernui.view.View;
 import icyllis.modernui.widget.*;
 import indi.etern.musichud.MusicHud;
 import indi.etern.musichud.client.ui.Theme;
-import indi.etern.musichud.client.ui.ToastUtil;
+import indi.etern.musichud.client.services.LoginService;
+import indi.etern.musichud.client.services.tuneweave.TuneWeaveClientService;
 import indi.etern.musichud.client.ui.utils.ui.ButtonInsetBackgroundFactory;
-import indi.etern.musichud.network.IClientNetworkService;
-import indi.etern.musichud.network.RequestResponseManager;
-import indi.etern.musichud.network.payloads.pushMessages.c2s.PhoneCodeLoginMessage;
-import indi.etern.musichud.network.payloads.requestResponseCycle.SendPhoneValidationCodeRequest;
-import indi.etern.musichud.network.payloads.requestResponseCycle.SendPhoneValidationCodeResponse;
+import indi.etern.musichud.server.api.tuneweave.TuneWeavePlatform;
 import net.minecraft.client.resources.language.I18n;
 
 import java.time.Duration;
@@ -29,8 +26,11 @@ public class PhoneCodeLoginView extends LinearLayout implements ILoginView {
     private final TextView messageTextView;
     private final EditText phoneRegionInput;
     private final Button sendCodeButton;
+    private final Spinner platformSpinner;
+    private final TuneWeaveClientService tuneWeave = TuneWeaveClientService.getInstance();
     private ZonedDateTime lastSentCodeTime;
     MusicHud.ScheduledTask scheduledRefreshTask = null;
+    private volatile TuneWeaveClientService.ChallengeSession challengeSession;
 
     public PhoneCodeLoginView(Context context) {
         super(context);
@@ -51,6 +51,21 @@ public class PhoneCodeLoginView extends LinearLayout implements ILoginView {
         params1.setMargins(0, dp(4), 0, 0);
         textView1.setLayoutParams(params1);
         addView(textView1);
+
+        platformSpinner = new Spinner(context);
+        platformSpinner.setAdapter(new ArrayAdapter<>(context, new String[]{
+                I18n.get(MusicHud.MOD_ID + ".platform.netease"),
+                I18n.get(MusicHud.MOD_ID + ".platform.qq"),
+                I18n.get(MusicHud.MOD_ID + ".platform.bilibili")
+        }));
+        platformSpinner.setSelection(switch (tuneWeave.defaultPlatform()) {
+            case NETEASE -> 0;
+            case QQ -> 1;
+            case BILIBILI -> 2;
+        });
+        LayoutParams platformParams = new LayoutParams(WRAP_CONTENT, WRAP_CONTENT);
+        platformParams.setMargins(0, dp(12), 0, 0);
+        addView(platformSpinner, platformParams);
 
         LinearLayout content = new LinearLayout(context);
         content.setOrientation(LinearLayout.VERTICAL);
@@ -139,38 +154,19 @@ public class PhoneCodeLoginView extends LinearLayout implements ILoginView {
                 }
                 lastSentCodeTime = ZonedDateTime.now();
                 setSendingButtonDisable();
-                RequestResponseManager.send(
-                                new SendPhoneValidationCodeRequest(regionCode, phone),
-                                SendPhoneValidationCodeResponse.class,
-                                Duration.ofSeconds(10))
-                        .whenComplete((response, throwable) -> {
-                            if (throwable != null) {
-                                MuiModApi.postToUiThread(() -> {
-                                    setSendingButtonEnable();
-                                    sendCodeButton.setText(I18n.get(MusicHud.MOD_ID + ".button.sendCode"));
-                                });
-                                return;
-                            }
-                            int timeout = response.getTimeout();
-                            if (!response.isSuccess()) {
-                                MuiModApi.postToUiThread(() -> {
-                                    Toast toast = Toast.makeText(context, I18n.get(MusicHud.MOD_ID + ".text.failedToSendCode"), Toast.LENGTH_SHORT);
-                                    ToastUtil.show(toast);
-                                });
-                            }
-                            scheduledRefreshTask = MusicHud.scheduleWithFixedDelay(() -> {
-                                MuiModApi.postToUiThread(() -> {
-                                    long seconds = timeout - Duration.between(lastSentCodeTime, ZonedDateTime.now()).getSeconds();
-                                    if (seconds <= 1) {
-                                        setSendingButtonEnable();
-                                        sendCodeButton.setText(I18n.get(MusicHud.MOD_ID + ".button.sendCode"));
-                                        scheduledRefreshTask.stop();
-                                    } else {
-                                        sendCodeButton.setText(String.valueOf(seconds));
-                                    }
-                                });
-                            }, Duration.ZERO, Duration.ofSeconds(1));
+                TuneWeavePlatform platform = selectedPlatform();
+                MusicHud.EXECUTOR.execute(() -> {
+                    try {
+                        challengeSession = tuneWeave.startSmsLogin(platform, Long.toString(phone), Integer.toString(regionCode));
+                        startCountdown(60);
+                    } catch (RuntimeException error) {
+                        MuiModApi.postToUiThread(() -> {
+                            setSendingButtonEnable();
+                            sendCodeButton.setText(I18n.get(MusicHud.MOD_ID + ".button.sendCode"));
+                            errorText(error.getMessage());
                         });
+                    }
+                });
         });
         layout2.addView(sendCodeButton);
 
@@ -211,7 +207,23 @@ public class PhoneCodeLoginView extends LinearLayout implements ILoginView {
                 return;
             }
 
-            IClientNetworkService.getInstance().sendToServer(new PhoneCodeLoginMessage(regionCode, phone, code));
+            TuneWeaveClientService.ChallengeSession session = challengeSession;
+            if (session == null) {
+                errorText(I18n.get(MusicHud.MOD_ID + ".text.sendCodeFirst"));
+                return;
+            }
+            loginButton.setClickable(false);
+            MusicHud.EXECUTOR.execute(() -> {
+                try {
+                    LoginService.getInstance().completeTuneWeaveLogin(
+                            tuneWeave.verifySmsLogin(session, Integer.toString(code)));
+                } catch (RuntimeException error) {
+                    MuiModApi.postToUiThread(() -> {
+                        loginButton.setClickable(true);
+                        errorText(error.getMessage());
+                    });
+                }
+            });
         });
         var bf2 = ButtonInsetBackgroundFactory.builder()
                 .padding(new ButtonInsetBackgroundFactory.Padding(dp(16), dp(8), dp(16), dp(8)))
@@ -255,8 +267,32 @@ public class PhoneCodeLoginView extends LinearLayout implements ILoginView {
         sendCodeButton.setClickable(true);
     }
 
+    private TuneWeavePlatform selectedPlatform() {
+        return switch (platformSpinner.getSelectedItemPosition()) {
+            case 1 -> TuneWeavePlatform.QQ;
+            case 2 -> TuneWeavePlatform.BILIBILI;
+            default -> TuneWeavePlatform.NETEASE;
+        };
+    }
+
+    private void startCountdown(int timeout) {
+        scheduledRefreshTask = MusicHud.scheduleWithFixedDelay(() -> MuiModApi.postToUiThread(() -> {
+            long seconds = timeout - Duration.between(lastSentCodeTime, ZonedDateTime.now()).getSeconds();
+            if (seconds <= 1) {
+                setSendingButtonEnable();
+                sendCodeButton.setText(I18n.get(MusicHud.MOD_ID + ".button.sendCode"));
+                if (scheduledRefreshTask != null) {
+                    scheduledRefreshTask.stop();
+                }
+            } else {
+                sendCodeButton.setText(String.valueOf(seconds));
+            }
+        }), Duration.ZERO, Duration.ofSeconds(1));
+    }
+
     @Override
     public void reset() {
+        challengeSession = null;
         messageTextView.setVisibility(GONE);
     }
 

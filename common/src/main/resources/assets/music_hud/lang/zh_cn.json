@@ -8,6 +8,7 @@
   "music_hud.login.mobile": "手机 App",
   "music_hud.text.login.waitingForScan": "请使用所选应用扫描二维码",
   "music_hud.text.login.scanned": "已扫码，请在应用内确认登录",
+  "music_hud.text.sendCodeFirst": "请先获取验证码",
   "music_hud.button.addToIdlePlaySource": "添加到空闲播放源",
   "music_hud.button.back": "返回",
   "music_hud.button.cancel": "取消",
