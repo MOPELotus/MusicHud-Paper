@@ -367,6 +367,9 @@ public class MusicService implements IClientMusicService {
             return CompletableFuture.failedFuture(
                     new IllegalStateException("Cannot call AccountService.loadUserAlbums when logined as anonymous"));
         }
+        if (tuneWeave.hasCredential(tuneWeave.defaultPlatform())) {
+            return CompletableFuture.supplyAsync(tuneWeave::loadAccountAlbums, MusicHud.EXECUTOR);
+        }
         return RequestResponseManager.send(
                         new GetUserAlbumsRequest(ignoreCache),
                         GetUserAlbumsResponse.class,
@@ -379,6 +382,9 @@ public class MusicService implements IClientMusicService {
         if (!LoginService.getInstance().isLogined()) {
             return CompletableFuture.failedFuture(
                     new IllegalStateException("Cannot call AccountService.loadUserArtists when logined as anonymous"));
+        }
+        if (tuneWeave.hasCredential(tuneWeave.defaultPlatform())) {
+            return CompletableFuture.supplyAsync(tuneWeave::loadAccountArtists, MusicHud.EXECUTOR);
         }
         return RequestResponseManager.send(
                         new GetUserArtistsRequest(ignoreCache),
@@ -449,8 +455,8 @@ public class MusicService implements IClientMusicService {
             if (tuneWeave.hasCredential(tuneWeave.defaultPlatform())) {
                 return CompletableFuture.supplyAsync(() -> {
                     currentUserCollections.setUserCategoryPlaylists(tuneWeave.loadAccountPlaylists());
-                    currentUserCollections.setSubscribedAlbums(new ObservableSequencedSet<>());
-                    currentUserCollections.setSubscribedArtists(new ObservableSequencedSet<>());
+                    currentUserCollections.setSubscribedAlbums(new ObservableSequencedSet<>(tuneWeave.loadAccountAlbums()));
+                    currentUserCollections.setSubscribedArtists(new ObservableSequencedSet<>(tuneWeave.loadAccountArtists()));
                     currentUserCollections.loaded = true;
                     return currentUserCollections;
                 }, MusicHud.EXECUTOR);

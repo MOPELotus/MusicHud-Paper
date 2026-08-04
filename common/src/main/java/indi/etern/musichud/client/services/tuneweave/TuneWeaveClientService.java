@@ -168,6 +168,30 @@ public final class TuneWeaveClientService {
         return new UserCategoryPlaylists(liked, created, subscribed);
     }
 
+    public java.util.LinkedHashSet<Album> loadAccountAlbums() {
+        TuneWeavePlatform platform = defaultPlatform();
+        JsonElement data = requestForPlatform(platform, "GET", "/v1/account/library/albums",
+                Map.of("platform", platform.apiName(), "limit", "100", "offset", "0"), null).data();
+        java.util.LinkedHashSet<Album> result = new java.util.LinkedHashSet<>();
+        for (JsonElement item : elements(data)) {
+            Album album = toAlbum(platform, unwrap(item));
+            if (album != Album.NONE) result.add(album);
+        }
+        return result;
+    }
+
+    public java.util.LinkedHashSet<Artist> loadAccountArtists() {
+        TuneWeavePlatform platform = defaultPlatform();
+        JsonElement data = requestForPlatform(platform, "GET", "/v1/account/following/artists",
+                Map.of("platform", platform.apiName(), "limit", "100", "offset", "0"), null).data();
+        java.util.LinkedHashSet<Artist> result = new java.util.LinkedHashSet<>();
+        for (JsonElement item : elements(data)) {
+            Artist artist = toArtist(platform, unwrap(item));
+            if (!artist.getSourceRef().isBlank()) result.add(artist);
+        }
+        return result;
+    }
+
     public List<UniPlaylistInfo> listUniPlaylists() {
         JsonElement data = requestWithAllCredentials("GET", "/v1/uni/playlists",
                 Map.of("limit", "100", "offset", "0"), null).data();
