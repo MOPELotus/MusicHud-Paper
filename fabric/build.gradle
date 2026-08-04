@@ -114,6 +114,7 @@ dependencies {
 
     compileOnly "org.projectlombok:lombok:$rootProject.lombok_version"
     annotationProcessor "org.projectlombok:lombok:$rootProject.lombok_version"
+    annotationProcessor project(':processor')
     testCompileOnly "org.projectlombok:lombok:$rootProject.lombok_version"
     testAnnotationProcessor "org.projectlombok:lombok:$rootProject.lombok_version"
     testImplementation "org.junit.jupiter:junit-jupiter:$rootProject.junit_version"
@@ -136,6 +137,7 @@ java {
 }
 
 tasks.withType(JavaCompile).configureEach {
+    options.compilerArgs += ['-Amusichud.module=' + project.name]
 }
 
 processResources {
