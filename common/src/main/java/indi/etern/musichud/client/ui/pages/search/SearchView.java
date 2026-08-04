@@ -10,6 +10,8 @@ import icyllis.modernui.view.View;
 import icyllis.modernui.widget.Button;
 import icyllis.modernui.widget.EditText;
 import icyllis.modernui.widget.LinearLayout;
+import icyllis.modernui.widget.Spinner;
+import icyllis.modernui.widget.ArrayAdapter;
 import icyllis.modernui.widget.TextView;
 import indi.etern.musichud.MusicHud;
 import indi.etern.musichud.beans.api.SearchType;
@@ -19,6 +21,8 @@ import indi.etern.musichud.beans.music.MusicDetail;
 import indi.etern.musichud.beans.music.Playlist;
 import indi.etern.musichud.client.ui.Theme;
 import indi.etern.musichud.client.ui.utils.ui.ButtonInsetBackgroundFactory;
+import indi.etern.musichud.client.services.tuneweave.TuneWeaveClientService;
+import indi.etern.musichud.server.api.tuneweave.TuneWeavePlatform;
 import indi.etern.musichud.interfaces.ClientConfig;
 import indi.etern.musichud.network.RequestResponseManager;
 import indi.etern.musichud.network.payloads.requestResponseCycle.SearchRequest;
@@ -49,6 +53,7 @@ public class SearchView extends LinearLayout {
     private final HashSet<Consumer<SearchMeta>> searchRefreshListeners = new HashSet<>();
     private static final ClientConfig clientConfig = ClientConfig.getInstance();
     private EditText searchTextInput;
+    private Spinner platformSpinner;
     private SearchResultTabPage searchResultTabPage;
     @Getter
     private String searchText;
@@ -79,6 +84,18 @@ public class SearchView extends LinearLayout {
         addView(top, topParams);
 
         top.addView(new View(context), new LayoutParams(0, WRAP_CONTENT, 2));
+        platformSpinner = new Spinner(context);
+        platformSpinner.setAdapter(new ArrayAdapter<>(context, new String[]{
+                I18n.get(MusicHud.MOD_ID + ".platform.netease"),
+                I18n.get(MusicHud.MOD_ID + ".platform.qq"),
+                I18n.get(MusicHud.MOD_ID + ".platform.bilibili")
+        }));
+        platformSpinner.setSelection(switch (TuneWeaveClientService.getInstance().defaultPlatform()) {
+            case NETEASE -> 0;
+            case QQ -> 1;
+            case BILIBILI -> 2;
+        });
+        top.addView(platformSpinner, new LayoutParams(WRAP_CONTENT, MATCH_PARENT));
         searchTextInput = new EditText(context, null, R.attr.editTextOutlinedStyle);
         searchTextInput.setTextAlignment(SearchView.TEXT_ALIGNMENT_CENTER);
         searchTextInput.setHint(I18n.get(MusicHud.MOD_ID + ".field.hint.searchMusic"));
@@ -161,15 +178,38 @@ public class SearchView extends LinearLayout {
     }
 
     private void sendSearchRequest(String text, SearchType searchType, int offset) {
-        RequestResponseManager.send(
-                        new SearchRequest(text, searchType, offset),
-                        SearchResultResponse.class,
-                        Duration.ofSeconds(10))
-                .thenAccept(response -> MuiModApi.postToUiThread(() -> handleSearchResult(response)))
-                .exceptionally(e -> {
-                    MusicHud.getLogger(SearchView.class).warn("Failed to search {}: {}", searchType, text, e);
-                    return null;
-                });
+        TuneWeavePlatform platform = switch (platformSpinner.getSelectedItemPosition()) {
+            case 1 -> TuneWeavePlatform.QQ;
+            case 2 -> TuneWeavePlatform.BILIBILI;
+            default -> TuneWeavePlatform.NETEASE;
+        };
+        MusicHud.EXECUTOR.execute(() -> {
+            try {
+                List<?> result = TuneWeaveClientService.getInstance().search(text, searchType, offset, platform);
+                MuiModApi.postToUiThread(() -> handleDirectSearchResult(offset, searchType, result));
+            } catch (RuntimeException directFailure) {
+                RequestResponseManager.send(
+                                new SearchRequest(text, searchType, offset),
+                                SearchResultResponse.class,
+                                Duration.ofSeconds(10))
+                        .thenAccept(response -> MuiModApi.postToUiThread(() -> handleSearchResult(response)))
+                        .exceptionally(e -> {
+                            MusicHud.getLogger(SearchView.class).warn("Failed to search {}: {}", searchType, text, e);
+                            return null;
+                        });
+            }
+        });
+    }
+
+    @SuppressWarnings("unchecked")
+    private void handleDirectSearchResult(int offset, SearchType searchType, List<?> result) {
+        switch (searchType) {
+            case MUSIC -> setSearchMusicResult(offset, (List<MusicDetail>) result);
+            case PLAYLIST -> setSearchPlaylistResult(offset, (List<Playlist>) result);
+            case ALBUM -> setSearchAlbumResult(offset, (List<Album>) result);
+            case ARTIST -> setSearchArtistResult(offset, (List<Artist>) result);
+            default -> { }
+        }
     }
 
     @SuppressWarnings("unchecked")

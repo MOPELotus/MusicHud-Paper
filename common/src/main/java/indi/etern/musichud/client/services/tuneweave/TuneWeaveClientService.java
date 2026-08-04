@@ -6,6 +6,9 @@ import com.google.gson.JsonNull;
 import com.google.gson.JsonObject;
 import indi.etern.musichud.MusicHud;
 import indi.etern.musichud.beans.music.Playlist;
+import indi.etern.musichud.beans.api.SearchType;
+import indi.etern.musichud.beans.music.Album;
+import indi.etern.musichud.beans.music.Artist;
 import indi.etern.musichud.beans.music.Fee;
 import indi.etern.musichud.beans.music.FormatType;
 import indi.etern.musichud.beans.music.MusicDetail;
@@ -288,6 +291,29 @@ public final class TuneWeaveClientService {
                 integer(stream, "duration_ms", musicDetail.getDurationMillis()), stringMap(stream.get("headers")));
     }
 
+    public List<?> search(String keywords, SearchType searchType, int offset, TuneWeavePlatform platform) {
+        String type = switch (searchType) {
+            case ALBUM -> "album";
+            case ARTIST -> "artist";
+            case PLAYLIST -> "playlist";
+            default -> "track";
+        };
+        JsonElement data = requestForPlatform(platform, "GET", "/v1/search", Map.of(
+                "q", keywords, "type", type, "platform", platform.apiName(),
+                "limit", "50", "offset", Integer.toString(Math.max(0, offset))), null).data();
+        List<JsonObject> rawItems = new ArrayList<>();
+        for (JsonElement item : elements(data)) {
+            JsonObject object = unwrap(item);
+            if (!object.isEmpty()) rawItems.add(object);
+        }
+        return switch (searchType) {
+            case ALBUM -> rawItems.stream().map(value -> toAlbum(platform, value)).toList();
+            case ARTIST -> rawItems.stream().map(value -> toArtist(platform, value)).toList();
+            case PLAYLIST -> rawItems.stream().map(value -> toPlaylist(platform, value)).toList();
+            default -> rawItems.stream().map(value -> toTrack(platform, value)).toList();
+        };
+    }
+
     private static String uniPath(String reference) {
         return "/v1/uni/playlists/" + TuneWeaveApiClient.encodePathSegment(reference);
     }
@@ -433,6 +459,54 @@ public final class TuneWeaveClientService {
                 string(object, "name", reference), string(object, "cover_url", ""),
                 integer(object, "track_count", integer(object, "item_count", 0)),
                 integer(object, "play_count", 0), creator);
+    }
+
+    private static Album toAlbum(TuneWeavePlatform platform, JsonObject object) {
+        String reference = string(object, "ref", string(object, "reference", ""));
+        if (reference.isBlank()) return Album.NONE;
+        java.util.LinkedHashSet<Artist> artists = new java.util.LinkedHashSet<>();
+        JsonElement artistData = object.get("artists");
+        if (artistData != null && artistData.isJsonArray()) {
+            artistData.getAsJsonArray().forEach(value -> {
+                if (value.isJsonObject()) artists.add(toArtist(platform, value.getAsJsonObject()));
+            });
+        }
+        return new Album(stableId(platform, "album:" + reference), string(object, "name", reference),
+                string(object, "cover_url", string(object, "pic_url", "")), string(object, "kind", ""),
+                string(object, "company", ""), integer(object, "track_count", 0),
+                new ObservableSequencedSet<>(), artists, indi.etern.musichud.beans.music.PusherInfo.EMPTY, reference);
+    }
+
+    private static Artist toArtist(TuneWeavePlatform platform, JsonObject object) {
+        String reference = string(object, "ref", string(object, "reference", ""));
+        String name = string(object, "name", reference);
+        return new Artist(stableId(platform, "artist:" + (reference.isBlank() ? name : reference)), name,
+                string(object, "avatar_url", string(object, "cover_url", "")),
+                integer(object, "album_count", integer(object, "album_size", 0)),
+                integer(object, "music_count", integer(object, "music_size", 0)),
+                string(object, "description", ""), new ArrayList<>(),
+                integer(object, "total_music_count", integer(object, "music_count", 0)), reference);
+    }
+
+    private static MusicDetail toTrack(TuneWeavePlatform platform, JsonObject object) {
+        String reference = string(object, "ref", string(object, "reference", ""));
+        if (reference.isBlank()) return MusicDetail.NONE;
+        List<Artist> artists = new ArrayList<>();
+        JsonElement artistData = object.get("artists");
+        if (artistData != null && artistData.isJsonArray()) {
+            artistData.getAsJsonArray().forEach(value -> {
+                if (value.isJsonObject()) artists.add(toArtist(platform, value.getAsJsonObject()));
+            });
+        }
+        Album album = Album.NONE;
+        JsonElement albumData = object.get("album");
+        if (albumData != null && albumData.isJsonObject()) album = toAlbum(platform, albumData.getAsJsonObject());
+        MusicDetail result = MusicDetail.fromTuneWeave(stableId(platform, "track:" + reference), reference,
+                "video".equals(string(object, "kind", "track")) ? "video" : "track",
+                string(object, "name", string(object, "title", reference)),
+                integer(object, "duration_ms", 0), album, artists);
+        result.setPusherInfo(indi.etern.musichud.beans.music.PusherInfo.EMPTY);
+        return result;
     }
 
     private static long stableId(TuneWeavePlatform platform, String value) {
