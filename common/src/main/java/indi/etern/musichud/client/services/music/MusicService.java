@@ -26,11 +26,9 @@ import indi.etern.musichud.interfaces.IClientLoginService;
 import indi.etern.musichud.interfaces.IClientMusicService;
 import indi.etern.musichud.interfaces.RegisterMark;
 import indi.etern.musichud.network.IClientNetworkService;
-import indi.etern.musichud.network.RequestResponseManager;
 import indi.etern.musichud.network.payloads.pushMessages.c2s.ClientPushMusicToQueueMessage;
 import indi.etern.musichud.network.payloads.pushMessages.c2s.ClientRemoveMusicFromQueueMessage;
 import indi.etern.musichud.network.payloads.pushMessages.c2s.VoteSkipCurrentMusicMessage;
-import indi.etern.musichud.network.payloads.requestResponseCycle.*;
 import lombok.*;
 import net.minecraft.client.resources.language.I18n;
 
