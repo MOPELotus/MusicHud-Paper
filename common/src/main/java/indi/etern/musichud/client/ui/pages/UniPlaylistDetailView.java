@@ -9,6 +9,8 @@ import icyllis.modernui.widget.Button;
 import icyllis.modernui.widget.EditText;
 import icyllis.modernui.widget.LinearLayout;
 import icyllis.modernui.widget.ScrollView;
+import icyllis.modernui.widget.ArrayAdapter;
+import icyllis.modernui.widget.Spinner;
 import icyllis.modernui.widget.TextView;
 import indi.etern.musichud.MusicHud;
 import indi.etern.musichud.client.services.tuneweave.TuneWeaveClientService;
@@ -128,21 +130,46 @@ public final class UniPlaylistDetailView extends LinearLayout {
     }
 
     private void showAddDialog() {
+        LinearLayout form = new LinearLayout(getContext());
+        form.setOrientation(VERTICAL);
+        Spinner platform = new Spinner(getContext());
+        platform.setAdapter(new ArrayAdapter<>(getContext(), new String[]{
+                I18n.get(MusicHud.MOD_ID + ".platform.netease"),
+                I18n.get(MusicHud.MOD_ID + ".platform.qq"),
+                I18n.get(MusicHud.MOD_ID + ".platform.bilibili")
+        }));
+        form.addView(platform, new LayoutParams(MATCH_PARENT, WRAP_CONTENT));
+        Spinner kind = new Spinner(getContext());
+        kind.setAdapter(new ArrayAdapter<>(getContext(), new String[]{
+                I18n.get(MusicHud.MOD_ID + ".uniPlaylist.item.track"),
+                I18n.get(MusicHud.MOD_ID + ".uniPlaylist.item.video")
+        }));
+        form.addView(kind, new LayoutParams(MATCH_PARENT, WRAP_CONTENT));
         EditText input = new EditText(getContext(), null, R.attr.editTextOutlinedStyle);
         input.setHint(I18n.get(MusicHud.MOD_ID + ".text.uniPlaylist.refHint"));
         input.setSingleLine(true);
+        form.addView(input, new LayoutParams(MATCH_PARENT, WRAP_CONTENT));
         TextView title = new TextView(getContext());
         title.setText(I18n.get(MusicHud.MOD_ID + ".text.uniPlaylist.add"));
-        new Modal(getContext(), title, input,
+        new Modal(getContext(), title, form,
                 new Modal.ActionButton(I18n.get(MusicHud.MOD_ID + ".button.confirm"), (b, modal) -> {
                     String value = input.getText().toString().trim();
-                    if (!value.isBlank()) { modal.dismiss(); add(value); }
+                    if (!value.isBlank()) {
+                        String prefix = switch (platform.getSelectedItemPosition()) {
+                            case 1 -> "qq";
+                            case 2 -> "bilibili";
+                            default -> "netease";
+                        };
+                        String itemKind = kind.getSelectedItemPosition() == 1 ? "video" : "track";
+                        modal.dismiss();
+                        add(prefix + ":" + value, itemKind);
+                    }
                 }),
                 new Modal.ActionButton(I18n.get(MusicHud.MOD_ID + ".button.cancel"), (b, modal) -> modal.dismiss())).show();
     }
 
-    private void add(String reference) {
-        MusicHud.EXECUTOR.execute(() -> { try { tuneWeave.addUniPlaylistItems(playlist.reference(), List.of(reference)); refresh(); }
+    private void add(String reference, String kind) {
+        MusicHud.EXECUTOR.execute(() -> { try { tuneWeave.addUniPlaylistItem(playlist.reference(), reference, kind); refresh(); }
         catch (RuntimeException error) { MuiModApi.postToUiThread(() -> showMessage(error.getMessage())); } });
     }
 

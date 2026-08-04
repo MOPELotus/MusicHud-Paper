@@ -9,7 +9,11 @@ import icyllis.modernui.widget.Button;
 import icyllis.modernui.widget.EditText;
 import icyllis.modernui.widget.LinearLayout;
 import icyllis.modernui.widget.ScrollView;
+import icyllis.modernui.widget.ArrayAdapter;
+import icyllis.modernui.widget.Spinner;
 import icyllis.modernui.widget.TextView;
+import com.google.gson.JsonObject;
+import com.google.gson.JsonParser;
 import indi.etern.musichud.MusicHud;
 import indi.etern.musichud.client.services.tuneweave.TuneWeaveClientService;
 import indi.etern.musichud.client.ui.Theme;
@@ -17,7 +21,11 @@ import indi.etern.musichud.client.ui.components.Modal;
 import indi.etern.musichud.client.ui.components.RouterContainer;
 import indi.etern.musichud.client.ui.utils.ui.ButtonInsetBackgroundFactory;
 import net.minecraft.client.resources.language.I18n;
+import org.lwjgl.util.tinyfd.TinyFileDialogs;
 
+import java.nio.charset.StandardCharsets;
+import java.nio.file.Files;
+import java.nio.file.Path;
 import java.util.List;
 import java.util.function.Consumer;
 
@@ -43,13 +51,19 @@ public final class UniPlaylistView extends LinearLayout {
         title.setTextColor(Theme.EMPHASIZE_TEXT_COLOR);
         toolbar.addView(title, new LayoutParams(0, WRAP_CONTENT, 1));
         toolbar.addView(actionButton(context, "refresh", v -> refresh()), new LayoutParams(WRAP_CONTENT, WRAP_CONTENT));
-        toolbar.addView(actionButton(context, "create", v -> showNameDialog(
+        addView(toolbar, new LayoutParams(MATCH_PARENT, WRAP_CONTENT));
+
+        LinearLayout actions = new LinearLayout(context);
+        actions.setGravity(Gravity.RIGHT);
+        actions.addView(actionButton(context, "create", v -> showNameDialog(
                 I18n.get(MusicHud.MOD_ID + ".text.uniPlaylist.create"), "", name -> create(name))),
                 new LayoutParams(WRAP_CONTENT, WRAP_CONTENT));
-        toolbar.addView(actionButton(context, "import", v -> showNameDialog(
-                I18n.get(MusicHud.MOD_ID + ".text.uniPlaylist.importSource"), "", source -> importSource(source))),
+        actions.addView(actionButton(context, "import", v -> showImportDialog()),
                 new LayoutParams(WRAP_CONTENT, WRAP_CONTENT));
-        addView(toolbar, new LayoutParams(MATCH_PARENT, WRAP_CONTENT));
+        actions.addView(actionButton(context, "importDocument", v -> importDocument()), new LayoutParams(WRAP_CONTENT, WRAP_CONTENT));
+        LayoutParams actionsParams = new LayoutParams(MATCH_PARENT, WRAP_CONTENT);
+        actionsParams.setMargins(0, dp(8), 0, 0);
+        addView(actions, actionsParams);
 
         TextView hint = new TextView(context);
         hint.setText(I18n.get(MusicHud.MOD_ID + ".text.uniPlaylist.description"));
@@ -118,6 +132,7 @@ public final class UniPlaylistView extends LinearLayout {
             buttons.addView(actionButton(getContext(), "rename", v -> showNameDialog(
                     I18n.get(MusicHud.MOD_ID + ".text.uniPlaylist.rename"), playlist.name(), value -> rename(playlist, value))),
                     new LayoutParams(WRAP_CONTENT, WRAP_CONTENT));
+            buttons.addView(actionButton(getContext(), "export", v -> export(playlist)), new LayoutParams(WRAP_CONTENT, WRAP_CONTENT));
             buttons.addView(actionButton(getContext(), "delete", v -> confirmDelete(playlist)), new LayoutParams(WRAP_CONTENT, WRAP_CONTENT));
             row.addView(buttons, new LayoutParams(MATCH_PARENT, WRAP_CONTENT));
             LayoutParams rowParams = new LayoutParams(MATCH_PARENT, WRAP_CONTENT);
@@ -133,6 +148,8 @@ public final class UniPlaylistView extends LinearLayout {
             case "open" -> ".button.open";
             case "rename" -> ".button.rename";
             case "delete" -> ".button.delete";
+            case "export" -> ".button.export";
+            case "importDocument" -> ".button.importDocument";
             default -> ".button.refresh";
         };
         Button button = new Button(context);
@@ -169,10 +186,101 @@ public final class UniPlaylistView extends LinearLayout {
         });
     }
 
-    private void importSource(String source) {
+    private void showImportDialog() {
+        LinearLayout form = new LinearLayout(getContext());
+        form.setOrientation(VERTICAL);
+        EditText name = new EditText(getContext(), null, R.attr.editTextOutlinedStyle);
+        name.setSingleLine(true);
+        name.setHint(I18n.get(MusicHud.MOD_ID + ".text.uniPlaylist.nameHint"));
+        form.addView(name, new LayoutParams(MATCH_PARENT, WRAP_CONTENT));
+
+        Spinner platform = new Spinner(getContext());
+        platform.setAdapter(new ArrayAdapter<>(getContext(), new String[]{
+                I18n.get(MusicHud.MOD_ID + ".platform.netease"),
+                I18n.get(MusicHud.MOD_ID + ".platform.qq"),
+                I18n.get(MusicHud.MOD_ID + ".platform.bilibili")
+        }));
+        form.addView(platform, new LayoutParams(MATCH_PARENT, WRAP_CONTENT));
+
+        String[] sourceTypes = {"playlist", "favorite_tracks", "season", "favorite_folder"};
+        Spinner type = new Spinner(getContext());
+        type.setAdapter(new ArrayAdapter<>(getContext(), new String[]{
+                I18n.get(MusicHud.MOD_ID + ".uniPlaylist.source.playlist"),
+                I18n.get(MusicHud.MOD_ID + ".uniPlaylist.source.favoriteTracks"),
+                I18n.get(MusicHud.MOD_ID + ".uniPlaylist.source.season"),
+                I18n.get(MusicHud.MOD_ID + ".uniPlaylist.source.favoriteFolder")
+        }));
+        form.addView(type, new LayoutParams(MATCH_PARENT, WRAP_CONTENT));
+
+        EditText id = new EditText(getContext(), null, R.attr.editTextOutlinedStyle);
+        id.setSingleLine(true);
+        id.setHint(I18n.get(MusicHud.MOD_ID + ".text.uniPlaylist.sourceIdHint"));
+        form.addView(id, new LayoutParams(MATCH_PARENT, WRAP_CONTENT));
+
+        TextView dialogTitle = new TextView(getContext());
+        dialogTitle.setText(I18n.get(MusicHud.MOD_ID + ".text.uniPlaylist.importSource"));
+        Modal modal = new Modal(getContext(),
+                dialogTitle, form,
+                new Modal.ActionButton(I18n.get(MusicHud.MOD_ID + ".button.confirm"), (button, dialog) -> {
+                    String sourceId = id.getText().toString().trim();
+                    if (sourceId.isBlank()) return;
+                    String sourcePlatform = switch (platform.getSelectedItemPosition()) {
+                        case 1 -> "qq";
+                        case 2 -> "bilibili";
+                        default -> "netease";
+                    };
+                    dialog.dismiss();
+                    MusicHud.EXECUTOR.execute(() -> {
+                        try {
+                            tuneWeave.importUniPlaylistSources(name.getText().toString().trim(), List.of(
+                                    new TuneWeaveClientService.UniImportSource(
+                                            sourcePlatform, sourceTypes[type.getSelectedItemPosition()], sourceId)));
+                            refreshOnUi();
+                        } catch (RuntimeException error) {
+                            MuiModApi.postToUiThread(() -> showProgress(error.getMessage()));
+                        }
+                    });
+                }),
+                new Modal.ActionButton(I18n.get(MusicHud.MOD_ID + ".button.cancel"), (button, dialog) -> dialog.dismiss()));
+        modal.show();
+    }
+
+    private void importDocument() {
+        String path = TinyFileDialogs.tinyfd_openFileDialog(
+                I18n.get(MusicHud.MOD_ID + ".text.uniPlaylist.importDocument"), "", null, "JSON document", false);
+        if (path == null || path.isBlank()) return;
         MusicHud.EXECUTOR.execute(() -> {
-            try { tuneWeave.importUniPlaylist(null, List.of(source)); refreshOnUi(); }
+            try {
+                Path file = Path.of(path);
+                if (Files.size(file) > 4 * 1024 * 1024) {
+                    throw new IllegalArgumentException("Uni Playlist document is too large");
+                }
+                JsonObject document = JsonParser.parseString(Files.readString(file, StandardCharsets.UTF_8)).getAsJsonObject();
+                if (!"tuneweave_uni_playlist_v1".equals(document.get("format").getAsString())) {
+                    throw new IllegalArgumentException("Unsupported Uni Playlist document format");
+                }
+                tuneWeave.importUniPlaylistDocument(document);
+                refreshOnUi();
+            }
             catch (RuntimeException error) { MuiModApi.postToUiThread(() -> showProgress(error.getMessage())); }
+            catch (Exception error) { MuiModApi.postToUiThread(() -> showProgress(error.getMessage())); }
+        });
+    }
+
+    private void export(TuneWeaveClientService.UniPlaylistInfo playlist) {
+        String safeName = playlist.name().replaceAll("[^a-zA-Z0-9._-]+", "_");
+        String path = TinyFileDialogs.tinyfd_saveFileDialog(
+                I18n.get(MusicHud.MOD_ID + ".text.uniPlaylist.exportDocument"),
+                safeName.isBlank() ? "uni-playlist.json" : safeName + ".json", null, "JSON document");
+        if (path == null || path.isBlank()) return;
+        MusicHud.EXECUTOR.execute(() -> {
+            try {
+                JsonObject document = tuneWeave.exportUniPlaylist(playlist.reference());
+                Files.writeString(Path.of(path), document.toString(), StandardCharsets.UTF_8);
+                MuiModApi.postToUiThread(() -> showProgress(I18n.get(MusicHud.MOD_ID + ".text.uniPlaylist.exported")));
+            } catch (Exception error) {
+                MuiModApi.postToUiThread(() -> showProgress(error.getMessage()));
+            }
         });
     }
 

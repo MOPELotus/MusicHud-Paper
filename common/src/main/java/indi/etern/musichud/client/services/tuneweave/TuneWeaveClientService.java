@@ -465,6 +465,19 @@ public final class TuneWeaveClientService {
         requestWithAllCredentials("POST", uniPath(reference) + "/items", Map.of(), body);
     }
 
+    public void addUniPlaylistItem(String reference, String resourceRef, String kind) {
+        if (resourceRef == null || resourceRef.isBlank()) return;
+        JsonObject body = new JsonObject();
+        JsonArray items = new JsonArray();
+        JsonObject item = new JsonObject();
+        item.addProperty("ref", resourceRef);
+        item.addProperty("kind", kind == null || kind.isBlank() ? "track" : kind);
+        items.add(item);
+        body.add("items", items);
+        body.add("accounts", new JsonObject());
+        requestWithAllCredentials("POST", uniPath(reference) + "/items", Map.of(), body);
+    }
+
     public void deleteUniPlaylistItem(String reference, String itemId) {
         requestWithAllCredentials("DELETE", uniPath(reference) + "/items/"
                 + TuneWeaveApiClient.encodePathSegment(itemId), Map.of(), null);
@@ -490,6 +503,31 @@ public final class TuneWeaveClientService {
         });
         body.add("sources", sources);
         return toUniPlaylist(requestWithAllCredentials("POST", "/v1/uni/playlists/imports", Map.of(), body).data());
+    }
+
+    public UniPlaylistInfo importUniPlaylistSources(String name, List<UniImportSource> sources) {
+        JsonObject body = new JsonObject();
+        if (name != null && !name.isBlank()) body.addProperty("name", name);
+        JsonArray sourceArray = new JsonArray();
+        sources.stream().limit(50).forEach(source -> {
+            JsonObject value = new JsonObject();
+            value.addProperty("platform", source.platform());
+            value.addProperty("type", source.type());
+            value.addProperty("id", source.id());
+            sourceArray.add(value);
+        });
+        body.add("sources", sourceArray);
+        return toUniPlaylist(requestWithAllCredentials("POST", "/v1/uni/playlists/imports", Map.of(), body).data());
+    }
+
+    public JsonObject exportUniPlaylist(String reference) {
+        return unwrap(requestWithAllCredentials("GET", uniPath(reference) + "/export", Map.of(), null).data());
+    }
+
+    public UniPlaylistInfo importUniPlaylistDocument(JsonObject document) {
+        JsonObject body = new JsonObject();
+        body.add("document", Objects.requireNonNull(document));
+        return toUniPlaylist(requestWithAllCredentials("POST", "/v1/uni/playlists/import-document", Map.of(), body).data());
     }
 
     public MusicResourceInfo getMusicResourceInfo(MusicDetail musicDetail,
@@ -843,6 +881,9 @@ public final class TuneWeaveClientService {
     }
 
     public record UniPlaylistInfo(String reference, String name, String description, int itemCount) {
+    }
+
+    public record UniImportSource(String platform, String type, String id) {
     }
 
     public record UniItemInfo(String id, int position, String kind, String sourceRef,
