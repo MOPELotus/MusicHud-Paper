@@ -6,6 +6,10 @@ import com.google.gson.JsonNull;
 import com.google.gson.JsonObject;
 import indi.etern.musichud.MusicHud;
 import indi.etern.musichud.beans.music.Playlist;
+import indi.etern.musichud.beans.music.Fee;
+import indi.etern.musichud.beans.music.FormatType;
+import indi.etern.musichud.beans.music.MusicDetail;
+import indi.etern.musichud.beans.music.MusicResourceInfo;
 import indi.etern.musichud.beans.music.UserCategoryPlaylists;
 import indi.etern.musichud.beans.user.Profile;
 import indi.etern.musichud.beans.user.VipType;
@@ -21,6 +25,7 @@ import java.security.NoSuchAlgorithmException;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
+import java.util.LinkedHashMap;
 import java.util.Map;
 import java.util.Objects;
 
@@ -257,6 +262,32 @@ public final class TuneWeaveClientService {
         return toUniPlaylist(requestWithAllCredentials("POST", "/v1/uni/playlists/imports", Map.of(), body).data());
     }
 
+    public MusicResourceInfo getMusicResourceInfo(MusicDetail musicDetail,
+                                                   indi.etern.musichud.beans.music.Quality quality) {
+        if (musicDetail == null || musicDetail.getSourceRef().isBlank()) {
+            return MusicResourceInfo.NONE;
+        }
+        String reference = musicDetail.getSourceRef();
+        TuneWeavePlatform platform = TuneWeavePlatform.fromApiName(reference.contains(":")
+                ? reference.substring(0, reference.indexOf(':')) : config.getDefaultMusicPlatform());
+        String path = "video".equals(musicDetail.getSourceKind())
+                ? "/v1/videos/" + TuneWeaveApiClient.encodePathSegment(reference) + "/audio-stream"
+                : "/v1/tracks/" + TuneWeaveApiClient.encodePathSegment(reference) + "/stream";
+        Map<String, String> query = new LinkedHashMap<>();
+        query.put("quality", qualityName(quality));
+        query.put("fallback", "true");
+        query.put("fallback_platforms", "netease,qq,kugou,migu,kuwo,soda");
+        JsonObject stream = unwrap(requestForPlatform(platform, "GET", path, query, null).data());
+        String url = string(stream, "url", "");
+        if (url.isBlank()) {
+            return MusicResourceInfo.NONE;
+        }
+        return new MusicResourceInfo(musicDetail.getId(), url, integer(stream, "bitrate", 0),
+                longValue(stream, "size", 0L), FormatType.fromSerializedName(
+                string(stream, "format", string(stream, "codec", ""))), "", Fee.UNSET,
+                integer(stream, "duration_ms", musicDetail.getDurationMillis()), stringMap(stream.get("headers")));
+    }
+
     private static String uniPath(String reference) {
         return "/v1/uni/playlists/" + TuneWeaveApiClient.encodePathSegment(reference);
     }
@@ -448,6 +479,35 @@ public final class TuneWeaveClientService {
     private static int integer(JsonObject object, String key, int fallback) {
         JsonElement value = object.get(key);
         return value == null || value.isJsonNull() ? fallback : value.getAsInt();
+    }
+
+    private static long longValue(JsonObject object, String key, long fallback) {
+        JsonElement value = object.get(key);
+        return value == null || value.isJsonNull() ? fallback : value.getAsLong();
+    }
+
+    private static Map<String, String> stringMap(JsonElement element) {
+        if (element == null || !element.isJsonObject()) return Map.of();
+        Map<String, String> result = new java.util.LinkedHashMap<>();
+        element.getAsJsonObject().entrySet().forEach(entry -> {
+            if (!entry.getValue().isJsonNull()) result.put(entry.getKey(), entry.getValue().getAsString());
+        });
+        return result;
+    }
+
+    private static String qualityName(indi.etern.musichud.beans.music.Quality quality) {
+        if (quality == null) return "auto";
+        return switch (quality) {
+            case STANDARD -> "standard";
+            case HIGHER -> "higher";
+            case EX_HIGH -> "high";
+            case LOSSLESS -> "lossless";
+            case HIRES -> "hires";
+            case JY_EFFECT, SKY -> "spatial";
+            case DOLBY -> "dolby";
+            case JY_MASTER -> "master";
+            case NONE -> "auto";
+        };
     }
 
     public record QrSession(TuneWeavePlatform platform, String transactionId, String url,

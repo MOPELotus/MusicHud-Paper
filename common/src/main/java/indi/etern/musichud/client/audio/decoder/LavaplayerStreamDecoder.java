@@ -16,13 +16,15 @@ import org.lwjgl.openal.AL10;
 import javax.sound.sampled.AudioInputStream;
 import java.io.IOException;
 import java.util.Objects;
+import java.util.Map;
+import java.util.ArrayList;
+import java.util.List;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.TimeoutException;
 
 public final class LavaplayerStreamDecoder implements AudioDecoder {
-    private static final AudioPlayerManager PLAYER_MANAGER = createPlayerManager();
     private static final long LOAD_TIMEOUT_SECONDS = 20;
     private static final long STUCK_TIMEOUT_MILLIS = 10_000L;
 
@@ -32,21 +34,34 @@ public final class LavaplayerStreamDecoder implements AudioDecoder {
     private final int format;
     private final int sampleRate;
     private final int channelCount;
+    private final AudioPlayerManager playerManager;
     private volatile boolean closed;
 
     private LavaplayerStreamDecoder(AudioPlayer player, AudioTrack track, AudioInputStream audioInputStream,
-                                    int format, int sampleRate, int channelCount) {
+                                    int format, int sampleRate, int channelCount, AudioPlayerManager playerManager) {
         this.player = player;
         this.track = track;
         this.audioInputStream = audioInputStream;
         this.format = format;
         this.sampleRate = sampleRate;
         this.channelCount = channelCount;
+        this.playerManager = playerManager;
     }
 
     public static LavaplayerStreamDecoder open(String identifier) throws IOException {
-        AudioTrack track = loadTrack(identifier);
-        AudioPlayer player = PLAYER_MANAGER.createPlayer();
+        return open(identifier, Map.of());
+    }
+
+    public static LavaplayerStreamDecoder open(String identifier, Map<String, String> headers) throws IOException {
+        AudioPlayerManager playerManager = createPlayerManager(headers);
+        AudioTrack track;
+        try {
+            track = loadTrack(playerManager, identifier);
+        } catch (IOException error) {
+            playerManager.shutdown();
+            throw error;
+        }
+        AudioPlayer player = playerManager.createPlayer();
         player.setVolume(100);
         player.playTrack(track);
         AudioInputStream audioInputStream = AudioPlayerInputStream.createStream(
@@ -58,7 +73,7 @@ public final class LavaplayerStreamDecoder implements AudioDecoder {
         int channelCount = StandardAudioDataFormats.COMMON_PCM_S16_LE.channelCount;
         int sampleRate = StandardAudioDataFormats.COMMON_PCM_S16_LE.sampleRate;
         int format = channelCount == 1 ? AL10.AL_FORMAT_MONO16 : AL10.AL_FORMAT_STEREO16;
-        return new LavaplayerStreamDecoder(player, track, audioInputStream, format, sampleRate, channelCount);
+        return new LavaplayerStreamDecoder(player, track, audioInputStream, format, sampleRate, channelCount, playerManager);
     }
 
     @Override
@@ -129,19 +144,29 @@ public final class LavaplayerStreamDecoder implements AudioDecoder {
         }
         player.stopTrack();
         player.destroy();
+        playerManager.shutdown();
     }
 
-    private static AudioPlayerManager createPlayerManager() {
+    private static AudioPlayerManager createPlayerManager(Map<String, String> headers) {
         DefaultAudioPlayerManager manager = new DefaultAudioPlayerManager();
         manager.getConfiguration().setOutputFormat(StandardAudioDataFormats.COMMON_PCM_S16_LE);
+        if (headers != null && !headers.isEmpty()) {
+            List<org.apache.http.Header> defaults = new ArrayList<>();
+            headers.forEach((name, value) -> {
+                if (name != null && value != null && !name.isBlank()) {
+                    defaults.add(new org.apache.http.message.BasicHeader(name, value));
+                }
+            });
+            manager.setHttpBuilderConfigurator(builder -> builder.setDefaultHeaders(defaults));
+        }
         manager.registerSourceManager(new HttpAudioSourceManager());
         manager.registerSourceManager(new LocalAudioSourceManager());
         return manager;
     }
 
-    private static AudioTrack loadTrack(String identifier) throws IOException {
+    private static AudioTrack loadTrack(AudioPlayerManager manager, String identifier) throws IOException {
         CompletableFuture<AudioTrack> future = new CompletableFuture<>();
-        PLAYER_MANAGER.loadItem(identifier, new AudioLoadResultHandler() {
+        manager.loadItem(identifier, new AudioLoadResultHandler() {
             @Override
             public void trackLoaded(AudioTrack track) {
                 future.complete(track);

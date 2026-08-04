@@ -8,6 +8,8 @@ import indi.etern.musichud.beans.music.MusicResourceInfo;
 import indi.etern.musichud.beans.music.Quality;
 import indi.etern.musichud.client.audio.decoder.*;
 import indi.etern.musichud.client.services.music.MusicService;
+import indi.etern.musichud.client.services.tuneweave.TuneWeaveClientService;
+import indi.etern.musichud.server.api.tuneweave.TuneWeavePlatform;
 import indi.etern.musichud.client.ui.hud.renderer.PlayingStatusRenderer;
 import indi.etern.musichud.interfaces.ClientConfig;
 import indi.etern.musichud.network.RequestResponseManager;
@@ -56,6 +58,7 @@ public class StreamAudioPlayer {
     private long debugLastOffsetSamples = -1;
     private static final Logger LOGGER = MusicHud.getLogger(StreamAudioPlayer.class);
     private static final ClientConfig clientConfig = ClientConfig.getInstance();
+    private static final TuneWeaveClientService tuneWeave = TuneWeaveClientService.getInstance();
     private static volatile StreamAudioPlayer instance = null;
     private final int[] buffers = new int[BUFFER_COUNT];
     private final AtomicBoolean initialized = new AtomicBoolean(false);
@@ -101,6 +104,10 @@ public class StreamAudioPlayer {
 
     private AudioDecoder loadAudioDecoder(String identifier, FormatType formatType) {
         return AudioDecoderFactory.open(identifier, formatType);
+    }
+
+    private AudioDecoder loadAudioDecoder(String identifier, FormatType formatType, java.util.Map<String, String> headers) {
+        return AudioDecoderFactory.open(identifier, formatType, headers);
     }
 
     public Status getStatus() {
@@ -497,7 +504,7 @@ public class StreamAudioPlayer {
 
                 LOGGER.debug("Starting audio download (attempt {})", localRetryCount + 1);
 
-                AudioDecoder decoder = loadAudioDecoder(musicResourceInfo.getUrl(), musicResourceInfo.getType());
+                AudioDecoder decoder = loadAudioDecoder(musicResourceInfo.getUrl(), musicResourceInfo.getType(), musicResourceInfo.getHeaders());
                 currentDecoder = decoder;
                 downloadInitializedFuture.complete(null);
 
@@ -1168,6 +1175,20 @@ public class StreamAudioPlayer {
     }
 
     public CompletableFuture<MusicResourceInfo> getCurrentMusicResourceInfo(Quality quality, MusicResourceInfo previous) {
+        TuneWeavePlatform sourcePlatform = currentMusicDetail == null || currentMusicDetail.getSourceRef().isBlank()
+                ? tuneWeave.defaultPlatform()
+                : TuneWeavePlatform.fromApiName(currentMusicDetail.getSourceRef().split(":", 2)[0]);
+        if (currentMusicDetail != null && !currentMusicDetail.getSourceRef().isBlank()
+                && tuneWeave.hasCredential(sourcePlatform)) {
+            return CompletableFuture.supplyAsync(
+                    () -> tuneWeave.getMusicResourceInfo(currentMusicDetail, quality), MusicHud.EXECUTOR)
+                    .thenCompose(value -> {
+                        if (value == MusicResourceInfo.NONE) {
+                            return CompletableFuture.failedFuture(new RuntimeException("Failed to load TuneWeave music resource"));
+                        }
+                        return CompletableFuture.completedFuture(value);
+                    });
+        }
         String url = previous == null || previous.getUrl() == null ? "" : previous.getUrl();
         return RequestResponseManager.send(
                         new GetMusicResourceRequest(currentMusicDetail.getId(), quality, url),
