@@ -25,7 +25,7 @@ public class LoginView extends FrameLayout implements ILoginView{
     private static LoginView instance;
     @Getter
     private final ViewPager pager;
-    private final ILoginView[] loginViews = new ILoginView[2];
+    private final ILoginView[] loginViews = new ILoginView[3];
 
     public LoginView(Context context) {
         super(context);
@@ -92,7 +92,7 @@ public class LoginView extends FrameLayout implements ILoginView{
     private class Adapter extends PagerAdapter {
         @Override
         public int getCount() {
-            return 2;
+            return 3;
         }
 
         @NonNull
@@ -106,7 +106,8 @@ public class LoginView extends FrameLayout implements ILoginView{
 
             ILoginView layout = switch (position) {
                 case 0 -> new QRLoginView(context);
-                case 1 -> new PhoneCodeLoginView(context);
+                case 1 -> new PhonePasswordLoginView(context);
+                case 2 -> new PhoneCodeLoginView(context);
                 default -> new QRLoginView(context);
             };
             loginViews[position] = layout;
@@ -133,7 +134,8 @@ public class LoginView extends FrameLayout implements ILoginView{
         public CharSequence getPageTitle(int position) {
             return I18n.get(switch (position) {
                 case 0 -> MusicHud.MOD_ID + ".text.login.page.qrCode";
-                case 1 -> MusicHud.MOD_ID + ".text.login.page.deviceCode";
+                case 1 -> MusicHud.MOD_ID + ".text.login.page.password";
+                case 2 -> MusicHud.MOD_ID + ".text.login.page.deviceCode";
                 default -> "";
             });
         }
