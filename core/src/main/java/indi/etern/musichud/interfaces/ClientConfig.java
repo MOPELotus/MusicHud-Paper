@@ -101,6 +101,20 @@ public interface ClientConfig {
 
     void setClientAccountConfig(ProfileConfigData clientAccountConfig);
 
+    String getTuneWeaveBaseUrl();
+
+    void setTuneWeaveBaseUrl(String baseUrl);
+
+    String getTuneWeaveCredential(String platform);
+
+    void setTuneWeaveCredential(String platform, String credential);
+
+    void clearTuneWeaveCredential(String platform);
+
+    String getDefaultMusicPlatform();
+
+    void setDefaultMusicPlatform(String platform);
+
     boolean getEnabledInIntegratedServer();
 
     void setEnabledInIntegratedServer(boolean enabledInIntegratedServer);

@@ -11,6 +11,7 @@ import lombok.Getter;
 import lombok.Setter;
 
 import java.nio.file.Path;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 
@@ -41,6 +42,9 @@ public class ClientConfigDefinition implements ClientConfig {
     private int hudCornerRadius = 8;
     private String clientCookie = "";
     private String clientAccountConfig = "";
+    private String tuneWeaveBaseUrl = "http://127.0.0.1:7832";
+    private String tuneWeaveCredentials = "{}";
+    private String defaultMusicPlatform = "netease";
     private boolean enabledInIntegratedServer = true;
     private boolean enableAutoConnect = true;
     private boolean enableIsolatedMode = true;
@@ -79,6 +83,11 @@ public class ClientConfigDefinition implements ClientConfig {
         hudCornerRadius = SimpleTomlConfig.getInt(values, "hudCornerRadius", hudCornerRadius);
         clientCookie = SimpleTomlConfig.getString(values, "clientCookie", clientCookie);
         clientAccountConfig = SimpleTomlConfig.getString(values, "clientAccountConfig", clientAccountConfig);
+        tuneWeaveBaseUrl = normalizeTuneWeaveBaseUrl(SimpleTomlConfig.getString(
+                values, "tuneWeaveBaseUrl", tuneWeaveBaseUrl));
+        tuneWeaveCredentials = SimpleTomlConfig.getString(values, "tuneWeaveCredentials", tuneWeaveCredentials);
+        defaultMusicPlatform = normalizePlatform(SimpleTomlConfig.getString(
+                values, "defaultMusicPlatform", defaultMusicPlatform));
         enabledInIntegratedServer = SimpleTomlConfig.getBoolean(
                 values,
                 "enabledInIntegratedServer",
@@ -208,6 +217,33 @@ public class ClientConfigDefinition implements ClientConfig {
     @Override
     public void setClientAccountConfig(ProfileConfigData clientAccountConfig) {
         this.clientAccountConfig = clientAccountConfig == null ? "" : JsonUtil.gson.toJson(clientAccountConfig);
+    }
+
+    @Override
+    public void setTuneWeaveBaseUrl(String baseUrl) {
+        tuneWeaveBaseUrl = normalizeTuneWeaveBaseUrl(baseUrl);
+    }
+
+    @Override
+    public synchronized void setTuneWeaveCredential(String platform, String credential) {
+        String key = normalizePlatform(platform);
+        Map<String, String> credentials = parseStringMap(tuneWeaveCredentials);
+        if (credential == null || credential.isBlank()) {
+            credentials.remove(key);
+        } else {
+            credentials.put(key, credential.trim());
+        }
+        tuneWeaveCredentials = JsonUtil.gson.toJson(credentials);
+    }
+
+    @Override
+    public synchronized void clearTuneWeaveCredential(String platform) {
+        setTuneWeaveCredential(platform, null);
+    }
+
+    @Override
+    public void setDefaultMusicPlatform(String platform) {
+        defaultMusicPlatform = normalizePlatform(platform);
     }
 
     @Override
@@ -351,6 +387,21 @@ public class ClientConfigDefinition implements ClientConfig {
     }
 
     @Override
+    public String getTuneWeaveBaseUrl() {
+        return tuneWeaveBaseUrl;
+    }
+
+    @Override
+    public synchronized String getTuneWeaveCredential(String platform) {
+        return parseStringMap(tuneWeaveCredentials).getOrDefault(normalizePlatform(platform), "");
+    }
+
+    @Override
+    public String getDefaultMusicPlatform() {
+        return defaultMusicPlatform;
+    }
+
+    @Override
     public boolean getEnabledInIntegratedServer() {
         return enabledInIntegratedServer;
     }
@@ -410,6 +461,9 @@ public class ClientConfigDefinition implements ClientConfig {
                 new SimpleTomlConfig.Entry("hudCornerRadius", "HUD rounded corner radius", hudCornerRadius),
                 new SimpleTomlConfig.Entry("clientCookie", "Client NCM cookie json", clientCookie),
                 new SimpleTomlConfig.Entry("clientAccountConfig", "Client account config json", clientAccountConfig),
+                new SimpleTomlConfig.Entry("tuneWeaveBaseUrl", "TuneWeave API URL used directly by this client", tuneWeaveBaseUrl),
+                new SimpleTomlConfig.Entry("tuneWeaveCredentials", "Client-owned TuneWeave credentials by platform (private)", tuneWeaveCredentials),
+                new SimpleTomlConfig.Entry("defaultMusicPlatform", "Default TuneWeave platform (netease|qq|bilibili)", defaultMusicPlatform),
                 new SimpleTomlConfig.Entry("enabledInIntegratedServer", "Enable embedded server for singleplayer or LAN multiplayer", enabledInIntegratedServer),
                 new SimpleTomlConfig.Entry("enableAutoConnect", "Enable auto connect", enableAutoConnect),
                 new SimpleTomlConfig.Entry("enableClientOnlyMode", "Enable client-only isolated mode", enableIsolatedMode),
@@ -443,6 +497,39 @@ public class ClientConfigDefinition implements ClientConfig {
             MusicHud.LOGGER.warn("Failed to parse client config list", e);
             return List.of();
         }
+    }
+
+    @SuppressWarnings("unchecked")
+    private static Map<String, String> parseStringMap(String json) {
+        if (json == null || json.isBlank()) {
+            return new LinkedHashMap<>();
+        }
+        try {
+            Map<String, String> values = JsonUtil.gson.fromJson(json, LinkedHashMap.class);
+            return values == null ? new LinkedHashMap<>() : new LinkedHashMap<>(values);
+        } catch (RuntimeException e) {
+            MusicHud.LOGGER.warn("Failed to parse TuneWeave client credentials");
+            return new LinkedHashMap<>();
+        }
+    }
+
+    private static String normalizeTuneWeaveBaseUrl(String value) {
+        String result = value == null || value.isBlank() ? "http://127.0.0.1:7832" : value.trim();
+        while (result.endsWith("/")) {
+            result = result.substring(0, result.length() - 1);
+        }
+        return result;
+    }
+
+    private static String normalizePlatform(String platform) {
+        if (platform == null) {
+            return "netease";
+        }
+        return switch (platform.trim().toLowerCase(java.util.Locale.ROOT)) {
+            case "qq", "tencent" -> "qq";
+            case "bilibili", "bili" -> "bilibili";
+            default -> "netease";
+        };
     }
 
     private void migrateEmptyWhiteListDefault(Map<String, String> values) {

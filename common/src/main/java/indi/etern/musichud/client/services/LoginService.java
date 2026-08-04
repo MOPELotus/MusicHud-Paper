@@ -15,6 +15,7 @@ import indi.etern.musichud.client.network.vanilla.VanillaPlayerProxy;
 import indi.etern.musichud.client.ui.ToastUtil;
 import indi.etern.musichud.client.ui.pages.account.AccountBaseView;
 import indi.etern.musichud.client.ui.pages.account.LoginView;
+import indi.etern.musichud.client.services.tuneweave.TuneWeaveClientService;
 import indi.etern.musichud.interfaces.*;
 import indi.etern.musichud.network.IClientNetworkService;
 import indi.etern.musichud.network.NetworkReceiver;
@@ -44,6 +45,7 @@ public class LoginService implements IClientLoginService {
     private static final IClientNetworkService clientNetworkService = IClientNetworkService.getInstance();
     private static final ClientConfig clientConfig = ClientConfig.getInstance();
     private static final Logger logger = MusicHud.getLogger(LoginService.class);
+    private static final TuneWeaveClientService tuneWeave = TuneWeaveClientService.getInstance();
     private static final Period refreshInterval = Period.of(0, 0, 1);
     private static volatile LoginService instance = null;
     private final List<Consumer<LoginState>> loginStateListeners = new CopyOnWriteArrayList<>();
@@ -68,7 +70,11 @@ public class LoginService implements IClientLoginService {
                 lastLoginErrorMessage = null;
             } else if (type == LoginType.ANONYMOUS && Profile.ANONYMOUS.equals(profile)) {
                 loginCookieInfo.setToClientCookie();
-                Profile.setCurrent(Profile.ANONYMOUS);
+                if (!tuneWeave.hasCredential(tuneWeave.defaultPlatform())) {
+                    Profile.setCurrent(Profile.ANONYMOUS);
+                } else {
+                    restoreTuneWeaveSession();
+                }
                 lastLoginErrorMessage = null;
             } else {
                 logger.warn("Login failed");
@@ -130,8 +136,9 @@ public class LoginService implements IClientLoginService {
         LoginType type = loginCookieInfo.type();
         Profile current = Profile.getCurrent();
         boolean realCookie = type != LoginType.UNLOGGED && type != LoginType.ANONYMOUS;
+        boolean tuneWeaveCredential = tuneWeave.hasCredential(tuneWeave.defaultPlatform());
         boolean realProfile = current != null && !current.equals(Profile.ANONYMOUS);
-        if (realCookie && realProfile) {
+        if ((realCookie || tuneWeaveCredential) && realProfile) {
             return LoginState.LOGGED_IN;
         }
         if (type == LoginType.ANONYMOUS || Profile.ANONYMOUS.equals(current)) {
@@ -167,8 +174,9 @@ public class LoginService implements IClientLoginService {
     @Override
     public boolean hasPreviousLoginInfo() {
         LoginCookieInfo loginCookieInfo = LoginCookieInfo.clientCurrentCookie();
-        return loginCookieInfo.type() != LoginType.UNLOGGED &&
-                loginCookieInfo.type() != LoginType.ANONYMOUS;
+        return tuneWeave.hasCredential(tuneWeave.defaultPlatform())
+                || loginCookieInfo.type() != LoginType.UNLOGGED
+                && loginCookieInfo.type() != LoginType.ANONYMOUS;
     }
 
     @Override
@@ -185,12 +193,18 @@ public class LoginService implements IClientLoginService {
         if (type != null) {
             connectionType = type;
         }
-        if (hasPreviousLoginInfo()) {
+        LoginCookieInfo previous = LoginCookieInfo.clientCurrentCookie();
+        boolean hasLegacyLogin = previous.type() != LoginType.UNLOGGED
+                && previous.type() != LoginType.ANONYMOUS;
+        if (hasLegacyLogin) {
             logger.info("Previous cookie found");
             loginToServerByCookieWithRefreshCheck();
         } else {
-            logger.info("No previous cookie found, login as anonymous");
+            logger.info("No server-owned login found, joining the Music HUD server anonymously");
             loginAsAnonymousToServer();
+        }
+        if (tuneWeave.hasCredential(tuneWeave.defaultPlatform())) {
+            restoreTuneWeaveSession();
         }
     }
 
@@ -205,10 +219,52 @@ public class LoginService implements IClientLoginService {
 
     @Override
     public void logoutAndReloginAsAnonymous() {
-        clientNetworkService.sendToServer(LogoutMessage.MESSAGE);
-        Profile.setCurrent(Profile.ANONYMOUS);
+        MusicHud.EXECUTOR.execute(() -> {
+            try {
+                tuneWeave.logout(tuneWeave.defaultPlatform());
+            } catch (RuntimeException error) {
+                tuneWeave.clearCredential(tuneWeave.defaultPlatform());
+                logger.warn("TuneWeave logout failed; discarded the local caller credential");
+            }
+            clientNetworkService.sendToServer(LogoutMessage.MESSAGE);
+            Profile.setCurrent(Profile.ANONYMOUS);
+            notifyLoginStateChanged();
+            loginAsAnonymousToServer();
+            refreshAccountView();
+        });
+    }
+
+    public void completeTuneWeaveLogin(TuneWeaveClientService.SessionProfile sessionProfile) {
+        if (sessionProfile == null || !sessionProfile.authenticated()) {
+            throw new IllegalArgumentException("TuneWeave did not return an authenticated profile");
+        }
+        Profile profile = sessionProfile.toMusicHudProfile();
+        Profile.setCurrent(profile);
+        ProfileConfigData profileConfigData = ProfileConfigData.getInstance();
+        profileConfigData.setProfile(profile);
+        profileConfigData.saveToConfig();
+        lastLoginErrorMessage = null;
         notifyLoginStateChanged();
-        loginAsAnonymousToServer();
+        refreshAccountView();
+    }
+
+    public void restoreTuneWeaveSession() {
+        MusicHud.EXECUTOR.execute(() -> {
+            try {
+                completeTuneWeaveLogin(tuneWeave.loadSession(tuneWeave.defaultPlatform()));
+            } catch (RuntimeException error) {
+                lastLoginErrorMessage = error.getMessage();
+                logger.warn("Failed to restore the client-owned TuneWeave session: {}", error.getMessage());
+                refreshAccountView();
+            }
+        });
+    }
+
+    private static void refreshAccountView() {
+        AccountBaseView accountBaseView = AccountBaseView.getInstance();
+        if (accountBaseView != null) {
+            MuiModApi.postToUiThread(accountBaseView::refresh);
+        }
     }
 
     @Override
