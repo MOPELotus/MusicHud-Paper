@@ -13,9 +13,9 @@ public class ServerConfigDefinition implements ServerConfig {
     @Getter
     private static final ServerConfigDefinition instance = new ServerConfigDefinition();
 
-    private String serverApiBaseUrl = "http://localhost:3000";
+    private String serverApiBaseUrl = "http://127.0.0.1:7832";
     private boolean startupBinaryApiServerWhenLaunch = true;
-    private String serverApiBinaryExecutablePath = "MusicHud/api";
+    private String serverApiBinaryExecutablePath = "MusicHud/tuneweave";
     private double pusherVoteAdditionalRate = 0.5;
     private boolean useRandomCnIp = true;
     private String corsAllowOrigin = "*";

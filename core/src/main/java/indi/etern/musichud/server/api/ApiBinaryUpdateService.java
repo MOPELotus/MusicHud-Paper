@@ -31,19 +31,10 @@ public class ApiBinaryUpdateService {
     }
 
     public CompletableFuture<ApiServerFetcher.ReleaseSummary> fetchLatestRelease() {
-        return ApiServerFetcher.listReleaseSummaries().thenCompose(summaries -> {
-            if (summaries != null && !summaries.isEmpty()) {
-                return CompletableFuture.completedFuture(summaries.getFirst());
-            }
-            return ApiServerFetcher.listReleases().thenApply(releases -> {
-                if (releases != null && !releases.isEmpty()) {
-                    ApiServerFetcher.Release r = releases.getFirst();
-                    return new ApiServerFetcher.ReleaseSummary(
-                            r.getTagName(), r.getName(), r.getHtmlUrl(), r.getPublishedAt());
-                }
-                return null;
-            });
-        });
+        return ApiServerFetcher.fetchTuneWeaveManifest().thenApply(manifest ->
+                new ApiServerFetcher.ReleaseSummary(
+                        manifest.getTag(), "TuneWeave " + manifest.getVersion(),
+                        manifest.getReleasePage(), null));
     }
 
     public CompletableFuture<Path> downloadToTemp(Path targetDir, String releaseTag, BiConsumer<Long, Long> progress) {
@@ -55,15 +46,21 @@ public class ApiBinaryUpdateService {
     }
 
     public CompletableFuture<Path> downloadToTemp(Path targetDir, String releaseTag, ApiServerFetcher.DownloadProxy proxy, BiConsumer<Long, Long> progress, AtomicBoolean cancelled) {
-        String tempFileName = ApiServerFetcher.Platform.detect().getAssetName() + "." + releaseTag + ".temp";
-        Path tempFile = targetDir.resolve(tempFileName);
-        return ApiServerFetcher.downloadLatestForCurrentPlatform(targetDir, tempFileName, proxy, progress, cancelled)
-                .thenApply(v -> tempFile);
+        return ApiServerFetcher.fetchTuneWeaveManifest().thenCompose(manifest -> {
+            ApiServerFetcher.TuneWeaveArtifact artifact = ApiServerFetcher.currentTuneWeaveArtifact(manifest);
+            String tempFileName = artifact.getFile() + "." + releaseTag + ".temp";
+            Path tempFile = targetDir.resolve(tempFileName);
+            return ApiServerFetcher.downloadTuneWeaveArtifact(artifact, tempFile, proxy, progress, cancelled)
+                    .thenApply(v -> tempFile);
+        });
     }
 
     public Path resolveFinalPath(Path tempFile, String releaseTag) {
         if (tempFile == null || !Files.exists(tempFile)) return null;
-        String baseName = ApiServerFetcher.Platform.detect().getAssetName();
+        String tempName = tempFile.getFileName().toString();
+        String marker = "." + releaseTag + ".temp";
+        String baseName = tempName.endsWith(marker)
+                ? tempName.substring(0, tempName.length() - marker.length()) : tempName;
         Path targetDir = tempFile.getParent();
         Path namedFile = targetDir.resolve(baseName);
 

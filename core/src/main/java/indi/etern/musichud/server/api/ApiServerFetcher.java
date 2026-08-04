@@ -17,6 +17,8 @@ import java.net.http.HttpResponse;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.StandardOpenOption;
+import java.security.MessageDigest;
+import java.util.HexFormat;
 import java.time.Duration;
 import java.util.ArrayList;
 import java.util.List;
@@ -55,6 +57,7 @@ public class ApiServerFetcher {
     public static final String BASE = "https://github.com/" + REPO_OWNER + "/" + REPO_NAME;
     public static final String API_RELEASES = "https://api.github.com/repos/" + REPO_OWNER + "/" + REPO_NAME + "/releases";
     public static final String LATEST_RELEASE_URL = BASE + "/releases/latest";
+    public static final String TUNEWEAVE_MANIFEST_URL = "https://raw.githubusercontent.com/MOPELotus/TuneWeave/main/release-manifest.json";
     private static final String ATOM_URL = BASE + "/releases.atom";
     private static final String LATEST_DOWNLOAD_URL = LATEST_RELEASE_URL + "/download/";
     private static final String TAG_DOWNLOAD_URL = BASE + "/releases/download/";
@@ -80,6 +83,34 @@ public class ApiServerFetcher {
 
     /** Lightweight release summary from Atom feed — zero API quota consumed. */
     public record ReleaseSummary(String tag, String title, String htmlUrl, String publishedAt) {}
+
+    @Getter
+    public static class TuneWeaveManifest {
+        private String version;
+        private String tag;
+        @SerializedName("release_page")
+        private String releasePage;
+        private List<TuneWeaveArtifact> artifacts = List.of();
+    }
+
+    @Getter
+    public static class TuneWeaveArtifact {
+        private String platform;
+        private String architecture;
+        private String target;
+        private String file;
+        private String executable;
+        @SerializedName("download_url")
+        private String downloadUrl;
+        private Verification verification;
+    }
+
+    @Getter
+    public static class Verification {
+        private String algorithm;
+        @SerializedName("checksum_url")
+        private String checksumUrl;
+    }
 
     /** Full release info from REST API (includes asset list). Consumes API quota. */
     @Getter
@@ -156,6 +187,102 @@ public class ApiServerFetcher {
      */
     public static void setGitHubToken(String token) {
         gitHubToken = token != null && !token.isBlank() ? token.trim() : null;
+    }
+
+    public static CompletableFuture<TuneWeaveManifest> fetchTuneWeaveManifest() {
+        return CompletableFuture.supplyAsync(() -> {
+            try {
+                HttpRequest request = HttpRequest.newBuilder(URI.create(TUNEWEAVE_MANIFEST_URL))
+                        .header("Accept", "application/json")
+                        .header("User-Agent", "MusicHUD-TuneWeave")
+                        .GET().build();
+                HttpResponse<String> response = HTTP.send(request, HttpResponse.BodyHandlers.ofString());
+                if (response.statusCode() != 200) {
+                    throw new IOException("TuneWeave release manifest returned HTTP " + response.statusCode());
+                }
+                TuneWeaveManifest manifest = JsonUtil.gson.fromJson(response.body(), TuneWeaveManifest.class);
+                if (manifest == null || manifest.getArtifacts() == null || manifest.getArtifacts().isEmpty()) {
+                    throw new IOException("TuneWeave release manifest contains no artifacts");
+                }
+                return manifest;
+            } catch (Exception error) {
+                throw new RuntimeException("Failed to fetch TuneWeave release manifest", error);
+            }
+        }, MusicHud.EXECUTOR);
+    }
+
+    public static TuneWeaveArtifact currentTuneWeaveArtifact(TuneWeaveManifest manifest) {
+        String platform = currentPlatformName();
+        String architecture = currentArchitecture();
+        return manifest.getArtifacts().stream()
+                .filter(artifact -> platform.equalsIgnoreCase(artifact.getPlatform())
+                        && architecture.equalsIgnoreCase(artifact.getArchitecture()))
+                .findFirst()
+                .orElseThrow(() -> new IllegalStateException(
+                        "TuneWeave has no artifact for " + platform + '/' + architecture));
+    }
+
+    public static CompletableFuture<Void> downloadTuneWeaveArtifact(
+            TuneWeaveArtifact artifact, Path target, DownloadProxy proxy,
+            BiConsumer<Long, Long> progress, AtomicBoolean cancelled) {
+        return CompletableFuture.runAsync(() -> {
+            Path temporary = target.resolveSibling(target.getFileName() + ".part");
+            try {
+                Files.createDirectories(target.getParent());
+                MessageDigest digest = MessageDigest.getInstance("SHA-256");
+                String url = proxy.resolveUrl(artifact.getDownloadUrl());
+                HttpRequest request = HttpRequest.newBuilder(URI.create(url))
+                        .header("User-Agent", "MusicHUD-TuneWeave")
+                        .GET().build();
+                HttpResponse<InputStream> response = HTTP.send(request, HttpResponse.BodyHandlers.ofInputStream());
+                if (response.statusCode() != 200) throw new IOException("TuneWeave download returned HTTP " + response.statusCode());
+                long total = response.headers().firstValueAsLong("Content-Length").orElse(-1);
+                long downloaded = 0;
+                try (InputStream input = response.body(); OutputStream output = Files.newOutputStream(
+                        temporary, StandardOpenOption.CREATE, StandardOpenOption.TRUNCATE_EXISTING)) {
+                    byte[] buffer = new byte[32 * 1024];
+                    int count;
+                    while ((count = input.read(buffer)) != -1) {
+                        if (cancelled != null && cancelled.get()) throw new CancellationException("Download cancelled");
+                        output.write(buffer, 0, count);
+                        digest.update(buffer, 0, count);
+                        downloaded += count;
+                        if (progress != null) progress.accept(downloaded, total);
+                    }
+                }
+                if (artifact.getVerification() == null
+                        || !"sha256".equalsIgnoreCase(artifact.getVerification().getAlgorithm())) {
+                    throw new IOException("TuneWeave artifact has no SHA-256 verification metadata");
+                }
+                HttpRequest checksumRequest = HttpRequest.newBuilder(URI.create(
+                                proxy.resolveUrl(artifact.getVerification().getChecksumUrl())))
+                        .header("User-Agent", "MusicHUD-TuneWeave").GET().build();
+                HttpResponse<String> checksumResponse = HTTP.send(checksumRequest,
+                        HttpResponse.BodyHandlers.ofString(java.nio.charset.StandardCharsets.UTF_8));
+                if (checksumResponse.statusCode() != 200) throw new IOException("Checksum download returned HTTP " + checksumResponse.statusCode());
+                String expected = checksumResponse.body().trim().split("\\s+", 2)[0].toLowerCase(Locale.ROOT);
+                String actual = HexFormat.of().formatHex(digest.digest());
+                if (!actual.equals(expected)) throw new IOException("TuneWeave SHA-256 verification failed");
+                Files.move(temporary, target, java.nio.file.StandardCopyOption.REPLACE_EXISTING);
+                if (!"windows".equalsIgnoreCase(artifact.getPlatform())) target.toFile().setExecutable(true);
+            } catch (Exception error) {
+                try { Files.deleteIfExists(temporary); } catch (IOException ignored) { }
+                if (error instanceof CancellationException cancellation) throw cancellation;
+                throw new RuntimeException("Failed to download TuneWeave artifact", error);
+            }
+        }, MusicHud.EXECUTOR);
+    }
+
+    private static String currentPlatformName() {
+        String os = System.getProperty("os.name", "").toLowerCase(Locale.ROOT);
+        if (os.contains("win")) return "windows";
+        if (os.contains("mac")) return "macos";
+        return "linux";
+    }
+
+    private static String currentArchitecture() {
+        String arch = System.getProperty("os.arch", "").toLowerCase(Locale.ROOT);
+        return arch.contains("aarch64") || arch.contains("arm64") ? "aarch64" : "x86_64";
     }
 
     // -- zero-quota methods (prefer these) --

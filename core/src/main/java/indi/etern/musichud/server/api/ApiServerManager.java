@@ -3,7 +3,7 @@ package indi.etern.musichud.server.api;
 import indi.etern.musichud.MusicHud;
 import indi.etern.musichud.interfaces.*;
 import indi.etern.musichud.platform.Environment;
-import indi.etern.musichud.utils.http.ApiClient;
+import indi.etern.musichud.server.api.tuneweave.TuneWeaveApiClient;
 import lombok.Getter;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
@@ -124,7 +124,7 @@ public class ApiServerManager implements ServerRegister {
     private void launchApiServerInternal() {
         MusicHud.EXECUTOR.execute(() -> {
             Thread.currentThread().setName("MHWorker-API-Launcher");
-            boolean apiAvailable = ApiClient.checkAvailable();
+            boolean apiAvailable = TuneWeaveApiClient.isAvailable();
             if (!apiAvailable) {
                 triedCount = 0;
                 startEmbeddedApiServer();
@@ -135,7 +135,7 @@ public class ApiServerManager implements ServerRegister {
                     addShutdownHook();
                 }
             } else {
-                apiLogger.info("API Server (version: {}) has been launched externally", ApiClient.getVersion());
+                apiLogger.info("TuneWeave API server is already available");
             }
         });
     }
@@ -170,15 +170,8 @@ public class ApiServerManager implements ServerRegister {
 
                     ProcessBuilder processBuilder = new ProcessBuilder(executablePath.toString());
                     Map<String, String> env = processBuilder.environment();
-                    env.put("CORS_ALLOW_ORIGIN", serverConfig.getCorsAllowOrigin());
-                    env.put("ENABLE_PROXY", String.valueOf(serverConfig.getEnableProxy()));
-                    env.put("PROXY_URL", serverConfig.getProxyUrl());
-                    env.put("ENABLE_RANDOM_CN_IP", String.valueOf(serverConfig.getUseRandomCnIp()));
-                    env.put("ENABLE_GENERAL_UNBLOCK", String.valueOf(serverConfig.getEnableGeneralUnblock()));
-                    env.put("ENABLE_FLAC", String.valueOf(serverConfig.getEnableFlac()));
-                    env.put("SELECT_MAX_BR", String.valueOf(serverConfig.getSelectMaxBr()));
-                    env.put("FOLLOW_SOURCE_ORDER", String.valueOf(serverConfig.getFollowSourceOrder()));
-                    env.put("PORT", String.valueOf(serverConfig.getPort()));
+                    env.put("TUNEWEAVE_BIND", "127.0.0.1:" + serverConfig.getPort());
+                    env.put("TUNEWEAVE_DATA_DIR", Paths.get("music-hud", "tuneweave-data").toAbsolutePath().toString());
                     process = processBuilder.start();
 
                     Path logFile;
@@ -202,18 +195,19 @@ public class ApiServerManager implements ServerRegister {
                             String line;
                             while ((line = reader.readLine()) != null) {
                                 if (writer != null) writer.println(line);
-                                if ((line.contains("Server started successfully") || line.contains("ncm_api_rs::server"))
+                                if ((line.contains("Server started successfully") || line.contains("ncm_api_rs::server")
+                                        || TuneWeaveApiClient.isAvailable())
                                         && binaryApiServerStatus == BinaryApiServerStatus.LAUNCHING) {
-                                    boolean available = ApiClient.checkAvailable();
-                                    setApiStatus(BinaryApiServerStatus.RUNNING);
+                                    boolean available = TuneWeaveApiClient.isAvailable();
+                                    setApiStatus(available ? BinaryApiServerStatus.RUNNING : BinaryApiServerStatus.LAUNCHING);
                                     if (available) {
-                                        apiLogger.info("Api server started, version: {}", ApiClient.getVersion());
+                                        apiLogger.info("TuneWeave API server started");
                                         try {
                                             Path execPath = Paths.get(serverConfig.getServerApiBinaryExecutablePath());
                                             Path parent = execPath.getParent();
                                             if (parent != null) {
                                                 ApiBinaryUpdateService.getInstance().fixUnknownVersion(
-                                                        parent, ApiClient.getVersion());
+                                                        parent, "tuneweave");
                                             }
                                         } catch (Exception ignored) {
                                         }
