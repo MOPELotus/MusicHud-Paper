@@ -1,46 +1,8 @@
-buildscript {
-    repositories {
-        mavenCentral()
-    }
-    dependencies {
-        // Build-time only: turns the vendored SVG icon sources into small PNG
-        // resources so the client never needs a network icon service at runtime.
-        classpath 'org.apache.xmlgraphics:batik-transcoder:1.17'
-        classpath 'org.apache.xmlgraphics:batik-codec:1.17'
-    }
-}
-
 plugins {
     id 'net.fabricmc.fabric-loom' version '1.17.12' apply false
     id 'net.neoforged.moddev' version '2.0.141' apply false
     id 'com.gradleup.shadow' version '9.2.2' apply false
     id 'io.papermc.paperweight.userdev' version '2.0.0-beta.21' apply false
-}
-
-def uiIconSourceDir = file('common/src/ui-icons')
-def uiIconOutputDir = file('common/build/generated/resources/platform-icons')
-
-tasks.register('generateUiIcons') {
-    inputs.dir(uiIconSourceDir)
-    outputs.dir(uiIconOutputDir)
-
-    doLast {
-        delete(uiIconOutputDir)
-        fileTree(uiIconSourceDir).matching { include '**/*.svg' }.each { source ->
-            def relativePath = uiIconSourceDir.toPath().relativize(source.toPath()).toString()
-            def output = new File(uiIconOutputDir, relativePath.replaceAll('\\.svg$', '.png'))
-            output.parentFile.mkdirs()
-            def transcoder = new org.apache.batik.transcoder.image.PNGTranscoder()
-            transcoder.addTranscodingHint(org.apache.batik.transcoder.SVGAbstractTranscoder.KEY_WIDTH, 96.0f)
-            transcoder.addTranscodingHint(org.apache.batik.transcoder.SVGAbstractTranscoder.KEY_HEIGHT, 96.0f)
-            output.withOutputStream { stream ->
-                transcoder.transcode(
-                        new org.apache.batik.transcoder.TranscoderInput(source.toURI().toString()),
-                        new org.apache.batik.transcoder.TranscoderOutput(stream)
-                )
-            }
-        }
-    }
 }
 
 allprojects {

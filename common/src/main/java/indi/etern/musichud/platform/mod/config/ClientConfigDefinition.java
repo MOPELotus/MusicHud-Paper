@@ -41,7 +41,6 @@ public class ClientConfigDefinition implements ClientConfig {
     private int hudCornerRadius = 8;
     private String clientCookie = "";
     private String clientAccountConfig = "";
-    private String tuneWeaveClientCredentials = "{}";
     private boolean enabledInIntegratedServer = true;
     private boolean enableAutoConnect = true;
     private boolean enableIsolatedMode = true;
@@ -80,7 +79,6 @@ public class ClientConfigDefinition implements ClientConfig {
         hudCornerRadius = SimpleTomlConfig.getInt(values, "hudCornerRadius", hudCornerRadius);
         clientCookie = SimpleTomlConfig.getString(values, "clientCookie", clientCookie);
         clientAccountConfig = SimpleTomlConfig.getString(values, "clientAccountConfig", clientAccountConfig);
-        tuneWeaveClientCredentials = SimpleTomlConfig.getString(values, "tuneWeaveClientCredentials", tuneWeaveClientCredentials);
         enabledInIntegratedServer = SimpleTomlConfig.getBoolean(
                 values,
                 "enabledInIntegratedServer",
@@ -210,12 +208,6 @@ public class ClientConfigDefinition implements ClientConfig {
     @Override
     public void setClientAccountConfig(ProfileConfigData clientAccountConfig) {
         this.clientAccountConfig = clientAccountConfig == null ? "" : JsonUtil.gson.toJson(clientAccountConfig);
-    }
-
-    @Override
-    public void setTuneWeaveClientCredentials(String tuneWeaveClientCredentials) {
-        this.tuneWeaveClientCredentials = tuneWeaveClientCredentials == null || tuneWeaveClientCredentials.isBlank()
-                ? "{}" : tuneWeaveClientCredentials;
     }
 
     @Override
@@ -359,11 +351,6 @@ public class ClientConfigDefinition implements ClientConfig {
     }
 
     @Override
-    public String getTuneWeaveClientCredentials() {
-        return tuneWeaveClientCredentials;
-    }
-
-    @Override
     public boolean getEnabledInIntegratedServer() {
         return enabledInIntegratedServer;
     }
@@ -423,7 +410,6 @@ public class ClientConfigDefinition implements ClientConfig {
                 new SimpleTomlConfig.Entry("hudCornerRadius", "HUD rounded corner radius", hudCornerRadius),
                 new SimpleTomlConfig.Entry("clientCookie", "Client NCM cookie json", clientCookie),
                 new SimpleTomlConfig.Entry("clientAccountConfig", "Client account config json", clientAccountConfig),
-                new SimpleTomlConfig.Entry("tuneWeaveClientCredentials", "Local TuneWeave caller credentials JSON; never sent to a game server", tuneWeaveClientCredentials),
                 new SimpleTomlConfig.Entry("enabledInIntegratedServer", "Enable embedded server for singleplayer or LAN multiplayer", enabledInIntegratedServer),
                 new SimpleTomlConfig.Entry("enableAutoConnect", "Enable auto connect", enableAutoConnect),
                 new SimpleTomlConfig.Entry("enableClientOnlyMode", "Enable client-only isolated mode", enableIsolatedMode),
