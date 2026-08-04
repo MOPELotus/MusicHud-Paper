@@ -111,6 +111,10 @@ dependencies {
     shadowBundle "com.github.hypfvieh:dbus-java-core:$rootProject.dbus_version"
     implementation "com.github.hypfvieh:dbus-java-transport-native-unixsocket:$rootProject.dbus_version"
     shadowBundle "com.github.hypfvieh:dbus-java-transport-native-unixsocket:$rootProject.dbus_version"
+    implementation "com.google.zxing:core:3.5.4"
+    shadowBundle "com.google.zxing:core:3.5.4"
+    implementation "org.apache.xmlgraphics:batik-transcoder:1.17"
+    shadowBundle "org.apache.xmlgraphics:batik-transcoder:1.17"
 
     compileOnly "org.projectlombok:lombok:$rootProject.lombok_version"
     annotationProcessor "org.projectlombok:lombok:$rootProject.lombok_version"

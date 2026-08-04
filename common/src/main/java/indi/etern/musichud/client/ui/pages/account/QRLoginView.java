@@ -4,99 +4,117 @@ import icyllis.modernui.core.Context;
 import icyllis.modernui.mc.MuiModApi;
 import icyllis.modernui.view.Gravity;
 import icyllis.modernui.view.View;
+import icyllis.modernui.view.ViewGroup;
+import icyllis.modernui.widget.ArrayAdapter;
 import icyllis.modernui.widget.Button;
 import icyllis.modernui.widget.LinearLayout;
+import icyllis.modernui.widget.Spinner;
 import icyllis.modernui.widget.TextView;
 import indi.etern.musichud.MusicHud;
+import indi.etern.musichud.client.services.LoginService;
+import indi.etern.musichud.client.services.tuneweave.TuneWeaveClientService;
 import indi.etern.musichud.client.ui.Theme;
 import indi.etern.musichud.client.ui.components.UrlImageView;
+import indi.etern.musichud.client.ui.utils.image.QrImageUtils;
 import indi.etern.musichud.client.ui.utils.ui.ButtonInsetBackgroundFactory;
-import indi.etern.musichud.network.IClientNetworkService;
-import indi.etern.musichud.network.RequestResponseManager;
-import indi.etern.musichud.network.payloads.pushMessages.c2s.CancelQRLoginMessage;
-import indi.etern.musichud.network.payloads.requestResponseCycle.StartQRLoginRequest;
-import indi.etern.musichud.network.payloads.requestResponseCycle.StartQRLoginResponse;
+import indi.etern.musichud.server.api.tuneweave.TuneWeavePlatform;
 import net.minecraft.client.resources.language.I18n;
 
 import java.time.Duration;
 
+import static icyllis.modernui.view.ViewGroup.LayoutParams.MATCH_PARENT;
 import static icyllis.modernui.view.ViewGroup.LayoutParams.WRAP_CONTENT;
 
+/** Direct client-mode QR login; the Minecraft server never sees the credential. */
 public class QRLoginView extends LinearLayout implements ILoginView {
-    private static final IClientNetworkService clientNetworkService = IClientNetworkService.getInstance();
+    private final TuneWeaveClientService tuneWeave = TuneWeaveClientService.getInstance();
     private final Button loginButton;
-    private final UrlImageView urlImageView;
+    private final Spinner platformSpinner;
+    private final Spinner qqLoginTypeSpinner;
+    private final UrlImageView qrImageView;
     private final TextView messageTextView;
+    private volatile TuneWeaveClientService.QrSession activeSession;
+    private MusicHud.ScheduledTask pollingTask;
 
     public QRLoginView(Context context) {
         super(context);
         setOrientation(LinearLayout.VERTICAL);
         setGravity(Gravity.CENTER_HORIZONTAL);
-        TextView textView = new TextView(context);
-        textView.setTextSize(Theme.TEXT_SIZE_LARGE);
-        textView.setTextColor(Theme.EMPHASIZE_TEXT_COLOR);
-        textView.setText(I18n.get(MusicHud.MOD_ID + ".text.login.qrCode"));
-        textView.setLayoutParams(new LayoutParams(WRAP_CONTENT, WRAP_CONTENT));
-        TextView textView1 = new TextView(context);
-        textView1.setTextSize(Theme.TEXT_SIZE_NORMAL);
-        textView1.setTextColor(Theme.SECONDARY_TEXT_COLOR);
-        textView1.setText(I18n.get(MusicHud.MOD_ID + ".text.login.description"));
-        LayoutParams params1 = new LayoutParams(WRAP_CONTENT, WRAP_CONTENT);
-        params1.setMargins(0, dp(4), 0, 0);
-        textView1.setLayoutParams(params1);
 
-        urlImageView = new UrlImageView(context);
-        LayoutParams imageParams = new LayoutParams(dp(160), dp(160));
-        imageParams.setMargins(0, dp(32), 0, 0);
-        urlImageView.setLayoutParams(imageParams);
+        TextView title = new TextView(context);
+        title.setTextSize(Theme.TEXT_SIZE_LARGE);
+        title.setTextColor(Theme.EMPHASIZE_TEXT_COLOR);
+        title.setText(I18n.get(MusicHud.MOD_ID + ".text.login.qrCode"));
+        addView(title, new LayoutParams(WRAP_CONTENT, WRAP_CONTENT));
+
+        TextView description = new TextView(context);
+        description.setTextSize(Theme.TEXT_SIZE_NORMAL);
+        description.setTextColor(Theme.SECONDARY_TEXT_COLOR);
+        description.setText(I18n.get(MusicHud.MOD_ID + ".text.login.description"));
+        LayoutParams descriptionParams = new LayoutParams(WRAP_CONTENT, WRAP_CONTENT);
+        descriptionParams.setMargins(0, dp(4), 0, 0);
+        addView(description, descriptionParams);
+
+        LinearLayout platformLayout = new LinearLayout(context);
+        platformLayout.setOrientation(LinearLayout.HORIZONTAL);
+        platformLayout.setGravity(Gravity.CENTER);
+        platformSpinner = new Spinner(context);
+        platformSpinner.setAdapter(new ArrayAdapter<>(context, new String[]{
+                I18n.get(MusicHud.MOD_ID + ".platform.netease"),
+                I18n.get(MusicHud.MOD_ID + ".platform.qq"),
+                I18n.get(MusicHud.MOD_ID + ".platform.bilibili")
+        }));
+        platformSpinner.setSelection(switch (tuneWeave.defaultPlatform()) {
+            case NETEASE -> 0;
+            case QQ -> 1;
+            case BILIBILI -> 2;
+        });
+        platformLayout.addView(platformSpinner, new LayoutParams(WRAP_CONTENT, WRAP_CONTENT));
+        qqLoginTypeSpinner = new Spinner(context);
+        qqLoginTypeSpinner.setAdapter(new ArrayAdapter<>(context, new String[]{
+                I18n.get(MusicHud.MOD_ID + ".login.qqMusic"),
+                I18n.get(MusicHud.MOD_ID + ".login.wechat"),
+                I18n.get(MusicHud.MOD_ID + ".login.mobile")
+        }));
+        LayoutParams qqParams = new LayoutParams(WRAP_CONTENT, WRAP_CONTENT);
+        qqParams.setMargins(dp(8), 0, 0, 0);
+        platformLayout.addView(qqLoginTypeSpinner, qqParams);
+        addView(platformLayout, new LayoutParams(MATCH_PARENT, WRAP_CONTENT));
+
+        qrImageView = new UrlImageView(context);
+        LayoutParams imageParams = new LayoutParams(dp(240), dp(240));
+        imageParams.setMargins(0, dp(20), 0, 0);
+        addView(qrImageView, imageParams);
 
         loginButton = new Button(context);
         loginButton.setTextColor(Theme.PRIMARY_COLOR);
         loginButton.setHeight(dp(36));
-        loginButton.setWidth(dp(84));
+        loginButton.setWidth(dp(112));
         loginButton.setTextSize(Theme.TEXT_SIZE_NORMAL);
         loginButton.setText(I18n.get(MusicHud.MOD_ID + ".button.loadQRCode"));
+        loginButton.setBackground(ButtonInsetBackgroundFactory.builder()
+                .padding(new ButtonInsetBackgroundFactory.Padding(0, 0, 0, 0))
+                .cornerRadius(dp(4)).inset(dp(1)).build().newBackgroundDrawable());
+        LayoutParams buttonParams = new LayoutParams(WRAP_CONTENT, WRAP_CONTENT);
+        buttonParams.setMargins(0, dp(8), 0, 0);
+        addView(loginButton, buttonParams);
 
         messageTextView = new TextView(context);
         messageTextView.setTextSize(Theme.TEXT_SIZE_NORMAL);
         messageTextView.setMaxWidth(dp(400));
         messageTextView.setMinHeight(36);
         messageTextView.setSingleLine(false);
+        messageTextView.setGravity(Gravity.CENTER_HORIZONTAL);
+        messageTextView.setVisibility(GONE);
         LayoutParams messageParams = new LayoutParams(WRAP_CONTENT, WRAP_CONTENT);
         messageParams.setMargins(0, dp(8), 0, 0);
-        messageTextView.setLayoutParams(messageParams);
-        messageTextView.setVisibility(View.GONE);
-        messageTextView.setGravity(Gravity.CENTER_HORIZONTAL);
+        addView(messageTextView, messageParams);
 
-        var background = ButtonInsetBackgroundFactory.builder()
-                .padding(new ButtonInsetBackgroundFactory.Padding(0, 0, 0, 0))
-                .cornerRadius(dp(4)).inset(dp(1)).build().newBackgroundDrawable();
-        loginButton.setBackground(background);
-        LayoutParams buttonParams = new LayoutParams(WRAP_CONTENT, WRAP_CONTENT);
-        buttonParams.setMargins(0, dp(8), 0, 0);
-        loginButton.setLayoutParams(buttonParams);
-        loginButton.setOnClickListener((view) -> {
-            MuiModApi.postToUiThread(() -> {
-                loginButton.setVisibility(GONE);
-                messageTextView.setVisibility(GONE);
-                urlImageView.setLoading(true);
-            });
-            RequestResponseManager.send(
-                    StartQRLoginRequest.REQUEST,
-                    StartQRLoginResponse.class,
-                    Duration.ofSeconds(10)).whenComplete((response, e) -> {
-                        MuiModApi.postToUiThread(() -> {
-                            urlImageView.loadUrl(response.getBase64QRImg());
-                        });
-                    }
-            );
-        });
-
-        addView(textView);
-        addView(textView1);
-        addView(loginButton);
-        addView(messageTextView);
-        addView(urlImageView);
+        loginButton.setOnClickListener(view -> startLogin());
+        platformSpinner.setOnItemSelectedListener((parent, view, position, id) ->
+                qqLoginTypeSpinner.setVisibility(position == 1 ? VISIBLE : GONE));
+        qqLoginTypeSpinner.setVisibility(platformSpinner.getSelectedItemPosition() == 1 ? VISIBLE : GONE);
+        qrImageView.setLoading(false);
 
         addOnAttachStateChangeListener(new OnAttachStateChangeListener() {
             @Override
@@ -105,24 +123,124 @@ public class QRLoginView extends LinearLayout implements ILoginView {
 
             @Override
             public void onViewDetachedFromWindow(View v) {
-                if (MusicHud.getConnectStatus() == MusicHud.ConnectStatus.CONNECTED) {
-                    clientNetworkService.sendToServer(CancelQRLoginMessage.REQUEST);
+                stopPolling();
+            }
+        });
+    }
+
+    private void startLogin() {
+        stopPolling();
+        setBusy(true);
+        qrImageView.clear();
+        messageTextView.setVisibility(GONE);
+        TuneWeavePlatform platform = selectedPlatform();
+        String loginType = platform == TuneWeavePlatform.QQ
+                ? switch (qqLoginTypeSpinner.getSelectedItemPosition()) {
+                    case 1 -> "wechat";
+                    case 2 -> "mobile";
+                    default -> "qq_music";
+                }
+                : null;
+        MusicHud.EXECUTOR.execute(() -> {
+            try {
+                TuneWeaveClientService.QrSession session = tuneWeave.startQrLogin(platform, loginType);
+                activeSession = session;
+                String image = QrImageUtils.prepare(session.imageDataUrl(), session.url());
+                MuiModApi.postToUiThread(() -> {
+                    qrImageView.loadUrl(image);
+                    messageTextView.setText(I18n.get(MusicHud.MOD_ID + ".text.login.waitingForScan"));
+                    messageTextView.setTextColor(Theme.SECONDARY_TEXT_COLOR);
+                    messageTextView.setVisibility(VISIBLE);
+                });
+                pollingTask = MusicHud.scheduleWithFixedDelay(this::pollLogin,
+                        Duration.ofSeconds(2), Duration.ofSeconds(2));
+            } catch (RuntimeException error) {
+                showError(error.getMessage());
+                setBusy(false);
+            }
+        });
+    }
+
+    private void pollLogin() {
+        TuneWeaveClientService.QrSession session = activeSession;
+        if (session == null) {
+            return;
+        }
+        try {
+            TuneWeaveClientService.QrPoll poll = tuneWeave.pollQrLogin(session);
+            MuiModApi.postToUiThread(() -> {
+                if ("scanned".equals(poll.state())) {
+                    messageTextView.setText(I18n.get(MusicHud.MOD_ID + ".text.login.scanned"));
+                } else if (poll.message() != null && !poll.message().isBlank()) {
+                    messageTextView.setText(poll.message());
+                }
+            });
+            if (poll.terminal()) {
+                stopPolling();
+                if ("confirmed".equals(poll.state())) {
+                    LoginService.getInstance().completeTuneWeaveLogin(poll.profile());
+                } else {
+                    showError(poll.message() == null ? poll.state() : poll.message());
+                    setBusy(false);
                 }
             }
+        } catch (RuntimeException error) {
+            showError(error.getMessage());
+            stopPolling();
+            setBusy(false);
+        }
+    }
+
+    private TuneWeavePlatform selectedPlatform() {
+        return switch (platformSpinner.getSelectedItemPosition()) {
+            case 1 -> TuneWeavePlatform.QQ;
+            case 2 -> TuneWeavePlatform.BILIBILI;
+            default -> TuneWeavePlatform.NETEASE;
+        };
+    }
+
+    private void setBusy(boolean busy) {
+        MuiModApi.postToUiThread(() -> {
+            loginButton.setClickable(!busy);
+            loginButton.setAlpha(busy ? 0.55f : 1f);
+            platformSpinner.setClickable(!busy);
+            qqLoginTypeSpinner.setClickable(!busy);
+            if (busy) {
+                qrImageView.setLoading(true);
+            }
+        });
+    }
+
+    private void stopPolling() {
+        MusicHud.ScheduledTask task = pollingTask;
+        pollingTask = null;
+        activeSession = null;
+        if (task != null) {
+            task.stop();
+        }
+    }
+
+    private void showError(String message) {
+        MuiModApi.postToUiThread(() -> {
+            messageTextView.setTextColor(Theme.ERROR_TEXT_COLOR);
+            messageTextView.setText(message == null || message.isBlank()
+                    ? I18n.get(MusicHud.MOD_ID + ".button.loadingError") : message);
+            messageTextView.setVisibility(VISIBLE);
         });
     }
 
     @Override
     public void reset() {
+        stopPolling();
         loginButton.setVisibility(VISIBLE);
-        urlImageView.clear();
+        setBusy(false);
+        qrImageView.clear();
         messageTextView.setVisibility(GONE);
     }
 
     @Override
     public void errorText(String message) {
-        messageTextView.setTextColor(Theme.ERROR_TEXT_COLOR);
-        messageTextView.setVisibility(View.VISIBLE);
-        messageTextView.setText(message);
+        showError(message);
+        setBusy(false);
     }
 }

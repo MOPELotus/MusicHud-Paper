@@ -91,6 +91,8 @@ dependencies {
     implementation "com.sedmelluq:lavaplayer:$rootProject.lavaplayer_version"
     implementation "com.github.hypfvieh:dbus-java-core:$rootProject.dbus_version"
     implementation "com.github.hypfvieh:dbus-java-transport-native-unixsocket:$rootProject.dbus_version"
+    implementation "com.google.zxing:core:3.5.4"
+    implementation "org.apache.xmlgraphics:batik-transcoder:1.17"
 }
 
 java {

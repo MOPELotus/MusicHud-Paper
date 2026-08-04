@@ -1,5 +1,13 @@
 {
   "key.category.music_hud.music_hud": "Music HUD",
+  "music_hud.platform.netease": "NetEase Cloud Music",
+  "music_hud.platform.qq": "QQ Music",
+  "music_hud.platform.bilibili": "Bilibili",
+  "music_hud.login.qqMusic": "QQ Music",
+  "music_hud.login.wechat": "WeChat",
+  "music_hud.login.mobile": "Mobile app",
+  "music_hud.text.login.waitingForScan": "Scan the QR code in the selected app",
+  "music_hud.text.login.scanned": "Scanned. Confirm login in the app",
   "music_hud.button.addToIdlePlaySource": "Add to idle play source",
   "music_hud.button.back": "Back",
   "music_hud.button.cancel": "Cancel",

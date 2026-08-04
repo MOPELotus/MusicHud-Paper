@@ -1,5 +1,13 @@
 {
   "key.category.music_hud.music_hud": "Music HUD",
+  "music_hud.platform.netease": "网易云音乐",
+  "music_hud.platform.qq": "QQ 音乐",
+  "music_hud.platform.bilibili": "哔哩哔哩",
+  "music_hud.login.qqMusic": "QQ 音乐",
+  "music_hud.login.wechat": "微信",
+  "music_hud.login.mobile": "手机 App",
+  "music_hud.text.login.waitingForScan": "请使用所选应用扫描二维码",
+  "music_hud.text.login.scanned": "已扫码，请在应用内确认登录",
   "music_hud.button.addToIdlePlaySource": "添加到空闲播放源",
   "music_hud.button.back": "返回",
   "music_hud.button.cancel": "取消",

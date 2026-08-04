@@ -1,5 +1,13 @@
 {
   "key.category.music_hud.music_hud": "Music HUD",
+  "music_hud.platform.netease": "網易雲音樂",
+  "music_hud.platform.qq": "QQ 音樂",
+  "music_hud.platform.bilibili": "嗶哩嗶哩",
+  "music_hud.login.qqMusic": "QQ 音樂",
+  "music_hud.login.wechat": "微信",
+  "music_hud.login.mobile": "手機 App",
+  "music_hud.text.login.waitingForScan": "請使用所選應用程式掃描二維碼",
+  "music_hud.text.login.scanned": "已掃碼，請在應用程式內確認登入",
   "music_hud.button.addToIdlePlaySource": "新增到空閒播放來源",
   "music_hud.button.back": "返回",
   "music_hud.button.cancel": "取消",
