@@ -596,6 +596,9 @@ public final class TuneWeaveClientService {
 
     private static UniPlaylistInfo toUniPlaylist(JsonElement element) {
         JsonObject object = unwrap(element);
+        if (object.has("playlist") && object.get("playlist").isJsonObject()) {
+            object = unwrap(object.get("playlist"));
+        }
         String reference = string(object, "ref", string(object, "resource_ref", ""));
         return new UniPlaylistInfo(reference, string(object, "name", reference),
                 string(object, "description", ""), integer(object, "item_count", 0));

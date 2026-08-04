@@ -55,13 +55,11 @@ public class PhoneCodeLoginView extends LinearLayout implements ILoginView {
         platformSpinner = new Spinner(context);
         platformSpinner.setAdapter(new ArrayAdapter<>(context, new String[]{
                 I18n.get(MusicHud.MOD_ID + ".platform.netease"),
-                I18n.get(MusicHud.MOD_ID + ".platform.qq"),
-                I18n.get(MusicHud.MOD_ID + ".platform.bilibili")
+                I18n.get(MusicHud.MOD_ID + ".platform.qq")
         }));
         platformSpinner.setSelection(switch (tuneWeave.defaultPlatform()) {
-            case NETEASE -> 0;
             case QQ -> 1;
-            case BILIBILI -> 2;
+            default -> 0;
         });
         LayoutParams platformParams = new LayoutParams(WRAP_CONTENT, WRAP_CONTENT);
         platformParams.setMargins(0, dp(12), 0, 0);
@@ -270,7 +268,6 @@ public class PhoneCodeLoginView extends LinearLayout implements ILoginView {
     private TuneWeavePlatform selectedPlatform() {
         return switch (platformSpinner.getSelectedItemPosition()) {
             case 1 -> TuneWeavePlatform.QQ;
-            case 2 -> TuneWeavePlatform.BILIBILI;
             default -> TuneWeavePlatform.NETEASE;
         };
     }
