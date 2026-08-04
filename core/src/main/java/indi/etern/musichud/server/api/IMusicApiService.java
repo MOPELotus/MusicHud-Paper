@@ -2,7 +2,7 @@ package indi.etern.musichud.server.api;
 
 import indi.etern.musichud.beans.api.SearchType;
 import indi.etern.musichud.beans.music.*;
-import indi.etern.musichud.server.api.impl.tuneweave.TuneWeaveMusicApiService;
+import indi.etern.musichud.server.api.impl.ncm.MusicApiService;
 import org.jetbrains.annotations.Nullable;
 
 import java.util.List;
@@ -12,8 +12,8 @@ import java.util.function.Function;
 
 public interface IMusicApiService {
     static IMusicApiService getInstance(ApiProvider apiProvider) {
-        if (Objects.requireNonNull(apiProvider) == ApiProvider.TUNEWEAVE) {
-            return TuneWeaveMusicApiService.getInstance();
+        if (Objects.requireNonNull(apiProvider) == ApiProvider.NCM) {
+            return MusicApiService.getInstance();
         }
         throw new IllegalArgumentException("Invalid api provider");
     }
