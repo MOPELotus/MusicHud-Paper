@@ -3,12 +3,9 @@ package indi.etern.musichud.beans.music;
 import com.google.gson.annotations.SerializedName;
 import indi.etern.musichud.network.ByteBufCodec;
 import indi.etern.musichud.network.Codecs;
-import indi.etern.musichud.utils.JsonUtil;
 import lombok.*;
 
 import java.util.Objects;
-import java.util.LinkedHashMap;
-import java.util.Map;
 
 @AllArgsConstructor(access = AccessLevel.PUBLIC)
 @NoArgsConstructor(access = AccessLevel.PUBLIC)
@@ -19,8 +16,6 @@ public class MusicResourceInfo {
             MusicResourceInfo::getId,
             Codecs.STRING_UTF8,
             MusicResourceInfo::getUrl,
-            Codecs.STRING_UTF8,
-            MusicResourceInfo::getHeadersJson,
             Codecs.INT,
             MusicResourceInfo::getBitrate,
             Codecs.LONG,
@@ -39,7 +34,6 @@ public class MusicResourceInfo {
     @Getter
     long id;
     String url = "";
-    String headersJson = "{}";
     @SerializedName("br")
     @Getter
     int bitrate;
@@ -61,38 +55,8 @@ public class MusicResourceInfo {
         return musicResourceInfo;
     }
 
-    public static MusicResourceInfo fromTuneWeave(
-            MusicDetail musicDetail, String url, int bitrate, long size, String format,
-            Map<String, String> requestHeaders
-    ) {
-        MusicResourceInfo result = new MusicResourceInfo(
-                musicDetail.getId(), url, "{}", bitrate, size, FormatType.fromSerializedName(format),
-                "", Fee.FREE, musicDetail.getDurationMillis());
-        result.setRequestHeaders(requestHeaders);
-        return result;
-    }
-
     public String getUrl() {
         return Objects.requireNonNullElse(url, "");
-    }
-
-    public String getHeadersJson() {
-        return Objects.requireNonNullElse(headersJson, "{}");
-    }
-
-    public void setRequestHeaders(Map<String, String> headers) {
-        headersJson = JsonUtil.gson.toJson(headers == null ? Map.of() : headers);
-    }
-
-    public Map<String, String> getRequestHeaders() {
-        Map<String, String> result = new LinkedHashMap<>();
-        try {
-            JsonUtil.gson.fromJson(getHeadersJson(), com.google.gson.JsonObject.class)
-                    .entrySet()
-                    .forEach(entry -> result.put(entry.getKey(), entry.getValue().getAsString()));
-        } catch (Exception ignored) {
-        }
-        return result;
     }
 
     public FormatType getType() {

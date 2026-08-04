@@ -27,7 +27,6 @@ import indi.etern.musichud.client.ui.Theme;
 import indi.etern.musichud.client.ui.components.*;
 import indi.etern.musichud.client.ui.pages.ConfigView;
 import indi.etern.musichud.client.ui.pages.HomeView;
-import indi.etern.musichud.client.ui.pages.UniPlaylistView;
 import indi.etern.musichud.client.ui.pages.account.AccountBaseView;
 import indi.etern.musichud.client.ui.pages.search.SearchView;
 import indi.etern.musichud.client.ui.utils.ButtonInsetBackgroundFactory;
@@ -272,11 +271,9 @@ public class MainFragment extends Fragment {
                 if (Minecraft.getInstance().player != null) {//in game
                     var homeNav = sideMenu.createNavigationPage(I18n.get(MusicHud.MOD_ID + ".text.page.home"), HomeView::new);
                     var searchNav = sideMenu.createNavigationPage(I18n.get(MusicHud.MOD_ID + ".text.page.search"), SearchView::new);
-                    var uniPlaylistNav = sideMenu.createNavigationPage("聚合歌单", UniPlaylistView::new);
                     var accountNav = sideMenu.createNavigationPage(I18n.get(MusicHud.MOD_ID + ".text.page.account"), AccountBaseView::new);
                     var settingsNav = sideMenu.createNavigationPage(I18n.get(MusicHud.MOD_ID + ".text.page.setting"), ConfigView::new);
-                    SideMenu.NavigationMeta defaultMeta = List.of(homeNav, searchNav, uniPlaylistNav, accountNav, settingsNav)
-                            .get(Math.min(defaultSelectedIndex, 4));
+                    SideMenu.NavigationMeta defaultMeta = List.of(homeNav, searchNav, accountNav, settingsNav).get(defaultSelectedIndex);
                     defaultMeta.select();
                 } else {
                     var settingsNav = sideMenu.createNavigationPage(I18n.get(MusicHud.MOD_ID + ".text.page.setting"), ConfigView::new);

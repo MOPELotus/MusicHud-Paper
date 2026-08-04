@@ -32,6 +32,7 @@ import indi.etern.musichud.network.payloads.requestResponseCycle.ConnectRequest;
 import indi.etern.musichud.network.payloads.requestResponseCycle.CookieLoginRequest;
 import indi.etern.musichud.network.payloads.requestResponseCycle.StartQRLoginResponse;
 import indi.etern.musichud.server.api.MusicPlayerServerService;
+import indi.etern.musichud.server.api.impl.ncm.LoginApiService;
 import lombok.AccessLevel;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
@@ -144,9 +145,9 @@ public class LoginService implements IClientLoginService {
 
     @Override
     public boolean isLogined() {
-        // Platform authentication belongs to TuneWeave. This legacy service now
-        // only owns Music HUD's multiplayer connection lifecycle.
-        return MusicHud.getConnectStatus() == MusicHud.ConnectStatus.CONNECTED;
+        LoginCookieInfo loginCookieInfo = LoginCookieInfo.clientCurrentCookie();
+        return loginCookieInfo.type() != LoginType.UNLOGGED &&
+                loginCookieInfo.type() != LoginType.ANONYMOUS;
     }
 
     @Override
@@ -170,7 +171,13 @@ public class LoginService implements IClientLoginService {
         if (type != null) {
             connectionType = type;
         }
-        logger.debug("Music HUD connection established; platform login is managed by TuneWeave");
+        if (isLogined()) {
+            logger.info("Previous cookie found");
+            loginToServerByCookieWithRefreshCheck();
+        } else {
+            logger.info("No previous cookie found, login as anonymous");
+            loginAsAnonymousToServer();
+        }
     }
 
     private void loginAsAnonymousToServer() {
@@ -186,6 +193,7 @@ public class LoginService implements IClientLoginService {
     public void logout() {
         clientNetworkService.sendToServer(LogoutMessage.MESSAGE);
         Profile.setCurrent(Profile.ANONYMOUS);
+        loginAsAnonymousToServer();
     }
 
     @Override
@@ -323,7 +331,7 @@ public class LoginService implements IClientLoginService {
                 MusicHud.EXECUTOR.execute(() -> {
                     if (MusicHud.getConnectStatus() == MusicHud.ConnectStatus.NOT_CONNECTED) {
                         if (clientConfig.getEnableIsolatedMode()) {
-                            clientNetworkService.sendToServer(LogoutMessage.MESSAGE);
+                            LoginApiService.getInstance().logout(VanillaPlayerProxy.ofPlayer(player));
                         }
                     } else {
                         MusicHud.setConnectStatus(MusicHud.ConnectStatus.NOT_CONNECTED);

@@ -25,7 +25,7 @@ public record GetArtistDetailRequest(long id) implements C2SPayload {
             INetworkRegister.getInstance().autoRegisterPayload(
                     GetArtistDetailRequest.class, CODEC,
                     ServerDataPacketVThreadExecutor.execute((playlistDetailRequest, player) -> {
-                        Artist artistDetail = IMusicApiService.getInstance(ApiProvider.TUNEWEAVE).getArtistDetail(playlistDetailRequest.id, player.getUUID());
+                        Artist artistDetail = IMusicApiService.getInstance(ApiProvider.NCM).getArtistDetail(playlistDetailRequest.id, player.getUUID());
                         if (artistDetail != null) {
                             IServerNetworkService.getInstance().sendToPlayer(player,new indi.etern.musichud.network.payloads.requestResponseCycle.GetArtistDetailResponse(artistDetail));
                         }

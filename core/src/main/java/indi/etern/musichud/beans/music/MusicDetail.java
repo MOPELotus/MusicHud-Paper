@@ -16,10 +16,6 @@ public class MusicDetail {
     public static final ByteBufCodec<MusicDetail> CODEC = ByteBufCodec.composite(
             Codecs.STRING_UTF8,
             MusicDetail::getName,
-            Codecs.STRING_UTF8,
-            MusicDetail::getSourceRef,
-            Codecs.STRING_UTF8,
-            MusicDetail::getSourceKind,
             Codecs.LONG,
             MusicDetail::getId,
             Codecs.ofList(() -> Artist.CODEC),
@@ -40,15 +36,6 @@ public class MusicDetail {
     );
     public static final MusicDetail NONE = new MusicDetail();
     String name = "";
-    /**
-     * The canonical TuneWeave reference (for example {@code qq:0039MnYb0qxYhV}).
-     * {@link #id} remains a transport/cache key so older UI code can continue to
-     * use a numeric identifier without losing non-numeric provider IDs.
-     */
-    @Getter
-    String sourceRef = "";
-    @Getter
-    String sourceKind = "track";
     @Getter
     long id;
     @SerializedName("ar")
@@ -82,8 +69,6 @@ public class MusicDetail {
 
     protected MusicDetail(
             String name,
-            String sourceRef,
-            String sourceKind,
             long id,
             List<Artist> artists,
             List<String> alias,
@@ -94,8 +79,6 @@ public class MusicDetail {
             LyricInfo lyricInfo
     ) {
         this.name = name;
-        this.sourceRef = sourceRef;
-        this.sourceKind = sourceKind;
         this.id = id;
         this.artists = artists;
         this.alias = alias;
@@ -108,20 +91,6 @@ public class MusicDetail {
 
     public String getName() {
         return Objects.requireNonNullElse(name, "");
-    }
-
-    public static MusicDetail fromTuneWeave(
-            String sourceRef,
-            String sourceKind,
-            long id,
-            String name,
-            List<Artist> artists,
-            Album album,
-            int durationMillis,
-            List<String> aliases
-    ) {
-        return new MusicDetail(name, sourceRef, sourceKind, id, artists, aliases, album,
-                durationMillis, List.of(), PusherInfo.EMPTY, LyricInfo.NONE);
     }
 
     public List<Artist> getArtists() {
