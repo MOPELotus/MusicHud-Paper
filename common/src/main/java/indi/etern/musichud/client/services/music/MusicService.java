@@ -13,6 +13,7 @@ import indi.etern.musichud.client.audio.NowPlayingInfo;
 import indi.etern.musichud.client.audio.StreamAudioPlayer;
 import indi.etern.musichud.client.interfaces.IClientEventService;
 import indi.etern.musichud.client.services.LoginService;
+import indi.etern.musichud.client.services.tuneweave.TuneWeaveClientService;
 import indi.etern.musichud.client.services.music.states.*;
 import indi.etern.musichud.client.ui.ToastUtil;
 import indi.etern.musichud.client.ui.hud.HudRendererManager;
@@ -48,6 +49,7 @@ public class MusicService implements IClientMusicService {
     private static final IClientNetworkService clientNetworkService = IClientNetworkService.getInstance();
     private static final ClientConfig clientConfig = ClientConfig.getInstance();
     private static volatile MusicService instance;
+    private static final TuneWeaveClientService tuneWeave = TuneWeaveClientService.getInstance();
 
     @Getter(lazy = true)
     private final IIdlePlaySourceState idlePlaySourceState = new IdlePlaySourceState();
@@ -349,6 +351,9 @@ public class MusicService implements IClientMusicService {
             return CompletableFuture.failedFuture(
                     new IllegalStateException("Cannot call AccountService.loadUserPlaylists when logined as anonymous"));
         }
+        if (tuneWeave.hasCredential(tuneWeave.defaultPlatform())) {
+            return CompletableFuture.supplyAsync(tuneWeave::loadAccountPlaylists, MusicHud.EXECUTOR);
+        }
         return RequestResponseManager.send(
                         new GetUserPlaylistRequest(ignoreCache),
                         GetUserPlaylistResponse.class,
@@ -441,6 +446,15 @@ public class MusicService implements IClientMusicService {
             return CompletableFuture.completedFuture(currentUserCollections);
         } else {
             currentUserCollections = new UserCollections();
+            if (tuneWeave.hasCredential(tuneWeave.defaultPlatform())) {
+                return CompletableFuture.supplyAsync(() -> {
+                    currentUserCollections.setUserCategoryPlaylists(tuneWeave.loadAccountPlaylists());
+                    currentUserCollections.setSubscribedAlbums(new ObservableSequencedSet<>());
+                    currentUserCollections.setSubscribedArtists(new ObservableSequencedSet<>());
+                    currentUserCollections.loaded = true;
+                    return currentUserCollections;
+                }, MusicHud.EXECUTOR);
+            }
             return CompletableFuture.allOf(
                             loadUserPlaylists(ignoreCache).thenAccept(currentUserCollections::setUserCategoryPlaylists),
                             loadUserAlbums(ignoreCache)

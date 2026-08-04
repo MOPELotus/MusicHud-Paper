@@ -1,13 +1,18 @@
 package indi.etern.musichud.client.services.tuneweave;
 
 import com.google.gson.JsonElement;
+import com.google.gson.JsonArray;
 import com.google.gson.JsonNull;
 import com.google.gson.JsonObject;
+import indi.etern.musichud.MusicHud;
+import indi.etern.musichud.beans.music.Playlist;
+import indi.etern.musichud.beans.music.UserCategoryPlaylists;
 import indi.etern.musichud.beans.user.Profile;
 import indi.etern.musichud.beans.user.VipType;
 import indi.etern.musichud.interfaces.ClientConfig;
 import indi.etern.musichud.server.api.tuneweave.TuneWeaveApiClient;
 import indi.etern.musichud.server.api.tuneweave.TuneWeavePlatform;
+import indi.etern.musichud.utils.collections.ObservableSequencedSet;
 
 import java.nio.ByteBuffer;
 import java.nio.charset.StandardCharsets;
@@ -132,6 +137,28 @@ public final class TuneWeaveClientService {
         return profile(data.get("profile"));
     }
 
+    /** Loads the caller's account playlists without routing the private credential through Minecraft. */
+    public UserCategoryPlaylists loadAccountPlaylists() {
+        TuneWeavePlatform platform = defaultPlatform();
+        JsonElement data = requestForPlatform(platform, "GET", "/v1/account/playlists",
+                Map.of("platform", platform.apiName(), "limit", "100", "offset", "0"), null).data();
+        ObservableSequencedSet<Playlist> created = new ObservableSequencedSet<>();
+        ObservableSequencedSet<Playlist> subscribed = new ObservableSequencedSet<>();
+        for (JsonElement item : elements(data)) {
+            JsonObject raw = unwrap(item);
+            Playlist playlist = toPlaylist(platform, raw);
+            if (playlist == Playlist.EMPTY) {
+                continue;
+            }
+            (bool(raw, "subscribed", false) ? subscribed : created).add(playlist);
+        }
+        String likeRef = "account:favorite_tracks:" + platform.apiName();
+        Playlist liked = Playlist.fromTuneWeave(
+                stableId(platform, "playlist:" + likeRef), likeRef, "Liked Songs", MusicHud.ICON_BASE64,
+                0, 0, Profile.ANONYMOUS);
+        return new UserCategoryPlaylists(liked, created, subscribed);
+    }
+
     public void logout(TuneWeavePlatform platform) {
         if (!hasCredential(platform)) {
             return;
@@ -232,6 +259,11 @@ public final class TuneWeaveClientService {
         return value == null || value instanceof JsonNull || value.isJsonNull() ? null : value.getAsString();
     }
 
+    private static String string(JsonObject object, String key, String fallback) {
+        String value = string(object, key);
+        return value == null ? fallback : value;
+    }
+
     private static long stableUserId(TuneWeavePlatform platform, String userId) {
         try {
             byte[] digest = MessageDigest.getInstance("SHA-256").digest(
@@ -241,6 +273,72 @@ public final class TuneWeaveClientService {
         } catch (NoSuchAlgorithmException impossible) {
             throw new IllegalStateException(impossible);
         }
+    }
+
+    private static Playlist toPlaylist(TuneWeavePlatform platform, JsonObject object) {
+        String reference = string(object, "ref");
+        if (reference == null || reference.isBlank()) {
+            reference = string(object, "reference");
+        }
+        if (reference == null || reference.isBlank()) {
+            return Playlist.EMPTY;
+        }
+        JsonObject creatorObject = object.has("creator") && object.get("creator").isJsonObject()
+                ? object.getAsJsonObject("creator") : new JsonObject();
+        String creatorRef = string(creatorObject, "ref");
+        Profile creator = new Profile(
+                string(creatorObject, "name", ""), "", stableId(platform, "user:" + creatorRef), VipType.NORMAL);
+        return Playlist.fromTuneWeave(
+                stableId(platform, "playlist:" + reference), reference,
+                string(object, "name", reference), string(object, "cover_url", ""),
+                integer(object, "track_count", integer(object, "item_count", 0)),
+                integer(object, "play_count", 0), creator);
+    }
+
+    private static long stableId(TuneWeavePlatform platform, String value) {
+        return stableUserId(platform, value);
+    }
+
+    private static List<JsonElement> elements(JsonElement value) {
+        if (value == null || value.isJsonNull()) {
+            return List.of();
+        }
+        if (value.isJsonArray()) {
+            List<JsonElement> result = new ArrayList<>();
+            value.getAsJsonArray().forEach(result::add);
+            return result;
+        }
+        if (value.isJsonObject()) {
+            JsonObject object = value.getAsJsonObject();
+            for (String key : List.of("items", "playlists", "results")) {
+                JsonElement nested = object.get(key);
+                if (nested instanceof JsonArray) {
+                    List<JsonElement> result = new ArrayList<>();
+                    nested.getAsJsonArray().forEach(result::add);
+                    return result;
+                }
+            }
+        }
+        return List.of();
+    }
+
+    private static JsonObject unwrap(JsonElement element) {
+        if (element == null || !element.isJsonObject()) {
+            return new JsonObject();
+        }
+        JsonObject object = element.getAsJsonObject();
+        return object.has("data") && object.get("data").isJsonObject()
+                ? object.getAsJsonObject("data") : object;
+    }
+
+    private static boolean bool(JsonObject object, String key, boolean fallback) {
+        JsonElement value = object.get(key);
+        return value == null || value.isJsonNull() ? fallback : value.getAsBoolean();
+    }
+
+    private static int integer(JsonObject object, String key, int fallback) {
+        JsonElement value = object.get(key);
+        return value == null || value.isJsonNull() ? fallback : value.getAsInt();
     }
 
     public record QrSession(TuneWeavePlatform platform, String transactionId, String url,
