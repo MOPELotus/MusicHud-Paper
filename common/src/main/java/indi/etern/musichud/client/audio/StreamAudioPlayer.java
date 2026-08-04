@@ -9,12 +9,8 @@ import indi.etern.musichud.beans.music.Quality;
 import indi.etern.musichud.client.audio.decoder.*;
 import indi.etern.musichud.client.services.music.MusicService;
 import indi.etern.musichud.client.services.tuneweave.TuneWeaveClientService;
-import indi.etern.musichud.server.api.tuneweave.TuneWeavePlatform;
 import indi.etern.musichud.client.ui.hud.renderer.PlayingStatusRenderer;
 import indi.etern.musichud.interfaces.ClientConfig;
-import indi.etern.musichud.network.RequestResponseManager;
-import indi.etern.musichud.network.payloads.requestResponseCycle.GetMusicResourceRequest;
-import indi.etern.musichud.network.payloads.requestResponseCycle.GetMusicResourceResponse;
 import lombok.Getter;
 import lombok.SneakyThrows;
 import net.minecraft.client.Minecraft;
@@ -1175,11 +1171,8 @@ public class StreamAudioPlayer {
     }
 
     public CompletableFuture<MusicResourceInfo> getCurrentMusicResourceInfo(Quality quality, MusicResourceInfo previous) {
-        TuneWeavePlatform sourcePlatform = currentMusicDetail == null || currentMusicDetail.getSourceRef().isBlank()
-                ? tuneWeave.defaultPlatform()
-                : TuneWeavePlatform.fromApiName(currentMusicDetail.getSourceRef().split(":", 2)[0]);
         if (currentMusicDetail != null && !currentMusicDetail.getSourceRef().isBlank()
-                && tuneWeave.hasCredential(sourcePlatform)) {
+                && tuneWeave.isAvailable()) {
             return CompletableFuture.supplyAsync(
                     () -> tuneWeave.getMusicResourceInfo(currentMusicDetail, quality), MusicHud.EXECUTOR)
                     .thenCompose(value -> {
@@ -1187,22 +1180,13 @@ public class StreamAudioPlayer {
                             return CompletableFuture.failedFuture(new RuntimeException("Failed to load TuneWeave music resource"));
                         }
                         return CompletableFuture.completedFuture(value);
-                    });
+                     });
         }
-        String url = previous == null || previous.getUrl() == null ? "" : previous.getUrl();
-        return RequestResponseManager.send(
-                        new GetMusicResourceRequest(currentMusicDetail.getId(), quality, url),
-                        GetMusicResourceResponse.class,
-                        Duration.ofSeconds(10))
-                .thenApply(GetMusicResourceResponse::getMusicResourceInfo)
-                .thenCompose(value -> {
-                    if (value == MusicResourceInfo.NONE) {
-                        MusicService.getInstance().switchMusic(MusicDetail.NONE, MusicDetail.NONE, null, I18n.get(MusicHud.MOD_ID + ".text.failedToLoadMusicResource"));
-                        setStatus(Status.ERROR);
-                        return CompletableFuture.failedFuture(new RuntimeException("Failed to load music resource"));
-                    }
-                    return CompletableFuture.completedFuture(value);
-                });
+        MusicService.getInstance().switchMusic(MusicDetail.NONE, MusicDetail.NONE, null,
+                I18n.get(MusicHud.MOD_ID + ".text.failedToLoadMusicResource"));
+        setStatus(Status.ERROR);
+        return CompletableFuture.failedFuture(new IllegalStateException(
+                "TuneWeave track reference is unavailable"));
     }
 
     public enum Status {

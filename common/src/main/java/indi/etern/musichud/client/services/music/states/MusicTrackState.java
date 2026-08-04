@@ -3,17 +3,13 @@ package indi.etern.musichud.client.services.music.states;
 import indi.etern.musichud.MusicHud;
 import indi.etern.musichud.beans.music.MusicDetail;
 import indi.etern.musichud.beans.music.Playlist;
-import indi.etern.musichud.beans.music.actions.ModifyType;
 import indi.etern.musichud.beans.state.IMusicTrackState;
 import indi.etern.musichud.client.services.music.MusicService;
+import indi.etern.musichud.client.services.tuneweave.TuneWeaveClientService;
 import indi.etern.musichud.interfaces.Unregister;
-import indi.etern.musichud.network.RequestResponseManager;
-import indi.etern.musichud.network.payloads.requestResponseCycle.ModifyPlaylistRequest;
-import indi.etern.musichud.network.payloads.requestResponseCycle.ModifyPlaylistResponse;
 import lombok.AllArgsConstructor;
 import lombok.SneakyThrows;
 
-import java.time.Duration;
 import java.util.concurrent.*;
 import java.util.function.Consumer;
 import java.util.function.Supplier;
@@ -23,6 +19,7 @@ public class MusicTrackState implements IMusicTrackState {
     private static final ConcurrentHashMap<TrackPlaylistPair, CopyOnWriteArrayList<Consumer<Boolean>>>
             modifyListeners = new ConcurrentHashMap<>();
     private final MusicService musicService = MusicService.getInstance();
+    private final TuneWeaveClientService tuneWeave = TuneWeaveClientService.getInstance();
     MusicDetail musicDetail;
 
     static Unregister registerModifyListener(TrackPlaylistPair trackPlaylistPair, Consumer<Boolean> listener) {
@@ -139,16 +136,11 @@ public class MusicTrackState implements IMusicTrackState {
                 var tracks = playlist1.getMusicDetails();
                 var edit = tracks.beginEdit();
                 tracks.addFirst(musicDetail);
-                ModifyPlaylistRequest request = new ModifyPlaylistRequest(musicDetail.getId(), playlist1.getId(), ModifyType.ADD);
-                return RequestResponseManager.send(request, ModifyPlaylistResponse.class, Duration.ofSeconds(5))
-                        .handle((response, throwable) -> {
+                return CompletableFuture.runAsync(() -> tuneWeave.modifyPlaylistTracks(playlist1, musicDetail, true), MusicHud.EXECUTOR)
+                        .handle((ignored, throwable) -> {
                             if (throwable != null) {
                                 edit.rollback();
-                                throw new RuntimeException(throwable);
-                            }
-                            if (!response.isSuccess()) {
-                                edit.rollback();
-                                throw new RuntimeException(response.getMessage());
+                                throw new CompletionException(throwable);
                             }
                             edit.commit();
                             return null;
@@ -172,16 +164,11 @@ public class MusicTrackState implements IMusicTrackState {
                 var tracks = playlist1.getMusicDetails();
                 var edit = tracks.beginEdit();
                 tracks.remove(musicDetail);
-                ModifyPlaylistRequest request = new ModifyPlaylistRequest(musicDetail.getId(), playlist1.getId(), ModifyType.REMOVE);
-                return RequestResponseManager.send(request, ModifyPlaylistResponse.class, Duration.ofSeconds(5))
-                        .handle((response, throwable) -> {
+                return CompletableFuture.runAsync(() -> tuneWeave.modifyPlaylistTracks(playlist1, musicDetail, false), MusicHud.EXECUTOR)
+                        .handle((ignored, throwable) -> {
                             if (throwable != null) {
                                 edit.rollback();
-                                throw new RuntimeException(throwable);
-                            }
-                            if (!response.isSuccess()) {
-                                edit.rollback();
-                                throw new RuntimeException(response.getMessage());
+                                throw new CompletionException(throwable);
                             }
                             edit.commit();
                             return null;

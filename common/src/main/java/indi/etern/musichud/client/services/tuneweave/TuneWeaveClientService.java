@@ -345,6 +345,56 @@ public final class TuneWeaveClientService {
                 new Lyric(string(lyrics, "romanized", "")));
     }
 
+    public void setTrackFavorite(MusicDetail musicDetail, boolean favorite) {
+        requireReference(musicDetail == null ? null : musicDetail.getSourceRef(), "track");
+        TuneWeavePlatform platform = platformFromReference(musicDetail.getSourceRef());
+        requestForPlatform(platform, favorite ? "PUT" : "DELETE", "/v1/account/favorites/tracks/"
+                + TuneWeaveApiClient.encodePathSegment(musicDetail.getSourceRef()), Map.of(), null);
+    }
+
+    public void setPlaylistSubscribed(Playlist playlist, boolean subscribed) {
+        requireReference(playlist == null ? null : playlist.getSourceRef(), "playlist");
+        TuneWeavePlatform platform = platformFromReference(playlist.getSourceRef());
+        requestForPlatform(platform, subscribed ? "PUT" : "DELETE", "/v1/account/favorites/playlists/"
+                + TuneWeaveApiClient.encodePathSegment(playlist.getSourceRef()), Map.of(), null);
+    }
+
+    public void setAlbumSubscribed(Album album, boolean subscribed) {
+        requireReference(album == null ? null : album.getSourceRef(), "album");
+        TuneWeavePlatform platform = platformFromReference(album.getSourceRef());
+        requestForPlatform(platform, subscribed ? "PUT" : "DELETE", "/v1/account/library/albums/"
+                + TuneWeaveApiClient.encodePathSegment(album.getSourceRef()), Map.of(), null);
+    }
+
+    public void setArtistSubscribed(Artist artist, boolean subscribed) {
+        requireReference(artist == null ? null : artist.getSourceRef(), "artist");
+        TuneWeavePlatform platform = platformFromReference(artist.getSourceRef());
+        requestForPlatform(platform, subscribed ? "PUT" : "DELETE", "/v1/account/following/artists/"
+                + TuneWeaveApiClient.encodePathSegment(artist.getSourceRef()), Map.of(), null);
+    }
+
+    public void modifyPlaylistTracks(Playlist playlist, MusicDetail musicDetail, boolean add) {
+        requireReference(playlist == null ? null : playlist.getSourceRef(), "playlist");
+        requireReference(musicDetail == null ? null : musicDetail.getSourceRef(), "track");
+        if (playlist.getSourceRef().startsWith("account:favorite_tracks:")) {
+            setTrackFavorite(musicDetail, add);
+            return;
+        }
+        JsonObject body = new JsonObject();
+        JsonArray refs = new JsonArray();
+        refs.add(musicDetail.getSourceRef());
+        body.add("refs", refs);
+        TuneWeavePlatform platform = platformFromReference(playlist.getSourceRef());
+        requestForPlatform(platform, add ? "POST" : "DELETE", "/v1/playlists/"
+                + TuneWeaveApiClient.encodePathSegment(playlist.getSourceRef()) + "/tracks", Map.of(), body);
+    }
+
+    private static void requireReference(String reference, String kind) {
+        if (reference == null || reference.isBlank()) {
+            throw new IllegalArgumentException("TuneWeave " + kind + " reference is missing");
+        }
+    }
+
     public List<UniPlaylistInfo> listUniPlaylists() {
         JsonElement data = requestWithAllCredentials("GET", "/v1/uni/playlists",
                 Map.of("limit", "100", "offset", "0"), null).data();
