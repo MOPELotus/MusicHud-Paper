@@ -7,6 +7,7 @@ import indi.etern.musichud.beans.music.LyricInfo;
 import indi.etern.musichud.client.ui.dto.LyricLine;
 import indi.etern.musichud.beans.music.MusicDetail;
 import indi.etern.musichud.client.services.music.MusicService;
+import indi.etern.musichud.client.services.tuneweave.TuneWeaveClientService;
 import indi.etern.musichud.client.ui.hud.HudRendererManager;
 import indi.etern.musichud.client.ui.screen.MainFragment;
 import indi.etern.musichud.client.ui.utils.PlayerInfoUtil;
@@ -43,6 +44,7 @@ public class NowPlayingInfo {
     private final Set<BiConsumer<MusicDetail, MusicDetail>> musicSwitchListener = new HashSet<>();
     private final AtomicReference<ArrayDeque<LyricLine>> atomicLyricLines = new AtomicReference<>();
     private final ClientConfig clientConfig = ClientConfig.getInstance();
+    private final TuneWeaveClientService tuneWeave = TuneWeaveClientService.getInstance();
     private volatile JMTC jmtc;
     @Setter
     @Getter
@@ -263,23 +265,24 @@ public class NowPlayingInfo {
             musicDuration = null;
         }
         musicStartTime = null;
-        LyricInfo lyricInfo = musicDetail.getLyricInfo();
-        ArrayDeque<LyricLine> lyricLines;
-        if (!lyricInfo.equals(LyricInfo.NONE)) {
-            try {
-                if (lyricInfo.withWordByWordLyric()) {
-                    lyricLines = WordByWordLyricParser.parse(musicDetail);
-                } else {
-                    lyricLines = FullLineLyricParser.parse(musicDetail);
+        boolean missingLyrics = musicDetail.getLyricInfo().equals(LyricInfo.NONE);
+        parseLyrics(musicDetail);
+        if (missingLyrics && !musicDetail.equals(MusicDetail.NONE)
+                && !musicDetail.getSourceRef().isBlank() && tuneWeave.isAvailable()) {
+            MusicHud.EXECUTOR.execute(() -> {
+                try {
+                    LyricInfo fetched = tuneWeave.loadLyrics(musicDetail);
+                    if (fetched.equals(LyricInfo.NONE) || currentlyPlayingMusicDetail != musicDetail) {
+                        return;
+                    }
+                    musicDetail.setLyricInfo(fetched);
+                    parseLyrics(musicDetail);
+                    MuiModApi.postToUiThread(() -> MainFragment.switchMusic(
+                            musicDetail, nextToPlayIdleMusicDetail, this.lyricLines));
+                } catch (RuntimeException error) {
+                    logger.debug("TuneWeave lyrics unavailable for {}: {}", musicDetail.getSourceRef(), error.getMessage());
                 }
-                this.lyricLines = lyricLines;
-                this.atomicLyricLines.set(new ArrayDeque<>(lyricLines));
-            } catch (Exception e) {
-                logger.warn("Failed to load lyrics of music: {} (id:{}), exception: {}: {}", musicDetail.getName(), musicDetail.getId(), e.getClass().getName(), e.getMessage());
-            }
-        } else {
-            this.lyricLines = null;
-            this.atomicLyricLines.set(null);
+            });
         }
         try {
             MuiModApi.postToUiThread(() -> MainFragment.switchMusic(musicDetail, idleNextToPlay, this.lyricLines));
@@ -290,6 +293,27 @@ public class NowPlayingInfo {
             consumer.accept(previous, musicDetail);
         });
         callLyricsUpdateListeners(null);
+    }
+
+    private void parseLyrics(MusicDetail musicDetail) {
+        LyricInfo lyricInfo = musicDetail.getLyricInfo();
+        if (lyricInfo.equals(LyricInfo.NONE)) {
+            this.lyricLines = null;
+            this.atomicLyricLines.set(null);
+            return;
+        }
+        try {
+            ArrayDeque<LyricLine> parsed = lyricInfo.withWordByWordLyric()
+                    ? WordByWordLyricParser.parse(musicDetail)
+                    : FullLineLyricParser.parse(musicDetail);
+            this.lyricLines = parsed;
+            this.atomicLyricLines.set(new ArrayDeque<>(parsed));
+        } catch (Exception e) {
+            this.lyricLines = null;
+            this.atomicLyricLines.set(null);
+            logger.warn("Failed to load lyrics of music: {} (id:{}), exception: {}: {}",
+                    musicDetail.getName(), musicDetail.getId(), e.getClass().getName(), e.getMessage());
+        }
     }
 
     public void startAt(ZonedDateTime zonedDateTime) {

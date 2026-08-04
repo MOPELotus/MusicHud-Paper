@@ -163,15 +163,18 @@ public class MusicService implements IClientMusicService {
                 return CompletableFuture.completedFuture(cachedPlaylist);
             }
         }
-        return RequestResponseManager.send(
-                        new GetPlaylistDetailRequest(id, ignoreCache),
-                        GetPlaylistDetailResponse.class,
-                        Duration.ofSeconds(5))
-                .thenApply(response -> {
-                    Playlist playlist = response.getPlaylist();
-                    playlistsCache.put(id, playlist);
-                    return playlist;
-                });
+        if (tuneWeave.isAvailable()) {
+            if (!tuneWeave.hasPlaylist(id)) {
+                return CompletableFuture.failedFuture(new IllegalArgumentException(
+                        "Unknown TuneWeave playlist reference: " + id));
+            }
+            return CompletableFuture.supplyAsync(() -> tuneWeave.loadPlaylistDetail(id), MusicHud.EXECUTOR)
+                    .thenApply(playlist -> {
+                        playlistsCache.put(id, playlist);
+                        return playlist;
+                    });
+        }
+        return CompletableFuture.failedFuture(new IllegalStateException("TuneWeave is unavailable"));
     }
 
     @Override
@@ -183,15 +186,18 @@ public class MusicService implements IClientMusicService {
                 return CompletableFuture.completedFuture(cachedAlbum);
             }
         }
-        return RequestResponseManager.send(
-                        new GetAlbumDetailRequest(id, ignoreCache),
-                        GetAlbumDetailResponse.class,
-                        Duration.ofSeconds(5))
-                .thenApply(response -> {
-                    Album album = response.getAlbum();
-                    albumsCache.put(id, album);
-                    return album;
-                });
+        if (tuneWeave.isAvailable()) {
+            if (!tuneWeave.hasAlbum(id)) {
+                return CompletableFuture.failedFuture(new IllegalArgumentException(
+                        "Unknown TuneWeave album reference: " + id));
+            }
+            return CompletableFuture.supplyAsync(() -> tuneWeave.loadAlbumDetail(id), MusicHud.EXECUTOR)
+                    .thenApply(album -> {
+                        albumsCache.put(id, album);
+                        return album;
+                    });
+        }
+        return CompletableFuture.failedFuture(new IllegalStateException("TuneWeave is unavailable"));
     }
 
     @Override
@@ -292,20 +298,30 @@ public class MusicService implements IClientMusicService {
                 return CompletableFuture.completedFuture(cachedArtist);
             }
         }
-        return RequestResponseManager.send(
-                        new GetArtistDetailRequest(id),
-                        GetArtistDetailResponse.class,
-                        Duration.ofSeconds(5))
-                .thenApply(GetArtistDetailResponse::getArtist);
+        if (tuneWeave.isAvailable()) {
+            if (!tuneWeave.hasArtist(id)) {
+                return CompletableFuture.failedFuture(new IllegalArgumentException(
+                        "Unknown TuneWeave artist reference: " + id));
+            }
+            return CompletableFuture.supplyAsync(() -> tuneWeave.loadArtistDetail(id), MusicHud.EXECUTOR)
+                    .thenApply(artist -> {
+                        artistsCache.put(id, artist);
+                        return artist;
+                    });
+        }
+        return CompletableFuture.failedFuture(new IllegalStateException("TuneWeave is unavailable"));
     }
 
     @Override
     public CompletableFuture<List<MusicDetail>> loadArtistMusic(long id, int offset) {
-        return RequestResponseManager.send(
-                        new GetArtistMoreMusicRequest(id, offset),
-                        GetArtistMoreMusicResponse.class,
-                        Duration.ofSeconds(5))
-                .thenApply(GetArtistMoreMusicResponse::getMusicDetails);
+        if (tuneWeave.isAvailable()) {
+            if (!tuneWeave.hasArtist(id)) {
+                return CompletableFuture.failedFuture(new IllegalArgumentException(
+                        "Unknown TuneWeave artist reference: " + id));
+            }
+            return CompletableFuture.supplyAsync(() -> tuneWeave.loadArtistTracks(id, offset), MusicHud.EXECUTOR);
+        }
+        return CompletableFuture.failedFuture(new IllegalStateException("TuneWeave is unavailable"));
     }
 
     @Override
@@ -354,11 +370,7 @@ public class MusicService implements IClientMusicService {
         if (tuneWeave.hasCredential(tuneWeave.defaultPlatform())) {
             return CompletableFuture.supplyAsync(tuneWeave::loadAccountPlaylists, MusicHud.EXECUTOR);
         }
-        return RequestResponseManager.send(
-                        new GetUserPlaylistRequest(ignoreCache),
-                        GetUserPlaylistResponse.class,
-                        Duration.ofSeconds(5))
-                .thenApply(GetUserPlaylistResponse::getPlaylists);
+        return CompletableFuture.failedFuture(new IllegalStateException("TuneWeave account credential is unavailable"));
     }
 
     @Override
@@ -370,11 +382,7 @@ public class MusicService implements IClientMusicService {
         if (tuneWeave.hasCredential(tuneWeave.defaultPlatform())) {
             return CompletableFuture.supplyAsync(tuneWeave::loadAccountAlbums, MusicHud.EXECUTOR);
         }
-        return RequestResponseManager.send(
-                        new GetUserAlbumsRequest(ignoreCache),
-                        GetUserAlbumsResponse.class,
-                        Duration.ofSeconds(5))
-                .thenApply(GetUserAlbumsResponse::getAlbums);
+        return CompletableFuture.failedFuture(new IllegalStateException("TuneWeave account credential is unavailable"));
     }
 
     @Override
@@ -386,11 +394,7 @@ public class MusicService implements IClientMusicService {
         if (tuneWeave.hasCredential(tuneWeave.defaultPlatform())) {
             return CompletableFuture.supplyAsync(tuneWeave::loadAccountArtists, MusicHud.EXECUTOR);
         }
-        return RequestResponseManager.send(
-                        new GetUserArtistsRequest(ignoreCache),
-                        GetUserArtistsResponse.class,
-                        Duration.ofSeconds(5))
-                .thenApply(GetUserArtistsResponse::getArtists);
+        return CompletableFuture.failedFuture(new IllegalStateException("TuneWeave account credential is unavailable"));
     }
 
     @Override
@@ -461,18 +465,8 @@ public class MusicService implements IClientMusicService {
                     return currentUserCollections;
                 }, MusicHud.EXECUTOR);
             }
-            return CompletableFuture.allOf(
-                            loadUserPlaylists(ignoreCache).thenAccept(currentUserCollections::setUserCategoryPlaylists),
-                            loadUserAlbums(ignoreCache)
-                                    .thenAccept(subscribedAlbums ->
-                                            currentUserCollections.setSubscribedAlbums(new ObservableSequencedSet<>(subscribedAlbums))),
-                            loadUserArtists(ignoreCache)
-                                    .thenAccept(subscribedArtists ->
-                                            currentUserCollections.setSubscribedArtists(new ObservableSequencedSet<>(subscribedArtists)))
-                    ).thenApply(v -> {
-                        currentUserCollections.loaded = true;
-                        return currentUserCollections;
-                    });
+            return CompletableFuture.failedFuture(new IllegalStateException(
+                    "TuneWeave account credential is unavailable"));
         }
     }
 

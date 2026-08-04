@@ -24,16 +24,12 @@ import indi.etern.musichud.client.ui.utils.ui.ButtonInsetBackgroundFactory;
 import indi.etern.musichud.client.services.tuneweave.TuneWeaveClientService;
 import indi.etern.musichud.server.api.tuneweave.TuneWeavePlatform;
 import indi.etern.musichud.interfaces.ClientConfig;
-import indi.etern.musichud.network.RequestResponseManager;
-import indi.etern.musichud.network.payloads.requestResponseCycle.SearchRequest;
-import indi.etern.musichud.network.payloads.requestResponseCycle.SearchResultResponse;
 import lombok.Data;
 import lombok.EqualsAndHashCode;
 import lombok.Getter;
 import lombok.ToString;
 import net.minecraft.client.resources.language.I18n;
 
-import java.time.Duration;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
@@ -188,15 +184,8 @@ public class SearchView extends LinearLayout {
                 List<?> result = TuneWeaveClientService.getInstance().search(text, searchType, offset, platform);
                 MuiModApi.postToUiThread(() -> handleDirectSearchResult(offset, searchType, result));
             } catch (RuntimeException directFailure) {
-                RequestResponseManager.send(
-                                new SearchRequest(text, searchType, offset),
-                                SearchResultResponse.class,
-                                Duration.ofSeconds(10))
-                        .thenAccept(response -> MuiModApi.postToUiThread(() -> handleSearchResult(response)))
-                        .exceptionally(e -> {
-                            MusicHud.getLogger(SearchView.class).warn("Failed to search {}: {}", searchType, text, e);
-                            return null;
-                        });
+                MusicHud.getLogger(SearchView.class).warn("Failed to search {}: {}", searchType, text, directFailure);
+                MuiModApi.postToUiThread(() -> handleSearchFailure(searchType));
             }
         });
     }
@@ -212,15 +201,14 @@ public class SearchView extends LinearLayout {
         }
     }
 
-    @SuppressWarnings("unchecked")
-    private void handleSearchResult(SearchResultResponse response) {
-        switch (response.getSearchType()) {
-            case MUSIC -> setSearchMusicResult(response.getOffset(), (List<MusicDetail>) response.getResult());
-            case PLAYLIST -> setSearchPlaylistResult(response.getOffset(), (List<Playlist>) response.getResult());
-            case ALBUM -> setSearchAlbumResult(response.getOffset(), (List<Album>) response.getResult());
-            case ARTIST -> setSearchArtistResult(response.getOffset(), (List<Artist>) response.getResult());
-            default -> {
-            }
+    private void handleSearchFailure(SearchType searchType) {
+        SearchMeta searchMeta = searchMetas.get(searchType);
+        if (searchMeta == null) return;
+        CompletableFuture<CompletingType> pendingFuture = searchMeta.pendingFuture;
+        searchMeta.pendingFuture = null;
+        searchRefreshListeners.forEach(listener -> listener.accept(searchMeta));
+        if (pendingFuture != null) {
+            pendingFuture.complete(CompletingType.NO_MORE_RESULT);
         }
     }
 

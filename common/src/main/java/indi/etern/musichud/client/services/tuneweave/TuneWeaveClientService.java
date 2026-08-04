@@ -11,6 +11,8 @@ import indi.etern.musichud.beans.music.Album;
 import indi.etern.musichud.beans.music.Artist;
 import indi.etern.musichud.beans.music.Fee;
 import indi.etern.musichud.beans.music.FormatType;
+import indi.etern.musichud.beans.music.Lyric;
+import indi.etern.musichud.beans.music.LyricInfo;
 import indi.etern.musichud.beans.music.MusicDetail;
 import indi.etern.musichud.beans.music.MusicResourceInfo;
 import indi.etern.musichud.beans.music.UserCategoryPlaylists;
@@ -31,11 +33,16 @@ import java.util.List;
 import java.util.LinkedHashMap;
 import java.util.Map;
 import java.util.Objects;
+import java.util.concurrent.ConcurrentHashMap;
 
 /** Client-owned TuneWeave authentication and credential-scoped requests. */
 public final class TuneWeaveClientService {
     private static final TuneWeaveClientService INSTANCE = new TuneWeaveClientService();
     private final ClientConfig config = ClientConfig.getInstance();
+    private final Map<Long, MusicDetail> tracksById = new ConcurrentHashMap<>();
+    private final Map<Long, Playlist> playlistsById = new ConcurrentHashMap<>();
+    private final Map<Long, Album> albumsById = new ConcurrentHashMap<>();
+    private final Map<Long, Artist> artistsById = new ConcurrentHashMap<>();
 
     private TuneWeaveClientService() {
     }
@@ -59,6 +66,18 @@ public final class TuneWeaveClientService {
 
     public boolean hasCredential(TuneWeavePlatform platform) {
         return !credential(platform).isBlank();
+    }
+
+    public boolean hasPlaylist(long id) {
+        return playlistsById.containsKey(id);
+    }
+
+    public boolean hasAlbum(long id) {
+        return albumsById.containsKey(id);
+    }
+
+    public boolean hasArtist(long id) {
+        return artistsById.containsKey(id);
     }
 
     public String credential(TuneWeavePlatform platform) {
@@ -165,6 +184,7 @@ public final class TuneWeaveClientService {
         Playlist liked = Playlist.fromTuneWeave(
                 stableId(platform, "playlist:" + likeRef), likeRef, "Liked Songs", MusicHud.ICON_BASE64,
                 0, 0, Profile.ANONYMOUS);
+        playlistsById.put(liked.getId(), liked);
         return new UserCategoryPlaylists(liked, created, subscribed);
     }
 
@@ -190,6 +210,139 @@ public final class TuneWeaveClientService {
             if (!artist.getSourceRef().isBlank()) result.add(artist);
         }
         return result;
+    }
+
+    public Playlist loadPlaylistDetail(long id) {
+        Playlist cached = playlistsById.get(id);
+        if (cached == null || cached.getSourceRef().isBlank()) {
+            return Playlist.EMPTY;
+        }
+        return loadPlaylistDetail(cached.getSourceRef());
+    }
+
+    public Playlist loadPlaylistDetail(String reference) {
+        if (reference == null || reference.isBlank()) {
+            return Playlist.EMPTY;
+        }
+        TuneWeavePlatform platform = platformFromReference(reference);
+        if (reference.startsWith("account:favorite_tracks:")) {
+            Playlist playlist = playlistsById.values().stream()
+                    .filter(value -> reference.equals(value.getSourceRef()))
+                    .findFirst()
+                    .orElseGet(() -> Playlist.fromTuneWeave(stableId(platform, "playlist:" + reference),
+                            reference, "Liked Songs", MusicHud.ICON_BASE64, 0, 0, Profile.ANONYMOUS));
+            List<MusicDetail> tracks = new ArrayList<>();
+            for (JsonElement item : elements(requestForPlatform(platform, "GET", "/v1/account/favorites/tracks",
+                    Map.of("platform", platform.apiName(), "limit", "100", "offset", "0"), null).data())) {
+                MusicDetail track = toTrack(platform, unwrap(item));
+                if (track != MusicDetail.NONE) tracks.add(track);
+            }
+            ObservableSequencedSet<MusicDetail> likedTracks = new ObservableSequencedSet<>();
+            likedTracks.addAll(tracks);
+            playlist.setTracks(likedTracks);
+            playlist.setMusicTrackCount(tracks.size());
+            playlistsById.put(playlist.getId(), playlist);
+            return playlist;
+        }
+        Playlist playlist = toPlaylist(platform, unwrap(requestForPlatform(
+                platform, "GET", "/v1/playlists/"
+                        + TuneWeaveApiClient.encodePathSegment(reference), Map.of(), null).data()));
+        List<MusicDetail> tracks = new ArrayList<>();
+        for (JsonElement item : elements(requestForPlatform(platform, "GET",
+                "/v1/playlists/" + TuneWeaveApiClient.encodePathSegment(reference) + "/tracks",
+                Map.of("limit", "100", "offset", "0"), null).data())) {
+            MusicDetail track = toTrack(platformFromReference(reference), unwrap(item));
+            if (track != MusicDetail.NONE) tracks.add(track);
+        }
+        ObservableSequencedSet<MusicDetail> playlistTracks = new ObservableSequencedSet<>();
+        playlistTracks.addAll(tracks);
+        playlist.setTracks(playlistTracks);
+        playlist.setMusicTrackCount(tracks.size());
+        playlistsById.put(playlist.getId(), playlist);
+        return playlist;
+    }
+
+    public Album loadAlbumDetail(long id) {
+        Album cached = albumsById.get(id);
+        return cached == null ? Album.NONE : loadAlbumDetail(cached.getSourceRef());
+    }
+
+    public Album loadAlbumDetail(String reference) {
+        if (reference == null || reference.isBlank()) return Album.NONE;
+        TuneWeavePlatform platform = platformFromReference(reference);
+        Album album = toAlbum(platform, unwrap(requestForPlatform(platform, "GET", "/v1/albums/"
+                + TuneWeaveApiClient.encodePathSegment(reference), Map.of(), null).data()));
+        List<MusicDetail> tracks = new ArrayList<>();
+        for (JsonElement item : elements(requestForPlatform(platform, "GET", "/v1/albums/"
+                + TuneWeaveApiClient.encodePathSegment(reference) + "/tracks",
+                Map.of("limit", "100", "offset", "0"), null).data())) {
+            MusicDetail track = toTrack(platform, unwrap(item));
+            if (track != MusicDetail.NONE) tracks.add(track);
+        }
+        ObservableSequencedSet<MusicDetail> albumTracks = new ObservableSequencedSet<>();
+        albumTracks.addAll(tracks);
+        album.setMusicDetails(albumTracks);
+        return album;
+    }
+
+    public Artist loadArtistDetail(long id) {
+        Artist cached = artistsById.get(id);
+        return cached == null ? new Artist() : loadArtistDetail(cached.getSourceRef());
+    }
+
+    public Artist loadArtistDetail(String reference) {
+        if (reference == null || reference.isBlank()) return new Artist();
+        TuneWeavePlatform platform = platformFromReference(reference);
+        return toArtist(platform, unwrap(requestForPlatform(platform, "GET", "/v1/artists/"
+                + TuneWeaveApiClient.encodePathSegment(reference), Map.of(), null).data()));
+    }
+
+    public List<MusicDetail> loadArtistTracks(long id, int offset) {
+        Artist cached = artistsById.get(id);
+        if (cached == null) return List.of();
+        return loadArtistTracks(cached.getSourceRef(), offset);
+    }
+
+    public List<MusicDetail> loadArtistTracks(String reference, int offset) {
+        if (reference == null || reference.isBlank()) return List.of();
+        TuneWeavePlatform platform = platformFromReference(reference);
+        List<MusicDetail> result = new ArrayList<>();
+        for (JsonElement item : elements(requestForPlatform(platform, "GET", "/v1/artists/"
+                + TuneWeaveApiClient.encodePathSegment(reference) + "/tracks",
+                Map.of("limit", "50", "offset", Integer.toString(Math.max(0, offset))), null).data())) {
+            MusicDetail track = toTrack(platform, unwrap(item));
+            if (track != MusicDetail.NONE) result.add(track);
+        }
+        return result;
+    }
+
+    public MusicDetail loadTrackDetail(MusicDetail musicDetail) {
+        if (musicDetail == null || musicDetail.getSourceRef().isBlank()
+                || "video".equals(musicDetail.getSourceKind())) {
+            return musicDetail == null ? MusicDetail.NONE : musicDetail;
+        }
+        TuneWeavePlatform platform = platformFromReference(musicDetail.getSourceRef());
+        MusicDetail detail = toTrack(platform, unwrap(requestForPlatform(platform, "GET", "/v1/tracks/"
+                + TuneWeaveApiClient.encodePathSegment(musicDetail.getSourceRef()), Map.of(), null).data()));
+        if (detail != MusicDetail.NONE) {
+            tracksById.put(detail.getId(), detail);
+        }
+        return detail;
+    }
+
+    public LyricInfo loadLyrics(MusicDetail musicDetail) {
+        if (musicDetail == null || musicDetail.getSourceRef().isBlank()
+                || "video".equals(musicDetail.getSourceKind())) {
+            return LyricInfo.NONE;
+        }
+        TuneWeavePlatform platform = platformFromReference(musicDetail.getSourceRef());
+        JsonObject lyrics = unwrap(requestForPlatform(platform, "GET", "/v1/tracks/"
+                + TuneWeaveApiClient.encodePathSegment(musicDetail.getSourceRef()) + "/lyrics",
+                Map.of("word_synced", "true", "translated", "true", "romanized", "true"), null).data());
+        return new LyricInfo(new Lyric(string(lyrics, "plain", "")),
+                new Lyric(string(lyrics, "translated", "")),
+                new Lyric(string(lyrics, "word_synced", "")),
+                new Lyric(string(lyrics, "romanized", "")));
     }
 
     public List<UniPlaylistInfo> listUniPlaylists() {
@@ -342,6 +495,17 @@ public final class TuneWeaveClientService {
         return "/v1/uni/playlists/" + TuneWeaveApiClient.encodePathSegment(reference);
     }
 
+    private TuneWeavePlatform platformFromReference(String reference) {
+        if (reference.startsWith("account:favorite_tracks:")) {
+            int lastSeparator = reference.lastIndexOf(':');
+            return TuneWeavePlatform.fromApiName(reference.substring(lastSeparator + 1));
+        }
+        int separator = reference.indexOf(':');
+        return separator > 0
+                ? TuneWeavePlatform.fromApiName(reference.substring(0, separator))
+                : defaultPlatform();
+    }
+
     private static UniPlaylistInfo toUniPlaylist(JsonElement element) {
         JsonObject object = unwrap(element);
         String reference = string(object, "ref", string(object, "resource_ref", ""));
@@ -465,7 +629,7 @@ public final class TuneWeaveClientService {
         }
     }
 
-    private static Playlist toPlaylist(TuneWeavePlatform platform, JsonObject object) {
+    private Playlist toPlaylist(TuneWeavePlatform platform, JsonObject object) {
         String reference = string(object, "ref");
         if (reference == null || reference.isBlank()) {
             reference = string(object, "reference");
@@ -478,14 +642,16 @@ public final class TuneWeaveClientService {
         String creatorRef = string(creatorObject, "ref");
         Profile creator = new Profile(
                 string(creatorObject, "name", ""), "", stableId(platform, "user:" + creatorRef), VipType.NORMAL);
-        return Playlist.fromTuneWeave(
+        Playlist playlist = Playlist.fromTuneWeave(
                 stableId(platform, "playlist:" + reference), reference,
                 string(object, "name", reference), string(object, "cover_url", ""),
                 integer(object, "track_count", integer(object, "item_count", 0)),
                 integer(object, "play_count", 0), creator);
+        playlistsById.put(playlist.getId(), playlist);
+        return playlist;
     }
 
-    private static Album toAlbum(TuneWeavePlatform platform, JsonObject object) {
+    private Album toAlbum(TuneWeavePlatform platform, JsonObject object) {
         String reference = string(object, "ref", string(object, "reference", ""));
         if (reference.isBlank()) return Album.NONE;
         java.util.LinkedHashSet<Artist> artists = new java.util.LinkedHashSet<>();
@@ -495,24 +661,28 @@ public final class TuneWeaveClientService {
                 if (value.isJsonObject()) artists.add(toArtist(platform, value.getAsJsonObject()));
             });
         }
-        return new Album(stableId(platform, "album:" + reference), string(object, "name", reference),
+        Album album = new Album(stableId(platform, "album:" + reference), string(object, "name", reference),
                 string(object, "cover_url", string(object, "pic_url", "")), string(object, "kind", ""),
                 string(object, "company", ""), integer(object, "track_count", 0),
                 new ObservableSequencedSet<>(), artists, indi.etern.musichud.beans.music.PusherInfo.EMPTY, reference);
+        albumsById.put(album.getId(), album);
+        return album;
     }
 
-    private static Artist toArtist(TuneWeavePlatform platform, JsonObject object) {
+    private Artist toArtist(TuneWeavePlatform platform, JsonObject object) {
         String reference = string(object, "ref", string(object, "reference", ""));
         String name = string(object, "name", reference);
-        return new Artist(stableId(platform, "artist:" + (reference.isBlank() ? name : reference)), name,
+        Artist artist = new Artist(stableId(platform, "artist:" + (reference.isBlank() ? name : reference)), name,
                 string(object, "avatar_url", string(object, "cover_url", "")),
                 integer(object, "album_count", integer(object, "album_size", 0)),
                 integer(object, "music_count", integer(object, "music_size", 0)),
                 string(object, "description", ""), new ArrayList<>(),
                 integer(object, "total_music_count", integer(object, "music_count", 0)), reference);
+        if (!reference.isBlank()) artistsById.put(artist.getId(), artist);
+        return artist;
     }
 
-    private static MusicDetail toTrack(TuneWeavePlatform platform, JsonObject object) {
+    private MusicDetail toTrack(TuneWeavePlatform platform, JsonObject object) {
         String reference = string(object, "ref", string(object, "reference", ""));
         if (reference.isBlank()) return MusicDetail.NONE;
         List<Artist> artists = new ArrayList<>();
@@ -530,6 +700,7 @@ public final class TuneWeaveClientService {
                 string(object, "name", string(object, "title", reference)),
                 integer(object, "duration_ms", 0), album, artists);
         result.setPusherInfo(indi.etern.musichud.beans.music.PusherInfo.EMPTY);
+        tracksById.put(result.getId(), result);
         return result;
     }
 
