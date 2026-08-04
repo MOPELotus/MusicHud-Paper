@@ -22,6 +22,7 @@ public class Artist implements IdentifiedBeans {
             Codecs.STRING_UTF8, Artist::getDescription,
             Codecs.ofList(() -> MusicDetail.CODEC), Artist::getMusicDetails,
             Codecs.INT, Artist::getTotalMusicCount,
+            Codecs.STRING_UTF8, Artist::getSourceRef,
             Artist::new
     );
     long id;
@@ -37,11 +38,14 @@ public class Artist implements IdentifiedBeans {
     List<MusicDetail> musicDetails = new ArrayList<>();
     @Setter
     int totalMusicCount;
+    @Setter
+    String sourceRef = "";
 
     public String getName() {
         return Objects.requireNonNullElse(name, "");
     }
     public String getAvatarUrl() {return Objects.requireNonNullElse(avatarUrl, "");}
+    public String getSourceRef() {return Objects.requireNonNullElse(sourceRef, "");}
     public String getAvatarThumbnailUrl(int size) {return Objects.requireNonNullElse(avatarUrl, "") + "?param=" + size + "y" + size;}
     public String getDescription() {
         return Objects.requireNonNullElse(description, "");

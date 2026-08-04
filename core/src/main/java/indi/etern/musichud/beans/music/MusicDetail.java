@@ -24,6 +24,8 @@ public class MusicDetail implements IdentifiedBeans {
             Codecs.ofList(() -> Artist.CODEC), MusicDetail::getArtists,
             PusherInfo.CODEC, MusicDetail::getPusherInfo,
             LyricInfo.CODEC, MusicDetail::getLyricInfo,
+            Codecs.STRING_UTF8, MusicDetail::getSourceRef,
+            Codecs.STRING_UTF8, MusicDetail::getSourceKind,
             MusicDetail::new
     );
     public static final MusicDetail NONE = new MusicDetail();
@@ -49,6 +51,10 @@ public class MusicDetail implements IdentifiedBeans {
     List<String> translations = List.of();
     @Getter
     Fee fee = Fee.UNSET;
+    @Setter
+    String sourceRef = "";
+    @Setter
+    String sourceKind = "track";
 
     // only useful for server, and its a optional api field
     @SerializedName("privilege")
@@ -71,7 +77,9 @@ public class MusicDetail implements IdentifiedBeans {
             List<String> translations,
             List<Artist> artists,
             PusherInfo pusherInfo,
-            LyricInfo lyricInfo
+            LyricInfo lyricInfo,
+            String sourceRef,
+            String sourceKind
     ) {
         this.name = name;
         this.id = id;
@@ -83,6 +91,21 @@ public class MusicDetail implements IdentifiedBeans {
         this.translations = translations;
         this.pusherInfo = pusherInfo;
         this.lyricInfo = lyricInfo;
+        this.sourceRef = sourceRef;
+        this.sourceKind = sourceKind;
+    }
+
+    public static MusicDetail fromTuneWeave(long id, String sourceRef, String sourceKind, String name,
+                                            int durationMillis, Album album, List<Artist> artists) {
+        MusicDetail detail = new MusicDetail();
+        detail.id = id;
+        detail.sourceRef = Objects.requireNonNullElse(sourceRef, "");
+        detail.sourceKind = Objects.requireNonNullElse(sourceKind, "track");
+        detail.name = Objects.requireNonNullElse(name, "");
+        detail.durationMillis = durationMillis;
+        detail.album = Objects.requireNonNullElse(album, Album.NONE);
+        detail.artists = artists == null ? List.of() : artists;
+        return detail;
     }
 
     public String getName() {
@@ -120,6 +143,14 @@ public class MusicDetail implements IdentifiedBeans {
 
     public LyricInfo getLyricInfo() {
         return Objects.requireNonNullElse(lyricInfo, LyricInfo.NONE);
+    }
+
+    public String getSourceRef() {
+        return Objects.requireNonNullElse(sourceRef, "");
+    }
+
+    public String getSourceKind() {
+        return Objects.requireNonNullElse(sourceKind, "track");
     }
 
     @Override

@@ -27,6 +27,7 @@ public class Playlist implements MusicCollection {
             Codecs.ofEnum(Privacy.class), Playlist::getPrivacy,
             Codecs.ofCollection(ObservableSequencedSet::new, () -> MusicDetail.CODEC), Playlist::getTracks,
             PusherInfo.CODEC, Playlist::getPusherInfo,
+            Codecs.STRING_UTF8, Playlist::getSourceRef,
             Playlist::new
     );
 
@@ -54,6 +55,8 @@ public class Playlist implements MusicCollection {
     // Not contained in the original API response, set separately
     @Getter
     PusherInfo pusherInfo = PusherInfo.EMPTY;
+    @Setter
+    String sourceRef = "";
 
     private boolean nullFiltered = false;
 
@@ -68,7 +71,8 @@ public class Playlist implements MusicCollection {
             Profile creator,
             Privacy privacy,
             ObservableSequencedSet<MusicDetail> tracks,
-            PusherInfo pusherInfo
+            PusherInfo pusherInfo,
+            String sourceRef
     ) {
         this.id = id;
         this.name = name;
@@ -81,6 +85,7 @@ public class Playlist implements MusicCollection {
         this.privacy = privacy;
         this.tracks = tracks;
         this.pusherInfo = pusherInfo;
+        this.sourceRef = sourceRef;
     }
 
     public static Playlist privacyBlocked(long id, Profile creator) {
@@ -94,6 +99,19 @@ public class Playlist implements MusicCollection {
     public static Playlist empty(long id) {
         Playlist playlist = new Playlist();
         playlist.id = id;
+        return playlist;
+    }
+
+    public static Playlist fromTuneWeave(long id, String sourceRef, String name, String coverUrl,
+                                         int trackCount, int playedCount, Profile creator) {
+        Playlist playlist = new Playlist();
+        playlist.id = id;
+        playlist.sourceRef = Objects.requireNonNullElse(sourceRef, "");
+        playlist.name = Objects.requireNonNullElse(name, "");
+        playlist.coverImgUrl = Objects.requireNonNullElse(coverUrl, MusicHud.ICON_BASE64);
+        playlist.musicTrackCount = Math.max(0, trackCount);
+        playlist.playedCount = Math.max(0, playedCount);
+        playlist.creator = Objects.requireNonNullElse(creator, Profile.ANONYMOUS);
         return playlist;
     }
 
@@ -118,6 +136,10 @@ public class Playlist implements MusicCollection {
 
     public String getCoverImgId_str() {
         return Objects.requireNonNullElse(coverImgId_str, "");
+    }
+
+    public String getSourceRef() {
+        return Objects.requireNonNullElse(sourceRef, "");
     }
 
     public String getCoverImgUrl() {
@@ -189,6 +211,7 @@ public class Playlist implements MusicCollection {
         playlist.musicTrackCount = musicTrackCount;
         playlist.playedCount = playedCount;
         playlist.pusherInfo = pusherInfo;
+        playlist.sourceRef = sourceRef;
         return playlist;
     }
 

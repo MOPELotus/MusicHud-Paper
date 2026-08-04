@@ -148,6 +148,21 @@ public class Codecs {
         }
     };
 
+    /** JSON and API responses can contain paged catalog data. */
+    public static final ByteBufCodec<String> LARGE_STRING_UTF8 = new ByteBufCodec<>() {
+        private static final int MAX_LENGTH = 4 * 1024 * 1024;
+
+        @Override
+        public String decode(ByteBuf byteBuf) {
+            return VanillaUtf8String.read(byteBuf, MAX_LENGTH);
+        }
+
+        @Override
+        public void encode(ByteBuf byteBuf, String value) {
+            VanillaUtf8String.write(byteBuf, value == null ? "" : value, MAX_LENGTH);
+        }
+    };
+
     public static final ByteBufCodec<ZonedDateTime> ZONED_DATE_TIME =
             new ByteBufCodec<>() {
                 @Override
@@ -253,6 +268,33 @@ public class Codecs {
                 for (T t : s) {
                     codec.encode(buf, t);
                 }
+            }
+        };
+    }
+
+    public static ByteBufCodec<Map<String, String>> ofStringMap() {
+        return new ByteBufCodec<>() {
+            @Override
+            public Map<String, String> decode(ByteBuf buf) {
+                int size = buf.readInt();
+                if (size < 0 || size > 1024) {
+                    throw new DecoderException("String map size is out of bounds: " + size);
+                }
+                Map<String, String> result = new LinkedHashMap<>();
+                for (int i = 0; i < size; i++) {
+                    result.put(STRING_UTF8.decode(buf), STRING_UTF8.decode(buf));
+                }
+                return result;
+            }
+
+            @Override
+            public void encode(ByteBuf buf, Map<String, String> value) {
+                Map<String, String> map = value == null ? Map.of() : value;
+                buf.writeInt(map.size());
+                map.forEach((key, entry) -> {
+                    STRING_UTF8.encode(buf, key == null ? "" : key);
+                    STRING_UTF8.encode(buf, entry == null ? "" : entry);
+                });
             }
         };
     }

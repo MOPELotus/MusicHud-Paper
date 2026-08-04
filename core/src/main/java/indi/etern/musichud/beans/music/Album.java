@@ -23,6 +23,7 @@ public class Album implements MusicCollection {
             Codecs.ofCollection(ObservableSequencedSet::new, () -> MusicDetail.CODEC), Album::getMusicDetails,
             Codecs.ofCollection(LinkedHashSet::new, () -> Artist.CODEC), Album::getArtists,
             PusherInfo.CODEC, Album::getPusherInfo,
+            Codecs.STRING_UTF8, Album::getSourceRef,
             Album::new
     );
     public static final Album NONE = new Album();
@@ -42,6 +43,8 @@ public class Album implements MusicCollection {
     // Not contained in the original API response, set separately
     @Getter
     transient PusherInfo pusherInfo = PusherInfo.EMPTY;
+    @Setter
+    String sourceRef = "";
 
     private boolean nullFiltered = false;
 
@@ -54,7 +57,8 @@ public class Album implements MusicCollection {
             Integer musicTrackCount,
             ObservableSequencedSet<MusicDetail> musicDetails,
             LinkedHashSet<Artist> artists,
-            PusherInfo pusherInfo
+            PusherInfo pusherInfo,
+            String sourceRef
     ) {
         this.id = id;
         this.name = name;
@@ -65,6 +69,7 @@ public class Album implements MusicCollection {
         this.musicDetails = musicDetails;
         this.artists = artists;
         this.pusherInfo = pusherInfo;
+        this.sourceRef = sourceRef;
     }
 
     public String getThumbnailPicUrl(int size) {
@@ -82,6 +87,10 @@ public class Album implements MusicCollection {
 
     public String getPicUrl() {
         return Objects.requireNonNullElse(picUrl, "");
+    }
+
+    public String getSourceRef() {
+        return Objects.requireNonNullElse(sourceRef, "");
     }
 
     public String getType() {
@@ -122,6 +131,7 @@ public class Album implements MusicCollection {
         album.musicTrackCount = this.musicTrackCount;
         album.company = this.company;
         album.type = this.type;
+        album.sourceRef = this.sourceRef;
         return album;
     }
 
@@ -129,6 +139,7 @@ public class Album implements MusicCollection {
     public Album copyWithPusherInfo(PusherInfo pusherInfo) {
         Album album = shallowCopyBriefInfo();
         album.pusherInfo = pusherInfo;
+        album.sourceRef = sourceRef;
         return album;
     }
 
