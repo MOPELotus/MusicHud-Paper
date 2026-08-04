@@ -101,14 +101,6 @@ public interface ClientConfig {
 
     void setClientAccountConfig(ProfileConfigData clientAccountConfig);
 
-    /**
-     * Opaque TuneWeave caller credentials encoded as a local JSON map. These
-     * values must never be included in a Minecraft payload.
-     */
-    String getTuneWeaveClientCredentials();
-
-    void setTuneWeaveClientCredentials(String tuneWeaveClientCredentials);
-
     boolean getEnabledInIntegratedServer();
 
     void setEnabledInIntegratedServer(boolean enabledInIntegratedServer);

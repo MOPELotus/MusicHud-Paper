@@ -5,7 +5,8 @@ import indi.etern.musichud.interfaces.RegisterMark;
 import indi.etern.musichud.network.ByteBufCodec;
 import indi.etern.musichud.network.INetworkRegister;
 import indi.etern.musichud.network.payloads.C2SPayload;
-import indi.etern.musichud.server.api.PlayerSessionRegistry;
+import indi.etern.musichud.server.api.ApiProvider;
+import indi.etern.musichud.server.api.ILoginApiService;
 import indi.etern.musichud.utils.ServerDataPacketVThreadExecutor;
 import lombok.AccessLevel;
 import lombok.NoArgsConstructor;
@@ -22,7 +23,8 @@ public class LogoutMessage implements C2SPayload {
             INetworkRegister.getInstance().autoRegisterPayload(
                     LogoutMessage.class, CODEC,
                     ServerDataPacketVThreadExecutor.execute((message, player) -> {
-                        PlayerSessionRegistry.getInstance().leave(player);
+                        ILoginApiService loginApiService = ILoginApiService.getInstance(ApiProvider.NCM);
+                        loginApiService.logout(player);
                     })
             );
         }
