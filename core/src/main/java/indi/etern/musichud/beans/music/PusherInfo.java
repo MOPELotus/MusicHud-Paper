@@ -3,6 +3,9 @@ package indi.etern.musichud.beans.music;
 import indi.etern.musichud.network.ByteBufCodec;
 import indi.etern.musichud.network.Codecs;
 import indi.etern.musichud.network.IPlayerClient;
+import indi.etern.musichud.server.api.ApiProvider;
+import indi.etern.musichud.server.api.ILoginApiService;
+import indi.etern.musichud.server.api.impl.ncm.LoginApiService;
 import lombok.Getter;
 import lombok.NonNull;
 
@@ -29,7 +32,15 @@ public final class PusherInfo {
     }
 
     public static PusherInfo ofPlayer(IPlayerClient player) {
-        return new PusherInfo(player.getUUID(), player.getName());
+        LoginApiService.PlayerLoginInfo loginInfo = ILoginApiService.getInstance(ApiProvider.NCM).getPlayerInfoMap().get(player.getUUID());
+        PusherInfo pusherInfo = PusherInfo.EMPTY;
+        if (loginInfo != null) {
+            pusherInfo = new PusherInfo(
+                    player.getUUID(),
+                    player.getName()
+            );
+        }
+        return pusherInfo;
     }
 
     @Override

@@ -5,6 +5,8 @@ import icyllis.modernui.core.Context;
 import icyllis.modernui.mc.ConfigItem;
 import icyllis.modernui.mc.MuiModApi;
 import icyllis.modernui.mc.ui.PreferencesFragment;
+import icyllis.modernui.text.SpannableString;
+import icyllis.modernui.text.style.URLSpan;
 import icyllis.modernui.view.Gravity;
 import icyllis.modernui.view.View;
 import icyllis.modernui.view.ViewGroup;
@@ -15,27 +17,39 @@ import indi.etern.musichud.beans.music.Quality;
 import indi.etern.musichud.client.services.LoginService;
 import indi.etern.musichud.client.ui.Theme;
 import indi.etern.musichud.client.ui.ToastUtil;
+import indi.etern.musichud.client.ui.components.Modal;
 import indi.etern.musichud.client.ui.components.DynamicIntegerOption;
 import indi.etern.musichud.client.ui.components.LyricLineView;
-import indi.etern.musichud.client.ui.components.Modal;
 import indi.etern.musichud.client.ui.components.StaggeredLyricScrollView;
-import indi.etern.musichud.client.ui.utils.ui.ButtonInsetBackgroundFactory;
 import indi.etern.musichud.client.ui.hud.HudRendererManager;
 import indi.etern.musichud.client.ui.hud.metadata.HorizontalAlign;
 import indi.etern.musichud.client.ui.hud.metadata.VerticalAlign;
 import indi.etern.musichud.client.ui.screen.MainFragment;
 import indi.etern.musichud.client.ui.screen.MusicHudScreen;
+import indi.etern.musichud.client.ui.utils.ui.ButtonInsetBackgroundFactory;
 import indi.etern.musichud.interfaces.ClientConfig;
 import indi.etern.musichud.interfaces.IClientLoginService;
 import indi.etern.musichud.interfaces.ServerConfig;
-import indi.etern.musichud.server.api.ApiServerManager;
-import indi.etern.musichud.server.api.MusicPlayerServerService;
+import indi.etern.musichud.server.api.*;
+import indi.etern.musichud.utils.http.ApiClient;
 import lombok.Getter;
+import net.minecraft.Util;
 import net.minecraft.client.resources.language.I18n;
 import org.apache.commons.lang3.Range;
+import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
+import org.lwjgl.glfw.GLFW;
+import org.lwjgl.util.tinyfd.TinyFileDialogs;
 
+import java.io.IOException;
+import java.nio.file.Files;
+import java.nio.file.Path;
+import java.nio.file.Paths;
 import java.util.*;
+import java.util.concurrent.CancellationException;
+import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.function.Consumer;
 
 import static icyllis.modernui.view.ViewGroup.LayoutParams.MATCH_PARENT;
 import static icyllis.modernui.view.ViewGroup.LayoutParams.WRAP_CONTENT;
@@ -46,31 +60,6 @@ public class ConfigView extends LinearLayout {
     @Getter
     static volatile ConfigView instance;
     private final IClientLoginService IClientLoginService = LoginService.getInstance();
-
-    private void showTuneWeaveDownloadDialog(Context context) {
-        LinearLayout content = new LinearLayout(context);
-        content.setOrientation(LinearLayout.VERTICAL);
-        TextView description = new TextView(context);
-        description.setText("将从 TuneWeave 上游发布清单下载与你的系统匹配的版本，并校验 SHA-256。下载完成后会启动当前这一个 TuneWeave 服务。");
-        description.setTextColor(Theme.NORMAL_TEXT_COLOR);
-        description.setTextSize(Theme.TEXT_SIZE_NORMAL);
-        content.addView(description);
-        TextView title = new TextView(context);
-        title.setText("下载 TuneWeave");
-        Modal dialog = new Modal(context, title, content,
-                new Modal.ActionButton("取消", (button, modal) -> modal.dismiss()),
-                new Modal.ActionButton("下载并启动", (button, modal) -> {
-                    modal.dismiss();
-                    ApiServerManager manager = ApiServerManager.getInstance();
-                    if (manager == null) {
-                        ToastUtil.show("TuneWeave 管理器尚未初始化");
-                        return;
-                    }
-                    manager.downloadAndStartTuneWeave();
-                    ToastUtil.show("正在下载并启动 TuneWeave…");
-                }));
-        dialog.show();
-    }
 
     public ConfigView(Context context) {
         super(context);
@@ -403,12 +392,15 @@ public class ConfigView extends LinearLayout {
             enableInIntegratedServerOption.create(integratedServerCategory);
             ApiServerManager apiServerManager = ApiServerManager.getInstance();
             enableInIntegratedServerOption.setOnChanged(() -> {
+                ILoginApiService loginApiService = ILoginApiService.getInstance(ApiProvider.NCM);
                 if (clientConfig.getEnabledInIntegratedServer()) {
                     if (apiServerManager != null) {
                         apiServerManager.restartApiServer();
                     }
+                    loginApiService.reconnectAll();
                 } else {
                     MusicPlayerServerService.getInstance().reset();
+                    loginApiService.disconnectToAll();
                     if (apiServerManager != null) {
                         apiServerManager.stopApiServer();
                     }
@@ -429,44 +421,6 @@ public class ConfigView extends LinearLayout {
             params1.setMargins(0, dp(6), 0, dp(128));
             view.addView(apiCategory, params1);
 
-            TextView tuneWeaveHint = new TextView(context);
-            tuneWeaveHint.setText("Music HUD 的播放、账户、收藏和聚合歌单共用同一 TuneWeave 服务。\n加入服务器后会自动使用服务器公布的地址；本地登录凭证仍只保存在当前客户端。\n默认：http://127.0.0.1:7832");
-            tuneWeaveHint.setTextColor(Theme.SECONDARY_TEXT_COLOR);
-            tuneWeaveHint.setTextSize(Theme.TEXT_SIZE_NORMAL);
-            apiCategory.addView(tuneWeaveHint);
-
-            {
-                LinearLayout inputBox = PreferencesFragment.createInputBox(context, "TuneWeave 服务地址");
-                EditText input = inputBox.findViewById(R.id.input);
-                if (input != null) {
-                    input.setMinimumWidth(dp(256));
-                    input.setTextAlignment(TEXT_ALIGNMENT_TEXT_START);
-                    input.setText(serverConfig.getServerApiBaseUrl());
-                    input.setOnFocusChangeListener((v, focused) -> {
-                        if (!focused) {
-                            serverConfig.setServerApiBaseUrl(input.getText().toString());
-                            serverConfig.save();
-                        }
-                    });
-                }
-                apiCategory.addView(inputBox);
-            }
-
-            Button downloadTuneWeave = new Button(context);
-            downloadTuneWeave.setText("下载 / 更新本地 TuneWeave");
-            downloadTuneWeave.setTextColor(Theme.PRIMARY_COLOR);
-            downloadTuneWeave.setTextSize(Theme.TEXT_SIZE_NORMAL);
-            downloadTuneWeave.setBackground(ButtonInsetBackgroundFactory.builder().cornerRadius(dp(4)).inset(dp(1))
-                    .padding(new ButtonInsetBackgroundFactory.Padding(dp(8), 0, dp(8), 0)).build().newBackgroundDrawable());
-            downloadTuneWeave.setOnClickListener(view1 -> showTuneWeaveDownloadDialog(context));
-            LayoutParams downloadTuneWeaveParams = new LayoutParams(WRAP_CONTENT, WRAP_CONTENT);
-            downloadTuneWeaveParams.setMargins(0, dp(8), 0, 0);
-            apiCategory.addView(downloadTuneWeave, downloadTuneWeaveParams);
-
-            /* Retired NCM binary-server controls.  TuneWeave is configured
-             * solely by the address field above and is never downloaded or
-             * managed by the Minecraft client. */
-            /*
             PreferencesFragment.BooleanOption startupBinaryApiServerOption = new PreferencesFragment.BooleanOption(
                     context,
                     I18n.get(MusicHud.MOD_ID + ".config.apiServer.startupBinaryApiServerWhenLaunch"),
@@ -778,14 +732,12 @@ public class ConfigView extends LinearLayout {
                     });
                 }
             });
-            */
         } catch (Exception e) {
             instance = null;
             throw e;
         }
     }
 
-    /*
     private static void updateApiLogLabel(TextView label) {
         long[] stats = ApiServerManager.getInstance().getLogStats();
         String template = I18n.get(MusicHud.MOD_ID + ".text.apiLogInfo");
@@ -821,7 +773,6 @@ public class ConfigView extends LinearLayout {
         content.setOrientation(LinearLayout.VERTICAL);
 
         TextView title = new TextView(context);
-        title.setText(I18n.get(MusicHud.MOD_ID + ".modal.downloadApiServer.title"));
         title.setTextSize(Theme.TEXT_SIZE_LARGE);
 
         TextView description = new TextView(context);
@@ -964,14 +915,14 @@ public class ConfigView extends LinearLayout {
         progressLayout.addView(progressBar, progParams);
         progressLayout.addView(progressText, new LayoutParams(WRAP_CONTENT, WRAP_CONTENT));
 
-        LayoutParams params4 = new LayoutParams(MATCH_PARENT, WRAP_CONTENT);
-        params4.setMargins(0, 0, 0, dp(8));
+//        LayoutParams params4 = new LayoutParams(MATCH_PARENT, WRAP_CONTENT);
+//        params4.setMargins(0, 0, 0, dp(8));
         LayoutParams params5 = new LayoutParams(MATCH_PARENT, WRAP_CONTENT);
         params5.setMargins(0, dp(4), 0, dp(4));
 
         LinearLayout idlePage = new LinearLayout(context);
         idlePage.setOrientation(LinearLayout.VERTICAL);
-        idlePage.addView(title, params4);
+//        idlePage.addView(title, params4);
         idlePage.addView(description);
         idlePage.addView(descriptionUrl);
         idlePage.addView(directoryLayout, params5);
@@ -979,9 +930,9 @@ public class ConfigView extends LinearLayout {
         idlePage.addView(releaseInfoLayout);
         idlePage.addView(existingVersionWarning);
 
-        TextView dlTitle = new TextView(context);
-        dlTitle.setText(I18n.get(MusicHud.MOD_ID + ".modal.downloadApiServer.title"));
-        dlTitle.setTextSize(Theme.TEXT_SIZE_LARGE);
+//        TextView dlTitle = new TextView(context);
+//        dlTitle.setText(baseTitle);
+//        dlTitle.setTextSize(Theme.TEXT_SIZE_LARGE);
 
         TextView dlDesc = new TextView(context);
         dlDesc.setText(I18n.get(MusicHud.MOD_ID + ".modal.downloadApiServer.downloading.description"));
@@ -991,9 +942,9 @@ public class ConfigView extends LinearLayout {
         LinearLayout progressPage = new LinearLayout(context);
         progressPage.setOrientation(LinearLayout.VERTICAL);
         progressPage.setVisibility(GONE);
-        LayoutParams params6 = new LayoutParams(MATCH_PARENT, WRAP_CONTENT);
-        params6.setMargins(0, 0, 0, dp(8));
-        progressPage.addView(dlTitle, params6);
+//        LayoutParams params6 = new LayoutParams(MATCH_PARENT, WRAP_CONTENT);
+//        params6.setMargins(0, 0, 0, dp(8));
+//        progressPage.addView(dlTitle, params6);
         progressPage.addView(dlDesc);
         progressPage.addView(progressLayout);
 
@@ -1001,15 +952,12 @@ public class ConfigView extends LinearLayout {
         donePage.setOrientation(LinearLayout.VERTICAL);
         donePage.setVisibility(GONE);
 
-        TextView doneTitle = new TextView(context);
-        doneTitle.setTextSize(Theme.TEXT_SIZE_LARGE);
-        doneTitle.setText(I18n.get(MusicHud.MOD_ID + ".modal.downloadApiServer.done.title"));
+        String doneTitle = I18n.get(MusicHud.MOD_ID + ".modal.downloadApiServer.done.title");
 
         TextView doneDesc = new TextView(context);
         doneDesc.setTextSize(Theme.TEXT_SIZE_NORMAL);
         doneDesc.setTextColor(Theme.NORMAL_TEXT_COLOR);
 
-        donePage.addView(doneTitle, params4);
         donePage.addView(doneDesc);
 
         content.addView(idlePage);
@@ -1024,12 +972,27 @@ public class ConfigView extends LinearLayout {
         final CompletableFuture<?>[] downloadFuture = {null};
         final AtomicBoolean cancelled = new AtomicBoolean(false);
 
+        String baseTitle = I18n.get(MusicHud.MOD_ID + ".modal.downloadApiServer.title");
         java.util.function.Consumer<Page> setPage = page -> {
             switch (page) {
-                case IDLE -> { idlePage.setVisibility(VISIBLE); progressPage.setVisibility(GONE); donePage.setVisibility(GONE); }
-                case DOWNLOADING -> { idlePage.setVisibility(GONE); progressPage.setVisibility(VISIBLE); donePage.setVisibility(GONE); }
-                case DONE -> { idlePage.setVisibility(GONE); progressPage.setVisibility(GONE); donePage.setVisibility(VISIBLE); }
-                case RESETTING -> { idlePage.setVisibility(VISIBLE); progressPage.setVisibility(GONE); donePage.setVisibility(GONE); }
+                case IDLE, RESETTING -> {
+                    title.setText(baseTitle);
+                    idlePage.setVisibility(VISIBLE);
+                    progressPage.setVisibility(GONE);
+                    donePage.setVisibility(GONE);
+                }
+                case DOWNLOADING -> {
+                    title.setText(baseTitle);
+                    idlePage.setVisibility(GONE);
+                    progressPage.setVisibility(VISIBLE);
+                    donePage.setVisibility(GONE);
+                }
+                case DONE -> {
+                    title.setText(doneTitle);
+                    idlePage.setVisibility(GONE);
+                    progressPage.setVisibility(GONE);
+                    donePage.setVisibility(VISIBLE);
+                }
             }
         };
 
@@ -1149,9 +1112,7 @@ public class ConfigView extends LinearLayout {
             }
         });
 
-        Modal dialog = new Modal(context, content,
-                confirmButton, cancelBtn
-        );
+        Modal dialog = new Modal(context, title, content, confirmButton, cancelBtn);
 
         dialog.setOnDismissListener(() -> {
             if (Page.RESETTING.equals(state[0])) {
@@ -1209,5 +1170,4 @@ public class ConfigView extends LinearLayout {
             warning.setVisibility(GONE);
         }
     }
-    */
 }

@@ -9,23 +9,29 @@ import indi.etern.musichud.server.api.ApiProvider;
 import indi.etern.musichud.server.api.IMusicApiService;
 import lombok.AllArgsConstructor;
 import lombok.Getter;
+
 import java.util.LinkedHashSet;
 
 @Getter
 @AllArgsConstructor
 public class GetUserArtistsRequest extends ApiRequestPayload {
     public static final ByteBufCodec<GetUserArtistsRequest> CODEC = RequestResponseCodecs.withCycleId(
-            ByteBufCodec.composite(Codecs.BOOL, GetUserArtistsRequest::isIgnoreCache, GetUserArtistsRequest::new)
+            ByteBufCodec.composite(
+                    Codecs.BOOL,
+                    GetUserArtistsRequest::isIgnoreCache,
+                    GetUserArtistsRequest::new
+            )
     );
+
     private final boolean ignoreCache;
 
     @RegisterMark
     public static class RegisterImpl implements CommonRegister {
         public void register() {
             RequestHandlerRegistry.autoRegisterPayload(GetUserArtistsRequest.class, CODEC, (request, player) -> {
-                LinkedHashSet<Artist> artists = IMusicApiService.getInstance(ApiProvider.TUNEWEAVE)
+                LinkedHashSet<Artist> playersUserArtists = IMusicApiService.getInstance(ApiProvider.NCM)
                         .getPlayersUserSubscribedArtists(request.isIgnoreCache(), player.getUUID());
-                return ResponseResult.of(new GetUserArtistsResponse(artists));
+                return ResponseResult.of(new GetUserArtistsResponse(playersUserArtists));
             });
         }
     }

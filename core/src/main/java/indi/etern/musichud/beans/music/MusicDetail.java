@@ -12,43 +12,22 @@ import java.util.List;
 import java.util.Objects;
 
 @NoArgsConstructor(access = AccessLevel.PUBLIC)
-public class MusicDetail {
+public class MusicDetail implements IdentifiedBeans{
     public static final ByteBufCodec<MusicDetail> CODEC = ByteBufCodec.composite(
-            Codecs.STRING_UTF8,
-            MusicDetail::getName,
-            Codecs.STRING_UTF8,
-            MusicDetail::getSourceRef,
-            Codecs.STRING_UTF8,
-            MusicDetail::getSourceKind,
-            Codecs.LONG,
-            MusicDetail::getId,
-            Codecs.ofList(() -> Artist.CODEC),
-            MusicDetail::getArtists,
-            Codecs.ofList(() -> Codecs.STRING_UTF8),
-            MusicDetail::getAlias,
-            Album.CODEC,
-            MusicDetail::getAlbum,
-            Codecs.INT,
-            MusicDetail::getDurationMillis,
-            Codecs.ofList(() -> Codecs.STRING_UTF8),
-            MusicDetail::getTranslations,
-            PusherInfo.CODEC,
-            MusicDetail::getPusherInfo,
-            LyricInfo.CODEC,
-            MusicDetail::getLyricInfo,
+            Codecs.LONG, MusicDetail::getId,
+            Codecs.STRING_UTF8, MusicDetail::getName,
+            Codecs.INT, MusicDetail::getDurationMillis,
+            Codecs.ofEnum(Fee.class), MusicDetail::getFee,
+            Album.CODEC, MusicDetail::getAlbum,
+            Codecs.ofList(() -> Codecs.STRING_UTF8), MusicDetail::getAlias,
+            Codecs.ofList(() -> Codecs.STRING_UTF8), MusicDetail::getTranslations,
+            Codecs.ofList(() -> Artist.CODEC), MusicDetail::getArtists,
+            PusherInfo.CODEC, MusicDetail::getPusherInfo,
+            LyricInfo.CODEC, MusicDetail::getLyricInfo,
             MusicDetail::new
     );
     public static final MusicDetail NONE = new MusicDetail();
     String name = "";
-    /**
-     * The canonical TuneWeave reference (for example {@code qq:0039MnYb0qxYhV}).
-     * {@link #id} remains a transport/cache key so older UI code can continue to
-     * use a numeric identifier without losing non-numeric provider IDs.
-     */
-    @Getter
-    String sourceRef = "";
-    @Getter
-    String sourceKind = "track";
     @Getter
     long id;
     @SerializedName("ar")
@@ -68,6 +47,8 @@ public class MusicDetail {
     long mark; // bit mask
     @SerializedName("tns")
     List<String> translations = List.of();
+    @Getter
+    Fee fee = Fee.UNSET;
 
     // only useful for server, and its a optional api field
     @SerializedName("privilege")
@@ -81,24 +62,22 @@ public class MusicDetail {
     LyricInfo lyricInfo = LyricInfo.NONE;
 
     protected MusicDetail(
-            String name,
-            String sourceRef,
-            String sourceKind,
             long id,
-            List<Artist> artists,
-            List<String> alias,
-            Album album,
+            String name,
             int durationMillis,
+            Fee fee,
+            Album album,
+            List<String> alias,
             List<String> translations,
+            List<Artist> artists,
             PusherInfo pusherInfo,
             LyricInfo lyricInfo
     ) {
         this.name = name;
-        this.sourceRef = sourceRef;
-        this.sourceKind = sourceKind;
         this.id = id;
         this.artists = artists;
         this.alias = alias;
+        this.fee = fee;
         this.album = album;
         this.durationMillis = durationMillis;
         this.translations = translations;
@@ -108,20 +87,6 @@ public class MusicDetail {
 
     public String getName() {
         return Objects.requireNonNullElse(name, "");
-    }
-
-    public static MusicDetail fromTuneWeave(
-            String sourceRef,
-            String sourceKind,
-            long id,
-            String name,
-            List<Artist> artists,
-            Album album,
-            int durationMillis,
-            List<String> aliases
-    ) {
-        return new MusicDetail(name, sourceRef, sourceKind, id, artists, aliases, album,
-                durationMillis, List.of(), PusherInfo.EMPTY, LyricInfo.NONE);
     }
 
     public List<Artist> getArtists() {
