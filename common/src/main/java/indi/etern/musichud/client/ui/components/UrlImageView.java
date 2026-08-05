@@ -258,7 +258,7 @@ public class UrlImageView extends FrameLayout {
                             if (bitmap == null) {
                                 throw new RuntimeException("failed to load image from base64 string");
                             }
-                            Image textureFromBitmap = Image.createTextureFromBitmap(bitmap);
+                            Image textureFromBitmap = createTexture(bitmap);
                             if (textureFromBitmap != null) {
                                 createDrawable(textureFromBitmap, base64String);
                             }
@@ -285,7 +285,7 @@ public class UrlImageView extends FrameLayout {
                                         if (bitmap == null) {
                                             throw new RuntimeException("failed to load image");
                                         }
-                                        Image textureFromBitmap = Image.createTextureFromBitmap(bitmap);
+                                        Image textureFromBitmap = createTexture(bitmap);
                                         if (textureFromBitmap != null) {
                                             createDrawable(textureFromBitmap, urlString);
                                         }
@@ -346,6 +346,18 @@ public class UrlImageView extends FrameLayout {
                     }
                 }
             });
+        }
+    }
+
+    private Image createTexture(Bitmap bitmap) {
+        if (!squareCrop || bitmap.getWidth() == bitmap.getHeight()) {
+            return Image.createTextureFromBitmap(bitmap);
+        }
+        int side = Math.min(bitmap.getWidth(), bitmap.getHeight());
+        int left = (bitmap.getWidth() - side) / 2;
+        int top = (bitmap.getHeight() - side) / 2;
+        try (Bitmap cropped = bitmap.subImage(left, top, side, side)) {
+            return Image.createTextureFromBitmap(cropped);
         }
     }
 

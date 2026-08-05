@@ -349,7 +349,7 @@ public class MainFragment extends Fragment {
                 platformIcon.setVisibility(View.INVISIBLE);
                 int rowHeight = pusherText.dp(Theme.TEXT_SIZE_LARGER);
                 LinearLayout.LayoutParams platformIconParams = new LinearLayout.LayoutParams(rowHeight, rowHeight);
-                platformIconParams.setMargins(0, 0, pusherText.dp(4), 0);
+                platformIconParams.setMargins(0, 0, pusherText.dp(8), 0);
                 pusherRow.addView(platformIcon, platformIconParams);
 
                 pusherHeadView = new PlayerHeadView(context);
