@@ -15,11 +15,14 @@ import icyllis.modernui.widget.TextView;
 import com.google.gson.JsonObject;
 import com.google.gson.JsonParser;
 import indi.etern.musichud.MusicHud;
+import indi.etern.musichud.beans.api.SearchType;
+import indi.etern.musichud.beans.music.Playlist;
 import indi.etern.musichud.client.services.tuneweave.TuneWeaveClientService;
 import indi.etern.musichud.client.ui.Theme;
 import indi.etern.musichud.client.ui.components.Modal;
 import indi.etern.musichud.client.ui.components.RouterContainer;
 import indi.etern.musichud.client.ui.utils.ui.ButtonInsetBackgroundFactory;
+import indi.etern.musichud.server.api.tuneweave.TuneWeavePlatform;
 import net.minecraft.client.resources.language.I18n;
 import org.lwjgl.util.tinyfd.TinyFileDialogs;
 
@@ -27,7 +30,9 @@ import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.List;
+import java.util.ArrayList;
 import java.util.function.Consumer;
+import java.util.concurrent.atomic.AtomicInteger;
 
 import static icyllis.modernui.view.ViewGroup.LayoutParams.MATCH_PARENT;
 import static icyllis.modernui.view.ViewGroup.LayoutParams.WRAP_CONTENT;
@@ -194,6 +199,14 @@ public final class UniPlaylistView extends LinearLayout {
         name.setHint(I18n.get(MusicHud.MOD_ID + ".text.uniPlaylist.nameHint"));
         form.addView(name, new LayoutParams(MATCH_PARENT, WRAP_CONTENT));
 
+        Spinner sourceMode = new Spinner(getContext());
+        sourceMode.setAdapter(new ArrayAdapter<>(getContext(), new String[]{
+                I18n.get(MusicHud.MOD_ID + ".text.uniPlaylist.source.account"),
+                I18n.get(MusicHud.MOD_ID + ".text.uniPlaylist.source.search"),
+                I18n.get(MusicHud.MOD_ID + ".text.uniPlaylist.source.manual")
+        }));
+        form.addView(sourceMode, new LayoutParams(MATCH_PARENT, WRAP_CONTENT));
+
         Spinner platform = new Spinner(getContext());
         platform.setAdapter(new ArrayAdapter<>(getContext(), new String[]{
                 I18n.get(MusicHud.MOD_ID + ".platform.netease"),
@@ -201,6 +214,15 @@ public final class UniPlaylistView extends LinearLayout {
                 I18n.get(MusicHud.MOD_ID + ".platform.bilibili")
         }));
         form.addView(platform, new LayoutParams(MATCH_PARENT, WRAP_CONTENT));
+
+        Spinner accountPlaylist = new Spinner(getContext());
+        accountPlaylist.setAdapter(new ArrayAdapter<>(getContext(), new String[]{
+                I18n.get(MusicHud.MOD_ID + ".text.uniPlaylist.loading")
+        }));
+        form.addView(accountPlaylist, new LayoutParams(MATCH_PARENT, WRAP_CONTENT));
+        @SuppressWarnings("unchecked")
+        List<Playlist>[] accountPlaylists = new List[]{List.of()};
+        AtomicInteger playlistLoadGeneration = new AtomicInteger();
 
         String[] sourceTypes = {"playlist", "favorite_tracks", "season", "favorite_folder"};
         Spinner type = new Spinner(getContext());
@@ -214,27 +236,110 @@ public final class UniPlaylistView extends LinearLayout {
 
         EditText id = new EditText(getContext(), null, R.attr.editTextOutlinedStyle);
         id.setSingleLine(true);
-        id.setHint(I18n.get(MusicHud.MOD_ID + ".text.uniPlaylist.sourceIdHint"));
+        id.setHint(I18n.get(MusicHud.MOD_ID + ".field.hint.searchMusic"));
         form.addView(id, new LayoutParams(MATCH_PARENT, WRAP_CONTENT));
+
+        TextView sourceStatus = new TextView(getContext());
+        sourceStatus.setTextSize(Theme.TEXT_SIZE_SMALL);
+        sourceStatus.setTextColor(Theme.SECONDARY_TEXT_COLOR);
+        form.addView(sourceStatus, new LayoutParams(MATCH_PARENT, WRAP_CONTENT));
+
+        Runnable updateSourceControls = () -> {
+            int mode = sourceMode.getSelectedItemPosition();
+            accountPlaylist.setVisibility(mode == 0 ? VISIBLE : GONE);
+            type.setVisibility(mode == 2 ? VISIBLE : GONE);
+            id.setVisibility(mode == 0 ? GONE : VISIBLE);
+            id.setHint(I18n.get(MusicHud.MOD_ID + (mode == 1
+                    ? ".field.hint.searchMusic" : ".text.uniPlaylist.sourceIdHint")));
+        };
+        Runnable loadAccountPlaylists = () -> {
+            TuneWeavePlatform selected = selectedPlatform(platform);
+            int generation = playlistLoadGeneration.incrementAndGet();
+            sourceStatus.setText(I18n.get(MusicHud.MOD_ID + ".text.platformPlaylist.loading"));
+            MusicHud.EXECUTOR.execute(() -> {
+                try {
+                    var collections = tuneWeave.loadAccountPlaylists(selected);
+                    List<Playlist> loaded = new ArrayList<>();
+                    loaded.addAll(collections.getCreatedPlaylist());
+                    loaded.addAll(collections.getSubscribedPlaylist());
+                    MuiModApi.postToUiThread(() -> {
+                        if (generation != playlistLoadGeneration.get()) return;
+                        accountPlaylists[0] = List.copyOf(loaded);
+                        accountPlaylist.setAdapter(new ArrayAdapter<>(getContext(), loaded.stream()
+                                .map(Playlist::getName).toArray(String[]::new)));
+                        sourceStatus.setText(loaded.isEmpty()
+                                ? I18n.get(MusicHud.MOD_ID + ".text.platformPlaylist.empty") : "");
+                    });
+                } catch (RuntimeException error) {
+                    MuiModApi.postToUiThread(() -> {
+                        if (generation == playlistLoadGeneration.get()) {
+                            accountPlaylists[0] = List.of();
+                            sourceStatus.setText(error.getMessage());
+                        }
+                    });
+                }
+            });
+        };
+        sourceMode.setOnItemSelectedListener((parent, view, position, itemId) -> {
+            updateSourceControls.run();
+            if (position == 0) loadAccountPlaylists.run();
+        });
+        platform.setOnItemSelectedListener((parent, view, position, itemId) -> {
+            if (sourceMode.getSelectedItemPosition() == 0) loadAccountPlaylists.run();
+        });
+        updateSourceControls.run();
+        loadAccountPlaylists.run();
 
         TextView dialogTitle = new TextView(getContext());
         dialogTitle.setText(I18n.get(MusicHud.MOD_ID + ".text.uniPlaylist.importSource"));
         Modal modal = new Modal(getContext(),
                 dialogTitle, form,
                 new Modal.ActionButton(I18n.get(MusicHud.MOD_ID + ".button.confirm"), (button, dialog) -> {
-                    String sourceId = id.getText().toString().trim();
-                    if (sourceId.isBlank()) return;
-                    String sourcePlatform = switch (platform.getSelectedItemPosition()) {
-                        case 1 -> "qq";
-                        case 2 -> "bilibili";
-                        default -> "netease";
-                    };
+                    int mode = sourceMode.getSelectedItemPosition();
+                    String input = id.getText().toString().trim();
+                    Playlist selectedPlaylist = mode == 0
+                            && accountPlaylist.getSelectedItemPosition() >= 0
+                            && accountPlaylist.getSelectedItemPosition() < accountPlaylists[0].size()
+                            ? accountPlaylists[0].get(accountPlaylist.getSelectedItemPosition()) : null;
+                    if ((mode == 0 && selectedPlaylist == null) || (mode != 0 && input.isBlank())) return;
+                    TuneWeavePlatform selected = selectedPlatform(platform);
+                    String playlistName = name.getText().toString().trim();
+                    if (mode == 1) {
+                        button.setEnabled(false);
+                        sourceStatus.setText(I18n.get(MusicHud.MOD_ID + ".text.uniPlaylist.searching"));
+                        MusicHud.EXECUTOR.execute(() -> {
+                            try {
+                                @SuppressWarnings("unchecked")
+                                List<Playlist> results = (List<Playlist>) tuneWeave.search(
+                                        input, SearchType.PLAYLIST, 0, selected);
+                                MuiModApi.postToUiThread(() -> {
+                                    button.setEnabled(true);
+                                    if (results.isEmpty()) {
+                                        sourceStatus.setText(I18n.get(MusicHud.MOD_ID + ".text.searchNoMoreResult"));
+                                        return;
+                                    }
+                                    dialog.dismiss();
+                                    showSearchImportDialog(results, selected, playlistName);
+                                });
+                            } catch (RuntimeException error) {
+                                MuiModApi.postToUiThread(() -> {
+                                    button.setEnabled(true);
+                                    sourceStatus.setText(error.getMessage());
+                                });
+                            }
+                        });
+                        return;
+                    }
                     dialog.dismiss();
                     MusicHud.EXECUTOR.execute(() -> {
                         try {
-                            tuneWeave.importUniPlaylistSources(name.getText().toString().trim(), List.of(
+                            String sourceId = mode == 0
+                                    ? referenceId(selectedPlaylist.getSourceRef(), selected) : input;
+                            String sourceType = mode == 0 ? "playlist"
+                                    : sourceTypes[type.getSelectedItemPosition()];
+                            tuneWeave.importUniPlaylistSources(playlistName, List.of(
                                     new TuneWeaveClientService.UniImportSource(
-                                            sourcePlatform, sourceTypes[type.getSelectedItemPosition()], sourceId)));
+                                            selected.apiName(), sourceType, sourceId)));
                             refreshOnUi();
                         } catch (RuntimeException error) {
                             MuiModApi.postToUiThread(() -> showProgress(error.getMessage()));
@@ -243,6 +348,52 @@ public final class UniPlaylistView extends LinearLayout {
                 }),
                 new Modal.ActionButton(I18n.get(MusicHud.MOD_ID + ".button.cancel"), (button, dialog) -> dialog.dismiss()));
         modal.show();
+    }
+
+    private void showSearchImportDialog(List<Playlist> results, TuneWeavePlatform platform,
+                                        String requestedName) {
+        Spinner resultSpinner = new Spinner(getContext());
+        resultSpinner.setAdapter(new ArrayAdapter<>(getContext(), results.stream()
+                .map(playlist -> playlist.getName() + " (" + playlist.getMusicTrackCount() + ")")
+                .toArray(String[]::new)));
+
+        TextView title = new TextView(getContext());
+        title.setText(I18n.get(MusicHud.MOD_ID + ".text.uniPlaylist.selectSearchResult"));
+        new Modal(getContext(), title, resultSpinner,
+                new Modal.ActionButton(I18n.get(MusicHud.MOD_ID + ".button.import"), (button, dialog) -> {
+                    int index = resultSpinner.getSelectedItemPosition();
+                    if (index < 0 || index >= results.size()) return;
+                    Playlist selected = results.get(index);
+                    dialog.dismiss();
+                    MusicHud.EXECUTOR.execute(() -> {
+                        try {
+                            tuneWeave.importUniPlaylistSources(
+                                    requestedName.isBlank() ? selected.getName() : requestedName,
+                                    List.of(new TuneWeaveClientService.UniImportSource(
+                                            platform.apiName(), "playlist",
+                                            referenceId(selected.getSourceRef(), platform))));
+                            refreshOnUi();
+                        } catch (RuntimeException error) {
+                            MuiModApi.postToUiThread(() -> showProgress(error.getMessage()));
+                        }
+                    });
+                }),
+                new Modal.ActionButton(I18n.get(MusicHud.MOD_ID + ".button.cancel"),
+                        (button, dialog) -> dialog.dismiss())).show();
+    }
+
+    private static TuneWeavePlatform selectedPlatform(Spinner spinner) {
+        return switch (spinner.getSelectedItemPosition()) {
+            case 1 -> TuneWeavePlatform.QQ;
+            case 2 -> TuneWeavePlatform.BILIBILI;
+            default -> TuneWeavePlatform.NETEASE;
+        };
+    }
+
+    private static String referenceId(String reference, TuneWeavePlatform platform) {
+        String prefix = platform.apiName() + ':';
+        return reference != null && reference.startsWith(prefix)
+                ? reference.substring(prefix.length()) : reference;
     }
 
     private void importDocument() {

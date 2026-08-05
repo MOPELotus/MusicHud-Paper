@@ -172,7 +172,11 @@ public final class TuneWeaveClientService {
 
     /** Loads the caller's account playlists without routing the private credential through Minecraft. */
     public UserCategoryPlaylists loadAccountPlaylists() {
-        TuneWeavePlatform platform = defaultPlatform();
+        return loadAccountPlaylists(defaultPlatform());
+    }
+
+    public UserCategoryPlaylists loadAccountPlaylists(TuneWeavePlatform platform) {
+        Objects.requireNonNull(platform, "platform");
         JsonElement data = requestForPlatform(platform, "GET", "/v1/account/playlists",
                 Map.of("platform", platform.apiName(), "limit", "100", "offset", "0"), null).data();
         ObservableSequencedSet<Playlist> created = new ObservableSequencedSet<>();

@@ -27,7 +27,6 @@ import indi.etern.musichud.client.ui.Theme;
 import indi.etern.musichud.client.ui.components.*;
 import indi.etern.musichud.client.ui.pages.ConfigView;
 import indi.etern.musichud.client.ui.pages.HomeView;
-import indi.etern.musichud.client.ui.pages.UniPlaylistView;
 import indi.etern.musichud.client.ui.pages.account.AccountBaseView;
 import indi.etern.musichud.client.ui.pages.search.SearchView;
 import indi.etern.musichud.client.ui.utils.ui.ButtonInsetBackgroundFactory;
@@ -284,12 +283,10 @@ public class MainFragment extends Fragment {
                             I18n.get(MusicHud.MOD_ID + ".text.page.search"), SearchView::new);
                     var accountNav = sideMenu.createNavigationPage("Account", "/assets/music_hud/textures/gui/icons/square_user_round.png",
                             I18n.get(MusicHud.MOD_ID + ".text.page.account"), AccountBaseView::new);
-                    var uniPlaylistNav = sideMenu.createNavigationPage("UniPlaylists", "/assets/music_hud/textures/gui/icons/list_music.png",
-                            I18n.get(MusicHud.MOD_ID + ".text.page.uniPlaylists"), UniPlaylistView::new);
                     var settingsNav = sideMenu.createNavigationPage("Settings", "/assets/music_hud/textures/gui/icons/settings.png",
                             I18n.get(MusicHud.MOD_ID + ".text.page.setting"), ConfigView::new);
-                    SideMenu.NavigationMeta defaultMeta = List.of(homeNav, searchNav, accountNav, uniPlaylistNav, settingsNav).get(
-                            Math.min(defaultSelectedIndex, 4));
+                    SideMenu.NavigationMeta defaultMeta = List.of(homeNav, searchNav, accountNav, settingsNav).get(
+                            Math.min(defaultSelectedIndex, 3));
                     defaultMeta.select();
                 } else {
                     var settingsNav = sideMenu.createNavigationPage("Settings", "/assets/music_hud/textures/gui/icons/settings.png",
