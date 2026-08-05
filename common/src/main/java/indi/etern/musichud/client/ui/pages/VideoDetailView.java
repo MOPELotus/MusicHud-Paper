@@ -141,7 +141,18 @@ public final class VideoDetailView extends LinearLayout {
 
     private Button action(String key, View.OnClickListener listener) {
         Button button = new Button(getContext());
-        button.setText(I18n.get(MusicHud.MOD_ID + key));
+        String label = I18n.get(MusicHud.MOD_ID + key);
+        if (key.endsWith(".play")) {
+            button.setText("\u25b6");
+            button.setTooltipText(label);
+            button.setContentDescription(label);
+        } else if (key.endsWith(".playAll")) {
+            button.setText("\u25b6\u25b6");
+            button.setTooltipText(label);
+            button.setContentDescription(label);
+        } else {
+            button.setText(label);
+        }
         button.setTextSize(Theme.TEXT_SIZE_SMALL);
         button.setTextColor(Theme.PRIMARY_COLOR);
         button.setBackground(ButtonInsetBackgroundFactory.builder().cornerRadius(dp(4)).inset(dp(1))
