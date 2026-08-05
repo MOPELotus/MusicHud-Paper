@@ -72,19 +72,16 @@ There are 2 methods to deploy.
 > Due to some limitations, API Server may not be auto-closed when game exit abnormal (e.g., due to a crash)
 
 ##### Auto Deploy
-You can find "Download API..." button in setting page, which will open a download guide, and download NetEase Cloud Music Enhanced from [a trusted repository](https://github.com/MOPELotus/api-enhanced) which automatically releases artifact powered by GitHub Actions to bypass login restrictions of accessing artifacts from GitHub Actions, with optional GH Proxy speedup
+Use **Download TuneWeave...** under API status in the settings page. MusicHUD reads TuneWeave's [release manifest](https://github.com/MOPELotus/TuneWeave/blob/main/release-manifest.json), selects the binary for the current operating system and architecture, optionally routes the download through a GitHub proxy, and verifies the published SHA-256 checksum. After downloading, MusicHUD can set the executable path and start TuneWeave for you.
 
 ##### Manual Deploy
-1. **Login to GitHub (Important, otherwise can NOT download artifacts)** and go to https://github.com/NeteaseCloudMusicApiEnhanced/api-enhanced/actions/workflows/build-dev.yml
-2. Click latest action runs in type "Build Artifacts" and download platform binary artifacts matches to your pc/server platform
-3. Uncompress the binary executable file from ZIP file to ...
-   - Mod edition: `{corepath}/music-hud/` and rename it to `api` (`api.exe` on Windows)
-   - Plugin edition: `{corepath}/plugins/MusicHud/` and rename it to `api` (`api.exe` on Windows)
-   - Or place it anywhere and modify config in game or option `serverApiBinaryExecutablePath` (absolute or relative path) in config file `/config/music_hud-common.toml`.
+1. Open the current TuneWeave [release manifest](https://github.com/MOPELotus/TuneWeave/blob/main/release-manifest.json) or [release page](https://github.com/MOPELotus/TuneWeave/releases).
+2. Download the single-file binary matching your operating system and architecture, then verify it with the adjacent `.sha256` file. No archive extraction or GitHub Actions login is required.
+3. Place the executable in a private local directory and set `serverApiBinaryExecutablePath` to its relative or absolute path in `/config/music_hud-server.toml`. On Linux and macOS, mark it executable first.
 
 #### Deploy separately (recommend for server)
-1. Deploy NetEase Cloud Music API Enhanced (https://github.com/neteasecloudmusicapienhanced/api-enhanced).
-2. If not using the default port (3000) of NCM API Enhanced or deploying on another server, modify the `serverApiBaseUrl` property in the config file `/config/music_hud-server.toml`.
+1. Download and run [TuneWeave](https://github.com/MOPELotus/TuneWeave). Its default address is `http://127.0.0.1:7832`.
+2. If TuneWeave listens on another address, set `serverApiBaseUrl` in `/config/music_hud-server.toml` to that base URL.
 
 ---
 ## CN version description
@@ -156,16 +153,13 @@ You can find "Download API..." button in setting page, which will open a downloa
 > 由于一些限制，在游戏非正常退出时（如崩溃）无法自动结束进程
 
 ##### 自动部署（客户端，1.2.15+）
-在设置页面中的 API 状态一栏中可找到“下载 API...”按钮，可打开一个下载指引，会从一个通过 GitHub Actions 自动发布 release 的[可信的分支仓库](https://github.com/MOPELotus/api-enhanced)下载 NetEase Cloud Music Enhanced 以绕过访问 GitHub Actions 工件的登录限制，可选使用 GH Proxy 加速下载
+在设置页面的 API 状态区域点击“下载 TuneWeave...”。MusicHUD 会读取 TuneWeave 的[发布清单](https://github.com/MOPELotus/TuneWeave/blob/main/release-manifest.json)，按当前操作系统和架构选择二进制文件，可选通过 GitHub 下载代理加速，并校验清单发布的 SHA-256。下载完成后可直接设为可执行文件路径并启动 TuneWeave。
 
 ##### 手动部署
-1. **登录到 GitHub (重要，否则无法下载工件)** 并跳转到 https://github.com/NeteaseCloudMusicApiEnhanced/api-enhanced/actions/workflows/build-dev.yml
-2. 在 actions 类型中选择 "Build Artifacts" 并进入最新的构建中根据你的平台下载对应的二进制构建产物
-3. 解压下载得到的压缩包并将其中的二进制可执行文件放置到...
-   - mod 版：{核心目录}/music-hud/ 并重命名为 `api` (对于 Windows 为 `api.exe`)
-   - 插件版: {核心目录}/plugins/MusicHud/api(.exe)
-   - 或者放在任意处并在游戏内或配置文件`/config/music_hud-common.toml`中修改选项 `serverApiBinaryExecutablePath` 对应(绝对/相对)目录
+1. 打开 TuneWeave 当前的[发布清单](https://github.com/MOPELotus/TuneWeave/blob/main/release-manifest.json)或 [Release 页面](https://github.com/MOPELotus/TuneWeave/releases)。
+2. 下载与操作系统和架构匹配的单文件二进制，并使用旁边的 `.sha256` 文件校验；无需解压，也无需登录 GitHub Actions。
+3. 将可执行文件放在私有本地目录，在 `/config/music_hud-server.toml` 中把 `serverApiBinaryExecutablePath` 设为对应的相对或绝对路径。Linux 和 macOS 需要先赋予执行权限。
 
 #### 独立部署（推荐服务端使用）
-1. 部署 Netease Cloud Music API Enhanced (https://github.com/neteasecloudmusicapienhanced/api-enhanced)
-2. 如果不使用 NCM API Enhanced 的默认端口 ( 3000 ) 或在其他服务器上部署，需要修改配置文件`/config/music_hud-server.toml`的 `serverApiBaseUrl` 属性
+1. 下载并运行 [TuneWeave](https://github.com/MOPELotus/TuneWeave)，默认地址为 `http://127.0.0.1:7832`。
+2. 如果 TuneWeave 监听其他地址，在 `/config/music_hud-server.toml` 中将 `serverApiBaseUrl` 改为对应基址。

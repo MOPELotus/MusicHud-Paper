@@ -783,13 +783,13 @@ public class ConfigView extends LinearLayout {
         TextView descriptionUrl = new TextView(context);
         String url = I18n.get(MusicHud.MOD_ID + ".modal.downloadApiServer.description.url");
         int indexOfUrl = url.indexOf("{url}");
-        String latestReleaseUrl = ApiServerFetcher.LATEST_RELEASE_URL;
-        String replace = url.replace("{url}", latestReleaseUrl);
+        String manifestUrl = ApiServerFetcher.TUNEWEAVE_MANIFEST_URL;
+        String replace = url.replace("{url}", manifestUrl);
         SpannableString spannableString = new SpannableString(replace);
-        spannableString.setSpan(new URLSpan(latestReleaseUrl), indexOfUrl, indexOfUrl + latestReleaseUrl.length(), SpannableString.SPAN_EXCLUSIVE_EXCLUSIVE);
+        spannableString.setSpan(new URLSpan(manifestUrl), indexOfUrl, indexOfUrl + manifestUrl.length(), SpannableString.SPAN_EXCLUSIVE_EXCLUSIVE);
         descriptionUrl.setText(spannableString);
         descriptionUrl.setTextSize(Theme.TEXT_SIZE_NORMAL);
-        descriptionUrl.setOnClickListener(v -> Util.getPlatform().openUri(latestReleaseUrl));
+        descriptionUrl.setOnClickListener(v -> Util.getPlatform().openUri(manifestUrl));
 
         final Path[] targetDir = {Paths.get("music-hud")};
         final ApiServerFetcher.ReleaseSummary[] latestRelease = {null};
@@ -937,7 +937,6 @@ public class ConfigView extends LinearLayout {
         TextView dlDesc = new TextView(context);
         dlDesc.setText(I18n.get(MusicHud.MOD_ID + ".modal.downloadApiServer.downloading.description"));
         dlDesc.setTextSize(Theme.TEXT_SIZE_NORMAL);
-        dlDesc.setOnClickListener(v -> Util.getPlatform().openUri(latestReleaseUrl));
 
         LinearLayout progressPage = new LinearLayout(context);
         progressPage.setOrientation(LinearLayout.VERTICAL);
@@ -964,8 +963,7 @@ public class ConfigView extends LinearLayout {
         content.addView(progressPage);
         content.addView(donePage);
 
-        final Path[] downloadedTempFile = {null};
-        final String[] releaseTag = {""};
+        final ApiBinaryUpdateService.DownloadedRelease[] downloadedRelease = {null};
 
         enum Page { IDLE, DOWNLOADING, DONE, RESETTING }
         final Page[] state = {Page.IDLE};
@@ -1021,30 +1019,31 @@ public class ConfigView extends LinearLayout {
                     Files.createDirectories(targetDir[0]);
                 } catch (IOException ignored) {}
 
-                releaseTag[0] = latestRelease[0] != null ? latestRelease[0].tag() : "unknown";
-                String tempFileName = ApiServerFetcher.Platform.detect().getAssetName() + "." + releaseTag[0] + ".temp";
-                Path tempFile = targetDir[0].resolve(tempFileName);
-                tempFile.toFile().deleteOnExit();
-
                 ApiBinaryUpdateService updateService = ApiBinaryUpdateService.getInstance();
 
                 ApiServerFetcher.DownloadProxy selectedProxy = ApiServerFetcher.DownloadProxy.values()[proxySpinner.getSelectedItemPosition()];
 
-                CompletableFuture<Path> future = updateService.downloadToTemp(targetDir[0], releaseTag[0], selectedProxy, (downloaded, total) -> {
+                CompletableFuture<ApiBinaryUpdateService.DownloadedRelease> future = updateService.downloadToTemp(targetDir[0], selectedProxy, (downloaded, total) -> {
                     MuiModApi.postToUiThread(() -> {
                         if (cancelled.get()) return;
-                        int pct = (int) (((double) downloaded / total) * 100);
-                        progressBar.setProgress(pct);
-                        progressText.setText(formatBytes(downloaded) + " / " + formatBytes(total));
+                        if (total > 0) {
+                            int pct = (int) (((double) downloaded / total) * 100);
+                            progressBar.setProgress(pct);
+                            progressText.setText(formatBytes(downloaded) + " / " + formatBytes(total));
+                        } else {
+                            progressText.setText(formatBytes(downloaded));
+                        }
                     });
                 }, cancelled);
                 downloadFuture[0] = future;
-                future.thenRun(() -> {
+                future.thenAccept(downloaded -> {
                     MuiModApi.postToUiThread(() -> {
+                        downloaded.tempFile().toFile().deleteOnExit();
                         ToastUtil.show(I18n.get(MusicHud.MOD_ID + ".modal.downloadApiServer.done"));
                         state[0] = Page.DONE;
-                        downloadedTempFile[0] = tempFile;
-                        doneDesc.setText(I18n.get(MusicHud.MOD_ID + ".modal.downloadApiServer.done.description").replace("{path}", tempFile.toString()));
+                        downloadedRelease[0] = downloaded;
+                        doneDesc.setText(I18n.get(MusicHud.MOD_ID + ".modal.downloadApiServer.done.description")
+                                .replace("{path}", downloaded.tempFile().toString()));
                         setPage.accept(Page.DONE);
                         btn.setText(button1YesText);
                         btn.setEnabled(true);
@@ -1087,13 +1086,15 @@ public class ConfigView extends LinearLayout {
                 downloadApiServerButton.setText(I18n.get(MusicHud.MOD_ID + ".button.downloadApiServer"));
             } else if (Page.DONE.equals(state[0])) {
                 ApiBinaryUpdateService updateService = ApiBinaryUpdateService.getInstance();
-                Path finalPath = updateService.resolveFinalPath(downloadedTempFile[0], releaseTag[0]);
+                ApiBinaryUpdateService.DownloadedRelease downloaded = downloadedRelease[0];
+                Path finalPath = downloaded == null ? null
+                        : updateService.resolveFinalPath(downloaded.tempFile(), downloaded.tag());
                 if (finalPath == null) {
                     ToastUtil.show(I18n.get(MusicHud.MOD_ID + ".modal.downloadApiServer.renameFailed"));
                     return;
                 }
-                updateService.updateMhApiJson(targetDir[0], releaseTag[0],
-                        updateService.extractVersion(releaseTag[0]), finalPath.getFileName().toString());
+                updateService.updateMhApiJson(targetDir[0], downloaded.tag(),
+                        downloaded.version(), finalPath.getFileName().toString());
                 String configPath = updateService.relativizePath(finalPath);
                 serverConfig.setServerApiBinaryExecutablePath(configPath);
                 if (serverApiBinaryPathInput[0] != null) {
@@ -1103,7 +1104,7 @@ public class ConfigView extends LinearLayout {
                 if (apiServer != null) {
                     apiServer.restartApiServer();
                 }
-                downloadedTempFile[0] = null;
+                downloadedRelease[0] = null;
                 state[0] = Page.RESETTING;
                 downloadApiServerButton.setText(I18n.get(MusicHud.MOD_ID + ".button.downloadApiServer"));
                 btn.setText(button1Text);

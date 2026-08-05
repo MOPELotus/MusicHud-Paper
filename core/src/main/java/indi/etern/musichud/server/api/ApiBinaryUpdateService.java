@@ -18,13 +18,10 @@ import java.util.Map;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.function.BiConsumer;
-import java.util.regex.Matcher;
-import java.util.regex.Pattern;
 
 @NoArgsConstructor(access = AccessLevel.PRIVATE)
 public class ApiBinaryUpdateService {
     private static final ApiBinaryUpdateService INSTANCE = new ApiBinaryUpdateService();
-    private static final Pattern VERSION_PATTERN = Pattern.compile("v(\\d+\\.\\d+\\.\\d+)");
 
     public static ApiBinaryUpdateService getInstance() {
         return INSTANCE;
@@ -37,21 +34,19 @@ public class ApiBinaryUpdateService {
                         manifest.getReleasePage(), null));
     }
 
-    public CompletableFuture<Path> downloadToTemp(Path targetDir, String releaseTag, BiConsumer<Long, Long> progress) {
-        return downloadToTemp(targetDir, releaseTag, ApiServerFetcher.DownloadProxy.DIRECT, progress);
-    }
-
-    public CompletableFuture<Path> downloadToTemp(Path targetDir, String releaseTag, ApiServerFetcher.DownloadProxy proxy, BiConsumer<Long, Long> progress) {
-        return downloadToTemp(targetDir, releaseTag, proxy, progress, new AtomicBoolean(false));
-    }
-
-    public CompletableFuture<Path> downloadToTemp(Path targetDir, String releaseTag, ApiServerFetcher.DownloadProxy proxy, BiConsumer<Long, Long> progress, AtomicBoolean cancelled) {
+    public CompletableFuture<DownloadedRelease> downloadToTemp(
+            Path targetDir, ApiServerFetcher.DownloadProxy proxy,
+            BiConsumer<Long, Long> progress, AtomicBoolean cancelled) {
         return ApiServerFetcher.fetchTuneWeaveManifest().thenCompose(manifest -> {
+            if (manifest.getTag() == null || manifest.getTag().isBlank()
+                    || manifest.getVersion() == null || manifest.getVersion().isBlank()) {
+                throw new IllegalStateException("TuneWeave release manifest is missing version metadata");
+            }
             ApiServerFetcher.TuneWeaveArtifact artifact = ApiServerFetcher.currentTuneWeaveArtifact(manifest);
-            String tempFileName = artifact.getFile() + "." + releaseTag + ".temp";
+            String tempFileName = artifact.getFile() + "." + manifest.getTag() + ".temp";
             Path tempFile = targetDir.resolve(tempFileName);
             return ApiServerFetcher.downloadTuneWeaveArtifact(artifact, tempFile, proxy, progress, cancelled)
-                    .thenApply(v -> tempFile);
+                    .thenApply(v -> new DownloadedRelease(manifest.getTag(), manifest.getVersion(), tempFile));
         });
     }
 
@@ -111,13 +106,9 @@ public class ApiBinaryUpdateService {
         return abs.toString();
     }
 
-    public String extractVersion(String tag) {
-        if (tag == null) return null;
-        Matcher m = VERSION_PATTERN.matcher(tag);
-        return m.find() ? m.group(1) : null;
-    }
-
     public record ReleaseMeta(String version, String file) {}
+
+    public record DownloadedRelease(String tag, String version, Path tempFile) {}
 
     public void updateMhApiJson(Path targetDir, String releaseTag, String version, String fileName) {
         Path jsonFile = targetDir.resolve("mh-api.json");
