@@ -96,9 +96,9 @@ final class LocalUniPlaylistStore {
         return result;
     }
 
-    synchronized void append(String reference, List<JsonObject> values) {
-        if (values == null || values.isEmpty()) return;
+    synchronized JsonObject append(String reference, List<JsonObject> values) {
         JsonObject document = find(reference);
+        if (values == null || values.isEmpty()) return document.deepCopy();
         JsonArray items = document.getAsJsonArray("items");
         if ((long) items.size() + values.size() > MAX_ITEMS) {
             throw new IllegalArgumentException("A local playlist cannot contain more than 100000 items");
@@ -112,6 +112,7 @@ final class LocalUniPlaylistStore {
         }
         touch(document, items.size());
         save();
+        return document.deepCopy();
     }
 
     synchronized void removeItem(String reference, String itemId) {

@@ -1137,6 +1137,25 @@ public final class TuneWeaveClientService {
     }
 
     public UniPlaylistInfo importUniPlaylistSources(String name, List<UniImportSource> sources) {
+        MaterializedImport materializedImport = materializeImportSources(sources);
+        String playlistName = name == null || name.isBlank() ? materializedImport.name() : name;
+        UniPlaylistInfo playlist = createUniPlaylist(playlistName, materializedImport.description());
+        try {
+            JsonObject document = localPlaylists.append(playlist.reference(), materializedImport.items());
+            return localPlaylistInfo(document);
+        } catch (RuntimeException error) {
+            localPlaylists.delete(playlist.reference());
+            throw error;
+        }
+    }
+
+    public UniPlaylistInfo appendUniPlaylistSources(String reference, List<UniImportSource> sources) {
+        requireReference(reference, "local Uni Playlist");
+        MaterializedImport materializedImport = materializeImportSources(sources);
+        return localPlaylistInfo(localPlaylists.append(reference, materializedImport.items()));
+    }
+
+    private MaterializedImport materializeImportSources(List<UniImportSource> sources) {
         JsonObject body = new JsonObject();
         JsonArray sourceArray = new JsonArray();
         sources.stream().limit(50).forEach(source -> {
@@ -1163,15 +1182,7 @@ public final class TuneWeaveClientService {
             offset += page.size();
             if (page.isEmpty()) break;
         } while (offset < total);
-        String playlistName = name == null || name.isBlank() ? materializedName : name;
-        UniPlaylistInfo playlist = createUniPlaylist(playlistName, materializedDescription);
-        try {
-            localPlaylists.append(playlist.reference(), materialized);
-            return new UniPlaylistInfo(playlist.reference(), playlist.name(), playlist.description(), materialized.size());
-        } catch (RuntimeException error) {
-            localPlaylists.delete(playlist.reference());
-            throw error;
-        }
+        return new MaterializedImport(materializedName, materializedDescription, materialized);
     }
 
     public JsonObject exportUniPlaylist(String reference) {
@@ -1886,6 +1897,9 @@ public final class TuneWeaveClientService {
     }
 
     public record UniImportSource(String platform, String type, String id) {
+    }
+
+    private record MaterializedImport(String name, String description, List<JsonObject> items) {
     }
 
     public record UniItemInfo(String id, int position, String kind, String sourceRef,
