@@ -19,8 +19,10 @@ import indi.etern.musichud.client.services.tuneweave.TuneWeaveClientService;
 import indi.etern.musichud.client.ui.Theme;
 import indi.etern.musichud.client.ui.ToastUtil;
 import indi.etern.musichud.client.ui.components.Modal;
+import indi.etern.musichud.client.ui.components.PlatformSelector;
 import indi.etern.musichud.client.ui.components.RouterContainer;
 import indi.etern.musichud.client.ui.utils.ui.ButtonInsetBackgroundFactory;
+import indi.etern.musichud.server.api.tuneweave.TuneWeavePlatform;
 import net.minecraft.client.resources.language.I18n;
 
 import java.util.ArrayList;
@@ -137,12 +139,8 @@ public final class UniPlaylistDetailView extends LinearLayout {
     private void showAddDialog() {
         LinearLayout form = new LinearLayout(getContext());
         form.setOrientation(VERTICAL);
-        Spinner platform = new Spinner(getContext());
-        platform.setAdapter(new ArrayAdapter<>(getContext(), new String[]{
-                I18n.get(MusicHud.MOD_ID + ".platform.netease"),
-                I18n.get(MusicHud.MOD_ID + ".platform.qq"),
-                I18n.get(MusicHud.MOD_ID + ".platform.bilibili")
-        }));
+        PlatformSelector platform = new PlatformSelector(getContext(), TuneWeavePlatform.values());
+        platform.setSelectedPlatform(tuneWeave.defaultPlatform());
         form.addView(platform, new LayoutParams(MATCH_PARENT, WRAP_CONTENT));
         Spinner kind = new Spinner(getContext());
         kind.setAdapter(new ArrayAdapter<>(getContext(), new String[]{
@@ -160,11 +158,7 @@ public final class UniPlaylistDetailView extends LinearLayout {
                 new Modal.ActionButton(I18n.get(MusicHud.MOD_ID + ".button.confirm"), (b, modal) -> {
                     String value = input.getText().toString().trim();
                     if (!value.isBlank()) {
-                        String prefix = switch (platform.getSelectedItemPosition()) {
-                            case 1 -> "qq";
-                            case 2 -> "bilibili";
-                            default -> "netease";
-                        };
+                        String prefix = platform.getSelectedPlatform().apiName();
                         String itemKind = kind.getSelectedItemPosition() == 1 ? "video" : "track";
                         modal.dismiss();
                         add(prefix + ":" + value, itemKind);

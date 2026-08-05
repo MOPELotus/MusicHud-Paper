@@ -6,16 +6,15 @@ import icyllis.modernui.mc.MuiModApi;
 import icyllis.modernui.text.method.PasswordTransformationMethod;
 import icyllis.modernui.view.Gravity;
 import icyllis.modernui.view.View;
-import icyllis.modernui.widget.ArrayAdapter;
 import icyllis.modernui.widget.Button;
 import icyllis.modernui.widget.EditText;
 import icyllis.modernui.widget.LinearLayout;
-import icyllis.modernui.widget.Spinner;
 import icyllis.modernui.widget.TextView;
 import indi.etern.musichud.MusicHud;
 import indi.etern.musichud.client.services.LoginService;
 import indi.etern.musichud.client.services.tuneweave.TuneWeaveClientService;
 import indi.etern.musichud.client.ui.Theme;
+import indi.etern.musichud.client.ui.components.PlatformSelector;
 import indi.etern.musichud.client.ui.utils.ui.ButtonInsetBackgroundFactory;
 import indi.etern.musichud.server.api.tuneweave.TuneWeavePlatform;
 import net.minecraft.client.resources.language.I18n;
@@ -25,7 +24,7 @@ import static icyllis.modernui.view.ViewGroup.LayoutParams.WRAP_CONTENT;
 
 /** Direct client-mode password login. The password is sent only to TuneWeave over this client request. */
 public class PhonePasswordLoginView extends LinearLayout implements ILoginView {
-    private final Spinner platformSpinner;
+    private final PlatformSelector platformSelector;
     private final EditText regionInput;
     private final EditText phoneInput;
     private final EditText passwordInput;
@@ -52,18 +51,11 @@ public class PhonePasswordLoginView extends LinearLayout implements ILoginView {
         descriptionParams.setMargins(0, dp(4), 0, 0);
         addView(description, descriptionParams);
 
-        platformSpinner = new Spinner(context);
-        platformSpinner.setAdapter(new ArrayAdapter<>(context, new String[]{
-                I18n.get(MusicHud.MOD_ID + ".platform.netease"),
-                I18n.get(MusicHud.MOD_ID + ".platform.qq")
-        }));
-        platformSpinner.setSelection(switch (tuneWeave.defaultPlatform()) {
-            case QQ -> 1;
-            default -> 0;
-        });
+        platformSelector = new PlatformSelector(context, TuneWeavePlatform.NETEASE, TuneWeavePlatform.QQ);
+        platformSelector.setSelectedPlatform(tuneWeave.defaultPlatform());
         LayoutParams platformParams = new LayoutParams(WRAP_CONTENT, WRAP_CONTENT);
         platformParams.setMargins(0, dp(12), 0, 0);
-        addView(platformSpinner, platformParams);
+        addView(platformSelector, platformParams);
 
         LinearLayout form = new LinearLayout(context);
         form.setOrientation(LinearLayout.VERTICAL);
@@ -161,17 +153,14 @@ public class PhonePasswordLoginView extends LinearLayout implements ILoginView {
     }
 
     private TuneWeavePlatform selectedPlatform() {
-        return switch (platformSpinner.getSelectedItemPosition()) {
-            case 1 -> TuneWeavePlatform.QQ;
-            default -> TuneWeavePlatform.NETEASE;
-        };
+        return platformSelector.getSelectedPlatform();
     }
 
     private void setBusy(boolean busy) {
         MuiModApi.postToUiThread(() -> {
             loginButton.setClickable(!busy);
             loginButton.setAlpha(busy ? 0.55f : 1f);
-            platformSpinner.setClickable(!busy);
+            platformSelector.setEnabled(!busy);
             regionInput.setClickable(!busy);
             phoneInput.setClickable(!busy);
             passwordInput.setClickable(!busy);

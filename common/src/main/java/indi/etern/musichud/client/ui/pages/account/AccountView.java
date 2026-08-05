@@ -21,6 +21,7 @@ import indi.etern.musichud.client.ui.Theme;
 import indi.etern.musichud.client.ui.components.ArtistCard;
 import indi.etern.musichud.client.ui.components.FlexWrapLayout;
 import indi.etern.musichud.client.ui.components.MusicCollectionCard;
+import indi.etern.musichud.client.ui.components.PlatformSelector;
 import indi.etern.musichud.client.ui.components.RouterContainer;
 import indi.etern.musichud.client.ui.pages.CloudView;
 import indi.etern.musichud.client.ui.pages.PodcastRadioView;
@@ -168,24 +169,16 @@ public class AccountView extends LinearLayout {
         LinearLayout platformTabs = new LinearLayout(context);
         platformTabs.setOrientation(LinearLayout.HORIZONTAL);
         platformTabs.setGravity(Gravity.CENTER);
-        for (TuneWeavePlatform platform : TuneWeavePlatform.values()) {
-            Button tab = new Button(context);
-            tab.setText(I18n.get(MusicHud.MOD_ID + ".platform." + platform.apiName()));
-            tab.setTextSize(Theme.TEXT_SIZE_SMALL);
-            tab.setTextColor(!showingUniPlaylists && selectedPlatform == platform
-                    ? Theme.PRIMARY_COLOR : Theme.SECONDARY_TEXT_COLOR);
-            tab.setBackground(ButtonInsetBackgroundFactory.builder().cornerRadius(dp(4)).inset(dp(1))
-                    .padding(new ButtonInsetBackgroundFactory.Padding(dp(12), dp(6), dp(12), dp(6)))
-                    .build().newBackgroundDrawable());
-            tab.setOnClickListener(button -> {
-                showingUniPlaylists = false;
-                selectedPlatform = platform;
-                tuneWeave.setDefaultPlatform(platform);
-                LoginService.getInstance().switchTuneWeavePlatform(platform);
-                refresh(false);
-            });
-            platformTabs.addView(tab, new LayoutParams(WRAP_CONTENT, WRAP_CONTENT));
-        }
+        PlatformSelector platformSelector = new PlatformSelector(context, TuneWeavePlatform.values());
+        platformSelector.setSelectedPlatform(selectedPlatform);
+        platformSelector.setOnPlatformSelectedListener(platform -> {
+            showingUniPlaylists = false;
+            selectedPlatform = platform;
+            tuneWeave.setDefaultPlatform(platform);
+            LoginService.getInstance().switchTuneWeavePlatform(platform);
+            refresh(false);
+        });
+        platformTabs.addView(platformSelector, new LayoutParams(WRAP_CONTENT, WRAP_CONTENT));
         Button uniTab = new Button(context);
         uniTab.setText(I18n.get(MusicHud.MOD_ID + ".text.page.uniPlaylists"));
         uniTab.setTextSize(Theme.TEXT_SIZE_SMALL);

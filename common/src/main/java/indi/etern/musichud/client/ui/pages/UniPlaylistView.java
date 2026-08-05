@@ -20,6 +20,7 @@ import indi.etern.musichud.beans.music.Playlist;
 import indi.etern.musichud.client.services.tuneweave.TuneWeaveClientService;
 import indi.etern.musichud.client.ui.Theme;
 import indi.etern.musichud.client.ui.components.Modal;
+import indi.etern.musichud.client.ui.components.PlatformSelector;
 import indi.etern.musichud.client.ui.components.RouterContainer;
 import indi.etern.musichud.client.ui.utils.ui.ButtonInsetBackgroundFactory;
 import indi.etern.musichud.server.api.tuneweave.TuneWeavePlatform;
@@ -207,12 +208,8 @@ public final class UniPlaylistView extends LinearLayout {
         }));
         form.addView(sourceMode, new LayoutParams(MATCH_PARENT, WRAP_CONTENT));
 
-        Spinner platform = new Spinner(getContext());
-        platform.setAdapter(new ArrayAdapter<>(getContext(), new String[]{
-                I18n.get(MusicHud.MOD_ID + ".platform.netease"),
-                I18n.get(MusicHud.MOD_ID + ".platform.qq"),
-                I18n.get(MusicHud.MOD_ID + ".platform.bilibili")
-        }));
+        PlatformSelector platform = new PlatformSelector(getContext(), TuneWeavePlatform.values());
+        platform.setSelectedPlatform(tuneWeave.defaultPlatform());
         form.addView(platform, new LayoutParams(MATCH_PARENT, WRAP_CONTENT));
 
         Spinner accountPlaylist = new Spinner(getContext());
@@ -284,7 +281,7 @@ public final class UniPlaylistView extends LinearLayout {
             updateSourceControls.run();
             if (position == 0) loadAccountPlaylists.run();
         });
-        platform.setOnItemSelectedListener((parent, view, position, itemId) -> {
+        platform.setOnPlatformSelectedListener(selected -> {
             if (sourceMode.getSelectedItemPosition() == 0) loadAccountPlaylists.run();
         });
         updateSourceControls.run();
@@ -382,12 +379,8 @@ public final class UniPlaylistView extends LinearLayout {
                         (button, dialog) -> dialog.dismiss())).show();
     }
 
-    private static TuneWeavePlatform selectedPlatform(Spinner spinner) {
-        return switch (spinner.getSelectedItemPosition()) {
-            case 1 -> TuneWeavePlatform.QQ;
-            case 2 -> TuneWeavePlatform.BILIBILI;
-            default -> TuneWeavePlatform.NETEASE;
-        };
+    private static TuneWeavePlatform selectedPlatform(PlatformSelector selector) {
+        return selector.getSelectedPlatform();
     }
 
     private static String referenceId(String reference, TuneWeavePlatform platform) {

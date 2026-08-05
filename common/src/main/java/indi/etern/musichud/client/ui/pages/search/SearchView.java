@@ -10,8 +10,6 @@ import icyllis.modernui.view.View;
 import icyllis.modernui.widget.Button;
 import icyllis.modernui.widget.EditText;
 import icyllis.modernui.widget.LinearLayout;
-import icyllis.modernui.widget.Spinner;
-import icyllis.modernui.widget.ArrayAdapter;
 import icyllis.modernui.widget.TextView;
 import indi.etern.musichud.MusicHud;
 import indi.etern.musichud.beans.api.SearchType;
@@ -20,6 +18,7 @@ import indi.etern.musichud.beans.music.Artist;
 import indi.etern.musichud.beans.music.MusicDetail;
 import indi.etern.musichud.beans.music.Playlist;
 import indi.etern.musichud.client.ui.Theme;
+import indi.etern.musichud.client.ui.components.PlatformSelector;
 import indi.etern.musichud.client.ui.utils.ui.ButtonInsetBackgroundFactory;
 import indi.etern.musichud.client.services.tuneweave.TuneWeaveClientService;
 import indi.etern.musichud.server.api.tuneweave.TuneWeavePlatform;
@@ -49,7 +48,7 @@ public class SearchView extends LinearLayout {
     private final HashSet<Consumer<SearchMeta>> searchRefreshListeners = new HashSet<>();
     private static final ClientConfig clientConfig = ClientConfig.getInstance();
     private EditText searchTextInput;
-    private Spinner platformSpinner;
+    private PlatformSelector platformSelector;
     private SearchResultTabPage searchResultTabPage;
     @Getter
     private String searchText;
@@ -80,18 +79,9 @@ public class SearchView extends LinearLayout {
         addView(top, topParams);
 
         top.addView(new View(context), new LayoutParams(0, WRAP_CONTENT, 2));
-        platformSpinner = new Spinner(context);
-        platformSpinner.setAdapter(new ArrayAdapter<>(context, new String[]{
-                I18n.get(MusicHud.MOD_ID + ".platform.netease"),
-                I18n.get(MusicHud.MOD_ID + ".platform.qq"),
-                I18n.get(MusicHud.MOD_ID + ".platform.bilibili")
-        }));
-        platformSpinner.setSelection(switch (TuneWeaveClientService.getInstance().defaultPlatform()) {
-            case NETEASE -> 0;
-            case QQ -> 1;
-            case BILIBILI -> 2;
-        });
-        top.addView(platformSpinner, new LayoutParams(WRAP_CONTENT, MATCH_PARENT));
+        platformSelector = new PlatformSelector(context, TuneWeavePlatform.values());
+        platformSelector.setSelectedPlatform(TuneWeaveClientService.getInstance().defaultPlatform());
+        top.addView(platformSelector, new LayoutParams(WRAP_CONTENT, MATCH_PARENT));
         searchTextInput = new EditText(context, null, R.attr.editTextOutlinedStyle);
         searchTextInput.setTextAlignment(SearchView.TEXT_ALIGNMENT_CENTER);
         searchTextInput.setHint(I18n.get(MusicHud.MOD_ID + ".field.hint.searchMusic"));
@@ -174,11 +164,7 @@ public class SearchView extends LinearLayout {
     }
 
     private void sendSearchRequest(String text, SearchType searchType, int offset) {
-        TuneWeavePlatform platform = switch (platformSpinner.getSelectedItemPosition()) {
-            case 1 -> TuneWeavePlatform.QQ;
-            case 2 -> TuneWeavePlatform.BILIBILI;
-            default -> TuneWeavePlatform.NETEASE;
-        };
+        TuneWeavePlatform platform = platformSelector.getSelectedPlatform();
         MusicHud.EXECUTOR.execute(() -> {
             try {
                 List<?> result = TuneWeaveClientService.getInstance().search(text, searchType, offset, platform);

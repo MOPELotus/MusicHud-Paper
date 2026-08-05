@@ -5,16 +5,17 @@ import icyllis.modernui.mc.MuiModApi;
 import icyllis.modernui.view.Gravity;
 import icyllis.modernui.view.View;
 import icyllis.modernui.view.ViewGroup;
-import icyllis.modernui.widget.ArrayAdapter;
 import icyllis.modernui.widget.Button;
-import icyllis.modernui.widget.LinearLayout;
+import icyllis.modernui.widget.ArrayAdapter;
 import icyllis.modernui.widget.Spinner;
+import icyllis.modernui.widget.LinearLayout;
 import icyllis.modernui.widget.TextView;
 import indi.etern.musichud.MusicHud;
 import indi.etern.musichud.client.services.LoginService;
 import indi.etern.musichud.client.services.tuneweave.TuneWeaveClientService;
 import indi.etern.musichud.client.ui.Theme;
 import indi.etern.musichud.client.ui.components.UrlImageView;
+import indi.etern.musichud.client.ui.components.PlatformSelector;
 import indi.etern.musichud.client.ui.utils.image.QrImageUtils;
 import indi.etern.musichud.client.ui.utils.ui.ButtonInsetBackgroundFactory;
 import indi.etern.musichud.server.api.tuneweave.TuneWeavePlatform;
@@ -29,7 +30,7 @@ import static icyllis.modernui.view.ViewGroup.LayoutParams.WRAP_CONTENT;
 public class QRLoginView extends LinearLayout implements ILoginView {
     private final TuneWeaveClientService tuneWeave = TuneWeaveClientService.getInstance();
     private final Button loginButton;
-    private final Spinner platformSpinner;
+    private final PlatformSelector platformSelector;
     private final Spinner qqLoginTypeSpinner;
     private final UrlImageView qrImageView;
     private final TextView messageTextView;
@@ -58,18 +59,9 @@ public class QRLoginView extends LinearLayout implements ILoginView {
         LinearLayout platformLayout = new LinearLayout(context);
         platformLayout.setOrientation(LinearLayout.HORIZONTAL);
         platformLayout.setGravity(Gravity.CENTER);
-        platformSpinner = new Spinner(context);
-        platformSpinner.setAdapter(new ArrayAdapter<>(context, new String[]{
-                I18n.get(MusicHud.MOD_ID + ".platform.netease"),
-                I18n.get(MusicHud.MOD_ID + ".platform.qq"),
-                I18n.get(MusicHud.MOD_ID + ".platform.bilibili")
-        }));
-        platformSpinner.setSelection(switch (tuneWeave.defaultPlatform()) {
-            case NETEASE -> 0;
-            case QQ -> 1;
-            case BILIBILI -> 2;
-        });
-        platformLayout.addView(platformSpinner, new LayoutParams(WRAP_CONTENT, WRAP_CONTENT));
+        platformSelector = new PlatformSelector(context, TuneWeavePlatform.values());
+        platformSelector.setSelectedPlatform(tuneWeave.defaultPlatform());
+        platformLayout.addView(platformSelector, new LayoutParams(WRAP_CONTENT, WRAP_CONTENT));
         qqLoginTypeSpinner = new Spinner(context);
         qqLoginTypeSpinner.setAdapter(new ArrayAdapter<>(context, new String[]{
                 I18n.get(MusicHud.MOD_ID + ".login.qqMusic"),
@@ -111,9 +103,9 @@ public class QRLoginView extends LinearLayout implements ILoginView {
         addView(messageTextView, messageParams);
 
         loginButton.setOnClickListener(view -> startLogin());
-        platformSpinner.setOnItemSelectedListener((parent, view, position, id) ->
-                qqLoginTypeSpinner.setVisibility(position == 1 ? VISIBLE : GONE));
-        qqLoginTypeSpinner.setVisibility(platformSpinner.getSelectedItemPosition() == 1 ? VISIBLE : GONE);
+        platformSelector.setOnPlatformSelectedListener(platform ->
+                qqLoginTypeSpinner.setVisibility(platform == TuneWeavePlatform.QQ ? VISIBLE : GONE));
+        qqLoginTypeSpinner.setVisibility(platformSelector.getSelectedPlatform() == TuneWeavePlatform.QQ ? VISIBLE : GONE);
         qrImageView.setLoading(false);
 
         addOnAttachStateChangeListener(new OnAttachStateChangeListener() {
@@ -192,18 +184,14 @@ public class QRLoginView extends LinearLayout implements ILoginView {
     }
 
     private TuneWeavePlatform selectedPlatform() {
-        return switch (platformSpinner.getSelectedItemPosition()) {
-            case 1 -> TuneWeavePlatform.QQ;
-            case 2 -> TuneWeavePlatform.BILIBILI;
-            default -> TuneWeavePlatform.NETEASE;
-        };
+        return platformSelector.getSelectedPlatform();
     }
 
     private void setBusy(boolean busy) {
         MuiModApi.postToUiThread(() -> {
             loginButton.setClickable(!busy);
             loginButton.setAlpha(busy ? 0.55f : 1f);
-            platformSpinner.setClickable(!busy);
+            platformSelector.setEnabled(!busy);
             qqLoginTypeSpinner.setClickable(!busy);
             if (busy) {
                 qrImageView.setLoading(true);

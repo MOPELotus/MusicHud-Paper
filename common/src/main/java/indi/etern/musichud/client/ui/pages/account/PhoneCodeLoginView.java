@@ -11,6 +11,7 @@ import indi.etern.musichud.client.ui.Theme;
 import indi.etern.musichud.client.services.LoginService;
 import indi.etern.musichud.client.services.tuneweave.TuneWeaveClientService;
 import indi.etern.musichud.client.ui.utils.ui.ButtonInsetBackgroundFactory;
+import indi.etern.musichud.client.ui.components.PlatformSelector;
 import indi.etern.musichud.server.api.tuneweave.TuneWeavePlatform;
 import net.minecraft.client.resources.language.I18n;
 
@@ -26,7 +27,7 @@ public class PhoneCodeLoginView extends LinearLayout implements ILoginView {
     private final TextView messageTextView;
     private final EditText phoneRegionInput;
     private final Button sendCodeButton;
-    private final Spinner platformSpinner;
+    private final PlatformSelector platformSelector;
     private final TuneWeaveClientService tuneWeave = TuneWeaveClientService.getInstance();
     private ZonedDateTime lastSentCodeTime;
     MusicHud.ScheduledTask scheduledRefreshTask = null;
@@ -52,18 +53,11 @@ public class PhoneCodeLoginView extends LinearLayout implements ILoginView {
         textView1.setLayoutParams(params1);
         addView(textView1);
 
-        platformSpinner = new Spinner(context);
-        platformSpinner.setAdapter(new ArrayAdapter<>(context, new String[]{
-                I18n.get(MusicHud.MOD_ID + ".platform.netease"),
-                I18n.get(MusicHud.MOD_ID + ".platform.qq")
-        }));
-        platformSpinner.setSelection(switch (tuneWeave.defaultPlatform()) {
-            case QQ -> 1;
-            default -> 0;
-        });
+        platformSelector = new PlatformSelector(context, TuneWeavePlatform.NETEASE, TuneWeavePlatform.QQ);
+        platformSelector.setSelectedPlatform(tuneWeave.defaultPlatform());
         LayoutParams platformParams = new LayoutParams(WRAP_CONTENT, WRAP_CONTENT);
         platformParams.setMargins(0, dp(12), 0, 0);
-        addView(platformSpinner, platformParams);
+        addView(platformSelector, platformParams);
 
         LinearLayout content = new LinearLayout(context);
         content.setOrientation(LinearLayout.VERTICAL);
@@ -266,10 +260,7 @@ public class PhoneCodeLoginView extends LinearLayout implements ILoginView {
     }
 
     private TuneWeavePlatform selectedPlatform() {
-        return switch (platformSpinner.getSelectedItemPosition()) {
-            case 1 -> TuneWeavePlatform.QQ;
-            default -> TuneWeavePlatform.NETEASE;
-        };
+        return platformSelector.getSelectedPlatform();
     }
 
     private void startCountdown(int timeout) {
