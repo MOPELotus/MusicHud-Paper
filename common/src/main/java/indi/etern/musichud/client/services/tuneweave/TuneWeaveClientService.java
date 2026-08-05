@@ -396,8 +396,10 @@ public final class TuneWeaveClientService {
             }
             JsonObject pagination = object(response.meta().get("pagination"));
             boolean hasMore = bool(pagination, "has_more", page.size() == 100);
-            int nextOffset = integer(pagination, "next_offset", offset + page.size());
-            if (!hasMore || page.isEmpty() || nextOffset <= offset) break;
+            JsonElement nextOffsetValue = pagination.get("next_offset");
+            if (!hasMore || page.isEmpty() || nextOffsetValue == null || nextOffsetValue.isJsonNull()) break;
+            int nextOffset = nextOffsetValue.getAsInt();
+            if (nextOffset <= offset) break;
             offset = nextOffset;
         }
         return result;
@@ -478,7 +480,37 @@ public final class TuneWeaveClientService {
         baseQuery.put("platform", platform.apiName());
         if (categoryId != null && !categoryId.isBlank()) baseQuery.put("category_id", categoryId.trim());
         if (regionId != null && !regionId.isBlank()) baseQuery.put("region_id", regionId.trim());
-        return loadRadioStationPages(platform, "/v1/radio/stations", baseQuery);
+        return loadRadioStationCatalog(platform, baseQuery);
+    }
+
+    private List<RadioStationInfo> loadRadioStationCatalog(TuneWeavePlatform platform,
+                                                           Map<String, String> baseQuery) {
+        LinkedHashMap<String, RadioStationInfo> result = new LinkedHashMap<>();
+        Map<String, String> cursor = Map.of();
+        String previousCursor = "";
+        while (true) {
+            Map<String, String> query = new LinkedHashMap<>(baseQuery);
+            query.put("limit", "100");
+            query.putAll(cursor);
+            TuneWeaveApiClient.TuneWeaveResponse response = requestForPlatform(
+                    platform, "GET", "/v1/radio/stations", query, null);
+            List<JsonElement> page = elements(response.data());
+            for (JsonElement value : page) {
+                RadioStationInfo station = toRadioStation(platform, unwrap(value), "");
+                if (!station.reference().isBlank()) result.putIfAbsent(station.reference(), station);
+            }
+            JsonObject pagination = object(response.meta().get("pagination"));
+            if (!bool(pagination, "has_more", false) || page.isEmpty()) break;
+            JsonObject extensions = unwrap(pagination.get("extensions"));
+            JsonObject nextCursor = unwrap(extensions.get("next_cursor"));
+            String lastId = string(nextCursor, "id", "");
+            String score = string(nextCursor, "score", "");
+            String cursorKey = lastId + ':' + score;
+            if (lastId.isBlank() || score.isBlank() || cursorKey.equals(previousCursor)) break;
+            previousCursor = cursorKey;
+            cursor = Map.of("last_id", lastId, "score", score);
+        }
+        return List.copyOf(result.values());
     }
 
     public List<RadioStationInfo> loadStyledRadioStations(TuneWeavePlatform platform) {
@@ -531,8 +563,10 @@ public final class TuneWeaveClientService {
             }
             JsonObject pagination = object(response.meta().get("pagination"));
             boolean hasMore = bool(pagination, "has_more", page.size() == 100);
-            int nextOffset = integer(pagination, "next_offset", offset + page.size());
-            if (!hasMore || page.isEmpty() || nextOffset <= offset) break;
+            JsonElement nextOffsetValue = pagination.get("next_offset");
+            if (!hasMore || page.isEmpty() || nextOffsetValue == null || nextOffsetValue.isJsonNull()) break;
+            int nextOffset = nextOffsetValue.getAsInt();
+            if (nextOffset <= offset) break;
             offset = nextOffset;
         }
         return result;
@@ -568,6 +602,7 @@ public final class TuneWeaveClientService {
             MusicDetail track = MusicDetail.fromTuneWeave(stableId(platform,
                     "radio-item:" + (itemReference.isBlank() ? station.reference() + ':' + title : itemReference)),
                     station.reference(), "radio", title, integer(item, "duration_ms", 0), album, artists);
+            track.setSourcePartRef(itemReference);
             track.setPusherInfo(indi.etern.musichud.beans.music.PusherInfo.EMPTY);
             tracksById.put(track.getId(), track);
             result.add(track);
@@ -1069,8 +1104,12 @@ public final class TuneWeaveClientService {
     private MusicResourceInfo loadRadioResource(MusicDetail musicDetail, TuneWeavePlatform platform) {
         JsonObject queue = object(requestForPlatform(platform, "GET", "/v1/radio/stations/"
                 + TuneWeaveApiClient.encodePathSegment(musicDetail.getSourceRef()) + "/tracks",
-                Map.of("limit", "1"), null).data());
-        JsonObject item = elements(queue.get("items")).stream().findFirst().map(TuneWeaveClientService::unwrap)
+                Map.of("limit", musicDetail.getSourcePartRef().isBlank() ? "1" : "100"), null).data());
+        List<JsonElement> items = elements(queue.get("items"));
+        JsonObject item = items.stream().map(TuneWeaveClientService::unwrap)
+                .filter(value -> musicDetail.getSourcePartRef().equals(string(value, "ref", "")))
+                .findFirst()
+                .or(() -> items.stream().findFirst().map(TuneWeaveClientService::unwrap))
                 .orElseGet(JsonObject::new);
         String url = string(item, "stream_url", "");
         int duration = integer(item, "duration_ms", musicDetail.getDurationMillis());
@@ -1398,7 +1437,7 @@ public final class TuneWeaveClientService {
 
     private PodcastInfo toPodcast(TuneWeavePlatform platform, JsonObject object) {
         String reference = string(object, "ref", string(object, "reference", ""));
-        JsonObject creator = object(object.get("creator"));
+        JsonObject creator = unwrap(object.get("creator"));
         return new PodcastInfo(reference, string(object, "name", reference),
                 string(object, "description", ""), string(object, "cover_url", ""),
                 string(creator, "name", ""), string(object, "category", ""),
@@ -1409,8 +1448,8 @@ public final class TuneWeaveClientService {
 
     private PodcastEpisodeInfo toPodcastEpisode(TuneWeavePlatform platform, JsonObject object) {
         String reference = string(object, "ref", string(object, "reference", ""));
-        JsonObject creator = object(object.get("creator"));
-        JsonObject audio = object(object.get("audio"));
+        JsonObject creator = unwrap(object.get("creator"));
+        JsonObject audio = unwrap(object.get("audio"));
         return new PodcastEpisodeInfo(reference, referenceValue(object.get("podcast_ref")),
                 string(object, "name", reference), string(object, "description", ""),
                 string(object, "cover_url", ""), string(creator, "name", ""),

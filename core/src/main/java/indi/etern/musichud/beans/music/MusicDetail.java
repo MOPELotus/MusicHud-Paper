@@ -97,6 +97,9 @@ public class MusicDetail implements IdentifiedBeans {
         if (sourceKind != null && sourceKind.startsWith("video|part=")) {
             this.sourceKind = "video";
             this.sourcePartRef = sourceKind.substring("video|part=".length());
+        } else if (sourceKind != null && sourceKind.startsWith("radio|item=")) {
+            this.sourceKind = "radio";
+            this.sourcePartRef = sourceKind.substring("radio|item=".length());
         } else {
             this.sourceKind = sourceKind;
         }
@@ -162,8 +165,10 @@ public class MusicDetail implements IdentifiedBeans {
 
     /** Wire representation keeps a selected video part in the existing source-kind slot. */
     public String getWireSourceKind() {
-        return "video".equals(getSourceKind()) && !getSourcePartRef().isBlank()
-                ? "video|part=" + getSourcePartRef() : getSourceKind();
+        if (getSourcePartRef().isBlank()) return getSourceKind();
+        if ("video".equals(getSourceKind())) return "video|part=" + getSourcePartRef();
+        if ("radio".equals(getSourceKind())) return "radio|item=" + getSourcePartRef();
+        return getSourceKind();
     }
 
     public String getSourcePartRef() {

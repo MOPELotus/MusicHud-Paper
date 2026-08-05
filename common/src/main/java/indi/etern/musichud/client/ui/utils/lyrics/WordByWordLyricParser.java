@@ -1,5 +1,8 @@
 package indi.etern.musichud.client.ui.utils.lyrics;
 
+import com.google.gson.JsonElement;
+import com.google.gson.JsonObject;
+import com.google.gson.JsonParser;
 import indi.etern.musichud.MusicHud;
 import indi.etern.musichud.beans.music.LyricInfo;
 import indi.etern.musichud.client.ui.dto.LyricLine;
@@ -22,6 +25,10 @@ public class WordByWordLyricParser {
     public static ArrayDeque<LyricLine> parse(MusicDetail musicDetail) {
         LyricInfo lyricInfo = musicDetail.getLyricInfo();
         String lyric = lyricInfo.getWordByWordLyric().getLyric();
+        ArrayDeque<LyricLine> voiceTranscript = parseVoiceTranscript(lyric);
+        if (voiceTranscript != null) {
+            return voiceTranscript;
+        }
         String translatedLyric = lyricInfo.getWordByWordTranslatedLyric().getLyric();
         LinkedHashMap<Duration, LyricLine> map = new LinkedHashMap<>();
         List<LyricLine> lyricLinesWithoutValidTimestamp = new ArrayList<>(0);
@@ -129,6 +136,39 @@ public class WordByWordLyricParser {
             lastLyricLine.setDuration(Duration.ofMillis(musicDetail.getDurationMillis()).minus(lastLyricLine.getStartTime()));
         }
         return lyricLines;
+    }
+
+    private static ArrayDeque<LyricLine> parseVoiceTranscript(String lyric) {
+        if (lyric == null || !lyric.stripLeading().startsWith("{")) return null;
+        try {
+            JsonObject document = JsonParser.parseString(lyric).getAsJsonObject();
+            JsonElement sentencesValue = document.get("sents");
+            if (sentencesValue == null || !sentencesValue.isJsonArray()) return null;
+            ArrayDeque<LyricLine> result = new ArrayDeque<>();
+            LyricLine previous = null;
+            for (JsonElement value : sentencesValue.getAsJsonArray()) {
+                if (!value.isJsonObject()) continue;
+                JsonObject sentence = value.getAsJsonObject();
+                if (!sentence.has("beg") || !sentence.has("name")) continue;
+                long begin = sentence.get("beg").getAsLong();
+                long end = sentence.has("end") && !sentence.get("end").isJsonNull()
+                        ? sentence.get("end").getAsLong() : begin;
+                LyricLine line = LyricLine.builder()
+                        .startTime(Duration.ofMillis(Math.max(0, begin)))
+                        .duration(Duration.ofMillis(Math.max(0, end - begin)))
+                        .text(sentence.get("name").getAsString().strip())
+                        .type(LyricLine.Type.NORMAL)
+                        .build();
+                if (line.getText().isEmpty()) continue;
+                line.setPrevious(previous);
+                if (previous != null) previous.setNext(line);
+                result.add(line);
+                previous = line;
+            }
+            return result.isEmpty() ? null : result;
+        } catch (RuntimeException ignored) {
+            return null;
+        }
     }
 
     static void matchLine(String lyric, Consumer<LyricLineMetaData> matchedConsumer) {
