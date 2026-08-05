@@ -16,6 +16,7 @@ import indi.etern.musichud.beans.music.*;
 import indi.etern.musichud.beans.user.Profile;
 import indi.etern.musichud.beans.user.ProfileConfigData;
 import indi.etern.musichud.client.services.music.MusicService;
+import indi.etern.musichud.client.services.tuneweave.TuneWeaveClientService;
 import indi.etern.musichud.client.ui.Theme;
 import indi.etern.musichud.client.ui.utils.PlayerInfoUtil;
 import indi.etern.musichud.client.ui.utils.image.ImageUtils;
@@ -31,6 +32,7 @@ import static icyllis.modernui.view.ViewGroup.LayoutParams.WRAP_CONTENT;
 
 public class MusicCollectionCard extends LinearLayout {
     private static final MusicService musicService = MusicService.getInstance();
+    private static final TuneWeaveClientService tuneWeave = TuneWeaveClientService.getInstance();
     @Getter
     MusicCollection musicCollection;
     private Unregister onChangeUnregister;
@@ -187,10 +189,20 @@ public class MusicCollectionCard extends LinearLayout {
         LocalPlayer localPlayer = Minecraft.getInstance().player;
         if (pusherInfo == null || pusherInfo.equals(PusherInfo.EMPTY)
                 || (localPlayer != null && pusherInfo.getPlayerUUID().equals(localPlayer.getUUID()))) {
-            ToggleIdlePlaySourceButton toggleIdleSourceButton = new ToggleIdlePlaySourceButton(context);
-            toggleIdleSourceButton.setBackground(backgroundFactory.newBackgroundDrawable());
-            toggleIdleSourceButton.bindMusicList(musicService.getIdlePlaySourceState().local().collection(musicCollection));
-            row1.addView(toggleIdleSourceButton, new LayoutParams(row2.dp(22), row2.dp(22), 0));
+            if (musicCollection instanceof Playlist playlist
+                    && tuneWeave.supportsFavoriteIntelligence(playlist)) {
+                ToggleFavoriteIntelligenceButton intelligenceButton =
+                        new ToggleFavoriteIntelligenceButton(context);
+                intelligenceButton.setBackground(backgroundFactory.newBackgroundDrawable());
+                intelligenceButton.bindPlaylist(playlist);
+                row1.addView(intelligenceButton, new LayoutParams(row2.dp(22), row2.dp(22), 0));
+            } else {
+                ToggleIdlePlaySourceButton toggleIdleSourceButton = new ToggleIdlePlaySourceButton(context);
+                toggleIdleSourceButton.setBackground(backgroundFactory.newBackgroundDrawable());
+                toggleIdleSourceButton.bindMusicList(
+                        musicService.getIdlePlaySourceState().local().collection(musicCollection));
+                row1.addView(toggleIdleSourceButton, new LayoutParams(row2.dp(22), row2.dp(22), 0));
+            }
         } else {
             LinearLayout pusherRow = new LinearLayout(context);
             pusherRow.setOrientation(LinearLayout.HORIZONTAL);

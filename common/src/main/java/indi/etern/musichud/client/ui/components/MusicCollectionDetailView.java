@@ -205,10 +205,20 @@ public class MusicCollectionDetailView extends LinearLayout {
                 toggleSubscribeButton.bindState(subscribeState);
             }
         }
-        ToggleIdlePlaySourceButton toggleIdleSourceButton = new ToggleIdlePlaySourceButton(context);
-        toggleIdleSourceButton.setBackground(backgroundFactory.newBackgroundDrawable());
-        toggleIdleSourceButton.bindMusicList(musicService.getIdlePlaySourceState().local().collection(musicCollection));
-        row1.addView(toggleIdleSourceButton, new LayoutParams(dp28, dp28, 0));
+        if (musicCollection instanceof Playlist playlist
+                && TuneWeaveClientService.getInstance().supportsFavoriteIntelligence(playlist)) {
+            ToggleFavoriteIntelligenceButton intelligenceButton =
+                    new ToggleFavoriteIntelligenceButton(context);
+            intelligenceButton.setBackground(backgroundFactory.newBackgroundDrawable());
+            intelligenceButton.bindPlaylist(playlist);
+            row1.addView(intelligenceButton, new LayoutParams(dp28, dp28, 0));
+        } else {
+            ToggleIdlePlaySourceButton toggleIdleSourceButton = new ToggleIdlePlaySourceButton(context);
+            toggleIdleSourceButton.setBackground(backgroundFactory.newBackgroundDrawable());
+            toggleIdleSourceButton.bindMusicList(
+                    musicService.getIdlePlaySourceState().local().collection(musicCollection));
+            row1.addView(toggleIdleSourceButton, new LayoutParams(dp28, dp28, 0));
+        }
 
         LayoutParams topBarParams = new LayoutParams(MATCH_PARENT, WRAP_CONTENT);
         topBarParams.setMargins(0, dp(24), 0, 0);

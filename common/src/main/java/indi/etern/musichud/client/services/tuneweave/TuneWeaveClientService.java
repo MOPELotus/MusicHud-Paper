@@ -1701,6 +1701,44 @@ public final class TuneWeaveClientService {
         return playlist.getSourceRef().equals(favoritePlaylistReferences.get(platform));
     }
 
+    public boolean supportsFavoriteIntelligence(Playlist playlist) {
+        return isFavoritePlaylist(playlist)
+                && platformFromReference(playlist.getSourceRef()) == TuneWeavePlatform.NETEASE;
+    }
+
+    public List<MusicDetail> loadFavoriteIntelligence(Playlist playlist, String startReference) {
+        if (!supportsFavoriteIntelligence(playlist)) {
+            throw new IllegalArgumentException("Favorite intelligence is only available for NetEase favorites");
+        }
+        TuneWeavePlatform platform = TuneWeavePlatform.NETEASE;
+        List<JsonElement> favoriteTracks = elements(requestForPlatform(platform, "GET",
+                "/v1/account/favorites/tracks",
+                Map.of("platform", platform.apiName(), "limit", "1", "offset", "0"), null).data());
+        if (favoriteTracks.isEmpty()) return List.of();
+        MusicDetail seed = toTrack(platform, unwrap(favoriteTracks.getFirst()));
+        if (seed == MusicDetail.NONE || seed.getSourceRef().isBlank()) return List.of();
+
+        Map<String, String> query = new LinkedHashMap<>();
+        query.put("platform", platform.apiName());
+        query.put("seed", seed.getSourceRef());
+        query.put("count", "1");
+        if (startReference != null && startReference.startsWith(platform.apiName() + ':')) {
+            query.put("start", startReference);
+        }
+        JsonObject queue = object(requestForPlatform(platform, "GET",
+                "/v1/account/favorites/tracks/intelligence", query, null).data());
+        LinkedHashMap<String, MusicDetail> result = new LinkedHashMap<>();
+        for (JsonElement value : elements(queue.get("items"))) {
+            JsonObject item = unwrap(value);
+            JsonObject trackData = object(item.get("track"));
+            MusicDetail track = toTrack(platform, trackData.isEmpty() ? item : trackData);
+            if (track != MusicDetail.NONE && !track.getSourceRef().isBlank()) {
+                result.putIfAbsent(track.getSourceRef(), track);
+            }
+        }
+        return List.copyOf(result.values());
+    }
+
     private static JsonObject mergeSnapshot(JsonObject object) {
         JsonElement snapshotData = object.get("snapshot");
         if (snapshotData == null || !snapshotData.isJsonObject()) return object;

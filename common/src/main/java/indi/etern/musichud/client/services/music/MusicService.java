@@ -25,6 +25,7 @@ import indi.etern.musichud.interfaces.ClientRegister;
 import indi.etern.musichud.interfaces.IClientLoginService;
 import indi.etern.musichud.interfaces.IClientMusicService;
 import indi.etern.musichud.interfaces.RegisterMark;
+import indi.etern.musichud.interfaces.Unregister;
 import indi.etern.musichud.network.IClientNetworkService;
 import indi.etern.musichud.network.payloads.pushMessages.c2s.ClientPushMusicToQueueMessage;
 import indi.etern.musichud.network.payloads.pushMessages.c2s.ClientRemoveMusicFromQueueMessage;
@@ -43,7 +44,6 @@ import java.util.function.Consumer;
 
 import static indi.etern.musichud.server.api.impl.ncm.CommonCaches.*;
 
-@NoArgsConstructor(access = AccessLevel.PRIVATE)
 public class MusicService implements IClientMusicService {
     private static final IClientNetworkService clientNetworkService = IClientNetworkService.getInstance();
     private static final ClientConfig clientConfig = ClientConfig.getInstance();
@@ -60,8 +60,20 @@ public class MusicService implements IClientMusicService {
     private final Set<Consumer<QueueItem>> musicQueuePushListeners = ConcurrentHashMap.newKeySet();
     @Getter
     private final Set<BiConsumer<Integer, QueueItem>> musicQueueRemoveListeners = ConcurrentHashMap.newKeySet();
+    private final Set<Consumer<Boolean>> favoriteIntelligenceStateListeners = ConcurrentHashMap.newKeySet();
+    private final Deque<MusicDetail> favoriteIntelligenceBuffer = new ArrayDeque<>();
+    private final java.util.concurrent.atomic.AtomicBoolean favoriteIntelligenceLoading =
+            new java.util.concurrent.atomic.AtomicBoolean();
+    private volatile Playlist favoriteIntelligencePlaylist;
+    private volatile boolean favoriteIntelligenceEnabled;
+    private volatile boolean favoriteIntelligencePushPending;
+    private volatile String favoriteIntelligenceLastReference = "";
     long lastPressTime = 0;
     private UserCollections currentUserCollections;
+
+    private MusicService() {
+        musicQueueRefreshListeners.add(this::onQueueRefreshedForFavoriteIntelligence);
+    }
 
     @EqualsAndHashCode
     @NoArgsConstructor(access = AccessLevel.PACKAGE)
@@ -142,8 +154,114 @@ public class MusicService implements IClientMusicService {
         return instance;
     }
 
+    public boolean isFavoriteIntelligenceEnabled(Playlist playlist) {
+        Playlist active = favoriteIntelligencePlaylist;
+        return favoriteIntelligenceEnabled && active != null && playlist != null
+                && active.getSourceRef().equals(playlist.getSourceRef());
+    }
+
+    public Unregister onFavoriteIntelligenceStateChange(Consumer<Boolean> listener) {
+        favoriteIntelligenceStateListeners.add(listener);
+        return () -> favoriteIntelligenceStateListeners.remove(listener);
+    }
+
+    public CompletableFuture<Boolean> setFavoriteIntelligenceEnabled(Playlist playlist, boolean enabled) {
+        if (!enabled) {
+            disableFavoriteIntelligence();
+            return CompletableFuture.completedFuture(false);
+        }
+        if (!tuneWeave.supportsFavoriteIntelligence(playlist)) {
+            return CompletableFuture.failedFuture(new IllegalArgumentException(
+                    "Favorite intelligence is unavailable for this playlist"));
+        }
+        synchronized (favoriteIntelligenceBuffer) {
+            favoriteIntelligencePlaylist = playlist;
+            favoriteIntelligenceEnabled = true;
+            favoriteIntelligencePushPending = false;
+            favoriteIntelligenceLastReference = "";
+            favoriteIntelligenceBuffer.clear();
+        }
+        return refillFavoriteIntelligence().thenApply(ignored -> {
+            notifyFavoriteIntelligenceState(true);
+            queueNextFavoriteIntelligenceTrack();
+            return true;
+        }).exceptionallyCompose(error -> {
+            disableFavoriteIntelligence();
+            return CompletableFuture.failedFuture(error);
+        });
+    }
+
+    private CompletableFuture<Void> refillFavoriteIntelligence() {
+        Playlist playlist = favoriteIntelligencePlaylist;
+        if (!favoriteIntelligenceEnabled || playlist == null
+                || !favoriteIntelligenceLoading.compareAndSet(false, true)) {
+            return CompletableFuture.completedFuture(null);
+        }
+        String start = favoriteIntelligenceLastReference;
+        return CompletableFuture.supplyAsync(
+                () -> tuneWeave.loadFavoriteIntelligence(playlist, start), MusicHud.EXECUTOR)
+                .thenAccept(tracks -> {
+                    if (tracks.isEmpty()) {
+                        throw new IllegalStateException("TuneWeave returned an empty favorite intelligence queue");
+                    }
+                    synchronized (favoriteIntelligenceBuffer) {
+                        for (MusicDetail track : tracks) {
+                            if (!track.getSourceRef().equals(favoriteIntelligenceLastReference)) {
+                                favoriteIntelligenceBuffer.addLast(track);
+                            }
+                        }
+                    }
+                }).whenComplete((ignored, error) -> favoriteIntelligenceLoading.set(false));
+    }
+
+    private void onQueueRefreshedForFavoriteIntelligence(Queue<QueueItem> queue) {
+        if (!favoriteIntelligenceEnabled) return;
+        if (!queue.isEmpty()) {
+            favoriteIntelligencePushPending = false;
+        } else if (!favoriteIntelligencePushPending) {
+            queueNextFavoriteIntelligenceTrack();
+        }
+    }
+
+    private void queueNextFavoriteIntelligenceTrack() {
+        if (!favoriteIntelligenceEnabled || favoriteIntelligencePushPending || !musicQueue.isEmpty()) return;
+        MusicDetail next;
+        synchronized (favoriteIntelligenceBuffer) {
+            next = favoriteIntelligenceBuffer.pollFirst();
+        }
+        if (next == null) {
+            if (favoriteIntelligenceLoading.get()) return;
+            refillFavoriteIntelligence().thenRun(this::queueNextFavoriteIntelligenceTrack)
+                    .exceptionally(error -> {
+                        MusicHud.LOGGER.warn("Failed to refill favorite intelligence queue", error);
+                        disableFavoriteIntelligence();
+                        return null;
+                    });
+            return;
+        }
+        favoriteIntelligenceLastReference = next.getSourceRef();
+        favoriteIntelligencePushPending = true;
+        sendPushMusicToQueue(next);
+    }
+
+    private void disableFavoriteIntelligence() {
+        favoriteIntelligenceEnabled = false;
+        favoriteIntelligencePlaylist = null;
+        favoriteIntelligencePushPending = false;
+        favoriteIntelligenceLastReference = "";
+        synchronized (favoriteIntelligenceBuffer) {
+            favoriteIntelligenceBuffer.clear();
+        }
+        notifyFavoriteIntelligenceState(false);
+    }
+
+    private void notifyFavoriteIntelligenceState(boolean enabled) {
+        favoriteIntelligenceStateListeners.forEach(listener -> listener.accept(enabled));
+    }
+
     public static void resetCurrentMusicStatus() {
         if (instance != null) {
+            instance.disableFavoriteIntelligence();
             instance.switchMusic(MusicDetail.NONE, MusicDetail.NONE, null, "");
             instance.getIdlePlaySourceState().local().reset();
             instance.musicQueue.clear();
