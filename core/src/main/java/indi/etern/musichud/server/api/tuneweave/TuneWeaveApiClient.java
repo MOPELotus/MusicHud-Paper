@@ -18,10 +18,15 @@ import java.net.http.HttpResponse;
 import java.net.http.HttpTimeoutException;
 import java.net.URLEncoder;
 import java.nio.charset.StandardCharsets;
+import java.nio.file.Files;
+import java.nio.file.Path;
+import java.nio.file.StandardCopyOption;
 import java.time.Duration;
 import java.util.Collection;
 import java.util.LinkedHashMap;
+import java.util.Locale;
 import java.util.Map;
+import java.util.Set;
 import java.util.UUID;
 import java.util.concurrent.Executors;
 
@@ -131,6 +136,76 @@ public final class TuneWeaveApiClient {
         throw last == null ? new TuneWeaveException("TuneWeave request failed", false) : last;
     }
 
+    /** Uploads a client-owned file to the short-lived NOS target returned by TuneWeave. */
+    public static void uploadTicketFile(String uploadUrl, String method, Map<String, String> headers, Path file) {
+        URI uri = validateNosUploadUri(uploadUrl);
+        String normalizedMethod = method == null ? "" : method.trim().toUpperCase(Locale.ROOT);
+        if (!("POST".equals(normalizedMethod) || "PUT".equals(normalizedMethod))) {
+            throw new TuneWeaveException("TuneWeave returned an unsupported cloud upload method", false);
+        }
+        HttpRequest.Builder builder = HttpRequest.newBuilder(uri)
+                .timeout(Duration.ofMinutes(30))
+                .header("User-Agent", "MusicHud-TuneWeave/1");
+        copyExternalHeaders(builder, headers, true);
+        try {
+            builder.method(normalizedMethod, HttpRequest.BodyPublishers.ofFile(file));
+            HttpResponse<Void> response = CLIENT.send(builder.build(), HttpResponse.BodyHandlers.discarding());
+            if (response.statusCode() < 200 || response.statusCode() >= 300) {
+                throw new TuneWeaveException(
+                        "Cloud object storage rejected the upload (HTTP " + response.statusCode() + ')', false);
+            }
+        } catch (InterruptedException error) {
+            Thread.currentThread().interrupt();
+            throw new TuneWeaveException("Cloud upload was interrupted", error, false);
+        } catch (Exception error) {
+            if (error instanceof TuneWeaveException tuneWeaveException) throw tuneWeaveException;
+            throw new TuneWeaveException("Cloud object storage upload failed", error, true);
+        }
+    }
+
+    /** Downloads a media URL returned by TuneWeave without forwarding the caller credential. */
+    public static void downloadMediaFile(String mediaUrl, Map<String, String> headers, Path target) {
+        URI uri = validateMediaUri(mediaUrl);
+        Path normalizedTarget = target.toAbsolutePath().normalize();
+        Path parent = normalizedTarget.getParent();
+        if (parent == null) throw new TuneWeaveException("Download target has no parent directory", false);
+        Path temporary = null;
+        try {
+            Files.createDirectories(parent);
+            temporary = Files.createTempFile(parent, normalizedTarget.getFileName().toString(), ".part");
+            HttpRequest.Builder builder = HttpRequest.newBuilder(uri)
+                    .timeout(Duration.ofMinutes(30))
+                    .header("User-Agent", "MusicHud-TuneWeave/1")
+                    .GET();
+            copyExternalHeaders(builder, headers, false);
+            HttpResponse<Path> response = CLIENT.send(builder.build(), HttpResponse.BodyHandlers.ofFile(temporary));
+            if (response.statusCode() < 200 || response.statusCode() >= 300) {
+                throw new TuneWeaveException(
+                        "Cloud media download failed (HTTP " + response.statusCode() + ')', true);
+            }
+            try {
+                Files.move(temporary, normalizedTarget, StandardCopyOption.ATOMIC_MOVE,
+                        StandardCopyOption.REPLACE_EXISTING);
+            } catch (java.nio.file.AtomicMoveNotSupportedException ignored) {
+                Files.move(temporary, normalizedTarget, StandardCopyOption.REPLACE_EXISTING);
+            }
+            temporary = null;
+        } catch (InterruptedException error) {
+            Thread.currentThread().interrupt();
+            throw new TuneWeaveException("Cloud media download was interrupted", error, false);
+        } catch (Exception error) {
+            if (error instanceof TuneWeaveException tuneWeaveException) throw tuneWeaveException;
+            throw new TuneWeaveException("Cloud media download failed", error, true);
+        } finally {
+            if (temporary != null) {
+                try {
+                    Files.deleteIfExists(temporary);
+                } catch (java.io.IOException ignored) {
+                }
+            }
+        }
+    }
+
     public static String baseUrl() {
         try {
             return normalizeBaseUrl(ServerConfig.getInstance().getServerApiBaseUrl());
@@ -177,6 +252,48 @@ public final class TuneWeaveApiClient {
             }
         }
         return result.toString();
+    }
+
+    private static URI validateNosUploadUri(String value) {
+        URI uri = validateMediaUri(value);
+        String host = uri.getHost().toLowerCase(Locale.ROOT);
+        if (!host.endsWith(".127.net") || host.length() <= ".127.net".length()
+                || uri.getPort() != -1) {
+            throw new TuneWeaveException("TuneWeave returned an untrusted cloud upload target", false);
+        }
+        return uri;
+    }
+
+    private static URI validateMediaUri(String value) {
+        URI uri;
+        try {
+            uri = URI.create(value == null ? "" : value.trim());
+        } catch (IllegalArgumentException error) {
+            throw new TuneWeaveException("TuneWeave returned an invalid media URL", error, false);
+        }
+        if (!("http".equalsIgnoreCase(uri.getScheme()) || "https".equalsIgnoreCase(uri.getScheme()))
+                || uri.getHost() == null || uri.getUserInfo() != null || uri.getFragment() != null) {
+            throw new TuneWeaveException("TuneWeave returned an invalid media URL", false);
+        }
+        return uri;
+    }
+
+    private static void copyExternalHeaders(HttpRequest.Builder builder, Map<String, String> headers,
+                                            boolean uploadTicket) {
+        if (headers == null || headers.isEmpty()) return;
+        Set<String> forbidden = Set.of("authorization", "cookie", "proxy-authorization", "host",
+                "content-length", "connection", "expect", "upgrade", "x-tuneweave-credential");
+        headers.forEach((name, value) -> {
+            if (name == null || value == null || name.isBlank() || value.isBlank()) return;
+            String normalized = name.trim().toLowerCase(Locale.ROOT);
+            if (forbidden.contains(normalized) || normalized.startsWith("proxy-")
+                    || name.indexOf('\r') >= 0 || name.indexOf('\n') >= 0
+                    || value.indexOf('\r') >= 0 || value.indexOf('\n') >= 0) {
+                return;
+            }
+            if (!uploadTicket && normalized.startsWith("x-nos-")) return;
+            builder.header(name.trim(), value.trim());
+        });
     }
 
     private static TuneWeaveResponse parseResponse(int status, String rawBody) {
