@@ -138,7 +138,7 @@ public class QRLoginView extends LinearLayout implements ILoginView {
                 ? switch (qqLoginTypeSpinner.getSelectedItemPosition()) {
                     case 1 -> "wechat";
                     case 2 -> "mobile";
-                    default -> "qq_music";
+                    default -> "qq";
                 }
                 : null;
         MusicHud.EXECUTOR.execute(() -> {
