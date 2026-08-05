@@ -28,6 +28,7 @@ import static icyllis.modernui.view.ViewGroup.LayoutParams.WRAP_CONTENT;
 
 /** Direct client-mode QR login; the Minecraft server never sees the credential. */
 public class QRLoginView extends LinearLayout implements ILoginView {
+    private static final String[] QQ_LOGIN_TYPES = {"qq", "wechat", "mobile"};
     private final TuneWeaveClientService tuneWeave = TuneWeaveClientService.getInstance();
     private final Button loginButton;
     private final PlatformSelector platformSelector;
@@ -64,9 +65,9 @@ public class QRLoginView extends LinearLayout implements ILoginView {
         platformLayout.addView(platformSelector, new LayoutParams(WRAP_CONTENT, WRAP_CONTENT));
         qqLoginTypeSpinner = new Spinner(context);
         qqLoginTypeSpinner.setAdapter(new ArrayAdapter<>(context, new String[]{
-                I18n.get(MusicHud.MOD_ID + ".login.qqMusic"),
+                I18n.get(MusicHud.MOD_ID + ".login.qq"),
                 I18n.get(MusicHud.MOD_ID + ".login.wechat"),
-                I18n.get(MusicHud.MOD_ID + ".login.mobile")
+                I18n.get(MusicHud.MOD_ID + ".login.qqMusicClient")
         }));
         LayoutParams qqParams = new LayoutParams(WRAP_CONTENT, WRAP_CONTENT);
         qqParams.setMargins(dp(8), 0, 0, 0);
@@ -127,11 +128,8 @@ public class QRLoginView extends LinearLayout implements ILoginView {
         messageTextView.setVisibility(GONE);
         TuneWeavePlatform platform = selectedPlatform();
         String loginType = platform == TuneWeavePlatform.QQ
-                ? switch (qqLoginTypeSpinner.getSelectedItemPosition()) {
-                    case 1 -> "wechat";
-                    case 2 -> "mobile";
-                    default -> "qq";
-                }
+                ? QQ_LOGIN_TYPES[Math.clamp(qqLoginTypeSpinner.getSelectedItemPosition(), 0,
+                        QQ_LOGIN_TYPES.length - 1)]
                 : null;
         MusicHud.EXECUTOR.execute(() -> {
             try {

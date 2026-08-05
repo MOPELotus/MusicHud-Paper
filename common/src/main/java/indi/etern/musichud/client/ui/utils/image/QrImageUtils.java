@@ -34,6 +34,9 @@ public final class QrImageUtils {
             if (normalized.startsWith("data:image/")) {
                 return normalized;
             }
+            if (normalized.startsWith("https://") || normalized.startsWith("http://")) {
+                return normalized;
+            }
         }
         if (qrContent == null || qrContent.isBlank()) {
             throw new IllegalArgumentException("TuneWeave returned neither a QR image nor QR content");
