@@ -96,13 +96,6 @@ public class MusicPlayerServerService {
 
                     nextIdleMusicDetail = preloadMusicDetail != null ? preloadMusicDetail : MusicDetail.NONE;
 
-                    MusicResourceInfo resourceInfo = musicApiService.getResourceInfo(switchedToPlay, Quality.STANDARD, switchedToPlay.getPusherInfo().getPlayerUUID());
-                    if (resourceInfo.equals(MusicResourceInfo.NONE)) {
-                        continue;
-                    }
-                    if (switchedToPlay.getLyricInfo() == null || switchedToPlay.getLyricInfo().equals(LyricInfo.NONE)) {
-                        switchedToPlay.setLyricInfo(musicApiService.getLyricInfo(switchedToPlay));
-                    }
                     serverNetworkService.sendToPlayerInfos(
                             loginedPlayerInfoMap.values(),
                             new SwitchMusicMessage(switchedToPlay, nextIdleMusicDetail, message)
@@ -342,12 +335,21 @@ public class MusicPlayerServerService {
         });
     }
 
-    public void pushMusicToQueue(long musicDetailId, PusherInfo pusherInfo) {
-        List<MusicDetail> musicDetailByIds = musicApiService.getMusicDetailByIds(List.of(musicDetailId), pusherInfo.getPlayerUUID());
-        if (musicDetailByIds.size() != 1) {
-            throw new IllegalStateException();
+    public void pushMusicToQueue(MusicDetail musicDetail, PusherInfo pusherInfo) {
+        Objects.requireNonNull(musicDetail, "musicDetail");
+        String reference = musicDetail.getSourceRef();
+        if (reference.isBlank() || reference.length() > 512 || !reference.contains(":")) {
+            throw new IllegalArgumentException("Invalid TuneWeave resource reference");
         }
-        MusicDetail musicDetail = musicDetailByIds.getFirst();
+        if (!Set.of("track", "video", "podcast_episode", "radio_station")
+                .contains(musicDetail.getSourceKind())) {
+            throw new IllegalArgumentException("Unsupported TuneWeave queue resource kind");
+        }
+        if (musicDetail.getName().isBlank() || musicDetail.getName().length() > 500
+                || musicDetail.getDurationMillis() <= 0
+                || musicDetail.getDurationMillis() > 24 * 60 * 60 * 1000) {
+            throw new IllegalArgumentException("Invalid TuneWeave queue resource metadata");
+        }
         musicDetail.setPusherInfo(pusherInfo);
         musicQueue.add(new QueueItem(musicDetail, UUID.randomUUID()));
         serverNetworkService.sendToPlayerInfos(loginApiService.getPlayerInfoMap().values(),

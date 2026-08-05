@@ -244,7 +244,7 @@ public class MusicService implements IClientMusicService {
 
     @Override
     public void sendPushMusicToQueue(MusicDetail musicDetail) {
-        clientNetworkService.sendToServer(new ClientPushMusicToQueueMessage(musicDetail.getId()));
+        clientNetworkService.sendToServer(new ClientPushMusicToQueueMessage(musicDetail));
     }
 
     @Override
