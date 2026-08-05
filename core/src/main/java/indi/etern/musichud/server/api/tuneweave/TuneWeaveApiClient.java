@@ -26,6 +26,7 @@ import java.util.Collection;
 import java.util.LinkedHashMap;
 import java.util.Locale;
 import java.util.Map;
+import java.util.Optional;
 import java.util.Set;
 import java.util.UUID;
 import java.util.concurrent.Executors;
@@ -52,6 +53,21 @@ public final class TuneWeaveApiClient {
         } catch (RuntimeException ignored) {
             return false;
         }
+    }
+
+    public static Optional<String> serverVersion() {
+        try {
+            JsonElement data = requestAt(baseUrl(), "GET", "/healthz", Map.of(), null, java.util.List.of()).data();
+            if (data != null && data.isJsonObject()) {
+                JsonElement version = data.getAsJsonObject().get("version");
+                if (version != null && version.isJsonPrimitive() && version.getAsJsonPrimitive().isString()
+                        && !version.getAsString().isBlank()) {
+                    return Optional.of(version.getAsString());
+                }
+            }
+        } catch (RuntimeException ignored) {
+        }
+        return Optional.empty();
     }
 
     public static JsonElement get(String path, Map<String, String> query) {

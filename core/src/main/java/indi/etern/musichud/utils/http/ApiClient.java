@@ -7,11 +7,9 @@ import indi.etern.musichud.MusicHud;
 import indi.etern.musichud.interfaces.PostProcessable;
 import indi.etern.musichud.platform.Environment;
 import indi.etern.musichud.server.api.UrlMeta;
-import indi.etern.musichud.server.api.impl.ncm.ApiServerEndpointsMeta;
 import indi.etern.musichud.throwable.ApiException;
 import indi.etern.musichud.utils.IClientDistUtil;
 import indi.etern.musichud.utils.JsonUtil;
-import lombok.Getter;
 import lombok.SneakyThrows;
 import org.apache.logging.log4j.Logger;
 
@@ -38,37 +36,12 @@ public class ApiClient {
             "max-age", "expires", "path", "domain", "secure", "httponly", "samesite"
     );
     private static final Logger LOGGER = MusicHud.getLogger(ApiClient.class);
-    @Getter
-    private static String version = "unknown";
-
     static {
         CLIENT = HttpClient.newBuilder()
                 .version(HttpClient.Version.HTTP_2)
                 .connectTimeout(Duration.ofSeconds(3))
                 .executor(Executors.newVirtualThreadPerTaskExecutor())
                 .build();
-    }
-
-    public static boolean checkAvailable() {
-        try {
-            var response = post(ApiServerEndpointsMeta.API_SERVER_VERSION, null, null, false);
-            version = response.data.version;
-            return true;
-        } catch (Exception e) {
-            try {
-                String response = get(ApiServerEndpointsMeta.BASE, null, false);
-                if (response.contains("NCM API Rust Server")) {// especially adapt to ncm-api-rs due to /inner/version won't work on it
-                    version = "ncm-rs-api";
-                    return true;
-                } else if (response.contains("<title>网易云音乐 API Enhanced</title>")) {// original NodeJS api fallback
-                    version = "ncm-js-api-unknown";
-                    return true;
-                }
-            } catch (Exception ignored) {
-            }
-            version = "unknown";
-            return false;
-        }
     }
 
     @SneakyThrows
@@ -250,12 +223,6 @@ public class ApiClient {
                     return !COOKIE_ATTRIBUTE_NAMES.contains(name);
                 })
                 .collect(Collectors.joining("; "));
-    }
-
-    public record ApiVersionResponse(ApiVersionResponseData data) {
-    }
-
-    private record ApiVersionResponseData(String version) {
     }
 
     private record CodeOnlyResponse(int code) {

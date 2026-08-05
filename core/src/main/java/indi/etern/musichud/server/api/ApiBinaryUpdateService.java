@@ -11,9 +11,7 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.nio.file.StandardCopyOption;
-import java.util.ArrayList;
 import java.util.HashMap;
-import java.util.List;
 import java.util.Map;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.atomic.AtomicBoolean;
@@ -111,6 +109,9 @@ public class ApiBinaryUpdateService {
     public record DownloadedRelease(String tag, String version, Path tempFile) {}
 
     public void updateMhApiJson(Path targetDir, String releaseTag, String version, String fileName) {
+        if (releaseTag == null || releaseTag.isBlank() || version == null || version.isBlank()) {
+            throw new IllegalArgumentException("TuneWeave release metadata is incomplete");
+        }
         Path jsonFile = targetDir.resolve("mh-api.json");
         Map<String, ReleaseMeta> map = new HashMap<>();
         try {
@@ -122,35 +123,10 @@ public class ApiBinaryUpdateService {
             }
         } catch (Exception ignored) {}
         map.values().removeIf(meta -> meta.file.equals(fileName));
-        map.put(releaseTag, new ReleaseMeta(version != null ? version : "unknown", fileName));
+        map.put(releaseTag, new ReleaseMeta(version, fileName));
         try {
             Files.writeString(jsonFile, JsonUtil.gson.toJson(map));
         } catch (IOException ignored) {}
-    }
-
-    public void fixUnknownVersion(Path targetDir, String version) {
-        Path jsonFile = targetDir.resolve("mh-api.json");
-        try {
-            if (!Files.exists(jsonFile)) return;
-            String content = Files.readString(jsonFile);
-            Map<String, ReleaseMeta> map = JsonUtil.gson.fromJson(content,
-                    new TypeToken<Map<String, ReleaseMeta>>(){}.getType());
-            if (map == null) return;
-            boolean changed = false;
-            List<String> unknownTags = new ArrayList<>();
-            for (var entry : map.entrySet()) {
-                if ("unknown".equals(entry.getValue().version)) {
-                    unknownTags.add(entry.getKey());
-                }
-            }
-            for (String tag : unknownTags) {
-                map.put(tag, new ReleaseMeta(version, map.get(tag).file));
-                changed = true;
-            }
-            if (changed) {
-                Files.writeString(jsonFile, JsonUtil.gson.toJson(map));
-            }
-        } catch (Exception ignored) {}
     }
 
     public String checkExistingVersion(Path targetDir, String releaseTag) {

@@ -88,10 +88,11 @@ public class ApiServerManager implements ServerRegister {
     }
 
     public void stopApiServer() {
-        if (process != null) {
+        Process running = process;
+        if (running != null) {
             continueRestart = false;
-            process.destroy();
             process = null;
+            running.destroy();
             removeShutdownHook();
         }
     }
@@ -135,6 +136,7 @@ public class ApiServerManager implements ServerRegister {
                     addShutdownHook();
                 }
             } else {
+                setApiStatus(BinaryApiServerStatus.RUNNING);
                 apiLogger.info("TuneWeave API server is already available");
             }
         });
@@ -146,7 +148,7 @@ public class ApiServerManager implements ServerRegister {
         }
         int maxTries = 5;
         if (triedCount >= maxTries) {
-            apiLogger.error("Embedded API Server has been stopped due to maximum tries reached.");
+            apiLogger.error("Embedded TuneWeave has been stopped due to maximum tries reached.");
             return;
         }
         String binaryExecutableApiServerPathString = serverConfig.getServerApiBinaryExecutablePath();
@@ -172,7 +174,8 @@ public class ApiServerManager implements ServerRegister {
                     Map<String, String> env = processBuilder.environment();
                     env.put("TUNEWEAVE_BIND", "127.0.0.1:" + serverConfig.getPort());
                     env.put("TUNEWEAVE_DATA_DIR", Paths.get("music-hud", "tuneweave-data").toAbsolutePath().toString());
-                    process = processBuilder.start();
+                    Process launchedProcess = processBuilder.start();
+                    process = launchedProcess;
 
                     Path logFile;
                     PrintWriter logWriter = null;
@@ -188,35 +191,14 @@ public class ApiServerManager implements ServerRegister {
 
                     CompletableFuture<Integer> future = new CompletableFuture<>();
                     processFuture = future;
+                    MusicHud.EXECUTOR.execute(() -> waitForTuneWeave(launchedProcess));
 
                     MusicHud.EXECUTOR.execute(() -> {
                         Thread.currentThread().setName("MHWorker-API-Console");
-                        try (BufferedReader reader = new BufferedReader(new InputStreamReader(process.getInputStream()))) {
+                        try (BufferedReader reader = new BufferedReader(new InputStreamReader(launchedProcess.getInputStream()))) {
                             String line;
                             while ((line = reader.readLine()) != null) {
                                 if (writer != null) writer.println(line);
-                                if ((line.contains("Server started successfully") || line.contains("ncm_api_rs::server")
-                                        || TuneWeaveApiClient.isAvailable())
-                                        && binaryApiServerStatus == BinaryApiServerStatus.LAUNCHING) {
-                                    boolean available = TuneWeaveApiClient.isAvailable();
-                                    setApiStatus(available ? BinaryApiServerStatus.RUNNING : BinaryApiServerStatus.LAUNCHING);
-                                    if (available) {
-                                        apiLogger.info("TuneWeave API server started");
-                                        try {
-                                            Path execPath = Paths.get(serverConfig.getServerApiBinaryExecutablePath());
-                                            Path parent = execPath.getParent();
-                                            if (parent != null) {
-                                                ApiBinaryUpdateService.getInstance().fixUnknownVersion(
-                                                        parent, "tuneweave");
-                                            }
-                                        } catch (Exception ignored) {
-                                        }
-                                    } else {
-                                        apiLogger.info("Api server started, but unavailable, restarting");
-                                        restartApiServer();
-                                        return;
-                                    }
-                                }
                                 log(line, false);
                             }
                         } catch (IOException e) {
@@ -226,7 +208,7 @@ public class ApiServerManager implements ServerRegister {
 
                     MusicHud.EXECUTOR.execute(() -> {
                         Thread.currentThread().setName("MHWorker-API-Console");
-                        try (BufferedReader reader = new BufferedReader(new InputStreamReader(process.getErrorStream()))) {
+                        try (BufferedReader reader = new BufferedReader(new InputStreamReader(launchedProcess.getErrorStream()))) {
                             String line;
                             while ((line = reader.readLine()) != null) {
                                 if (writer != null) writer.println(line);
@@ -240,8 +222,9 @@ public class ApiServerManager implements ServerRegister {
                     MusicHud.EXECUTOR.execute(() -> {
                         Thread.currentThread().setName("MHWorker-API-Daemon");
                         try {
-                            int exitCode = process.waitFor();
+                            int exitCode = launchedProcess.waitFor();
                             if (writer != null) writer.close();
+                            if (process == launchedProcess) process = null;
                             setApiStatus(BinaryApiServerStatus.STOPPED);
                             if (continueRestart) {
                                 apiLogger.warn("Api server unexpectedly stopped with code:{}, restarting...", exitCode);
@@ -258,12 +241,35 @@ public class ApiServerManager implements ServerRegister {
                         }
                     });
                 } catch (Exception e) {
-                    MusicHud.LOGGER.error("Failed to call binary server at path: \"{}\"", binaryExecutableApiServerPathString, e);
+                    MusicHud.LOGGER.error("Failed to start TuneWeave at path: \"{}\"", binaryExecutableApiServerPathString, e);
                     if (processFuture != null) {
                         processFuture.completeExceptionally(e);
                     }
                 }
             }
+        }
+    }
+
+    private void waitForTuneWeave(Process launchedProcess) {
+        for (int attempt = 0; attempt < 120; attempt++) {
+            if (process != launchedProcess || !launchedProcess.isAlive()) {
+                return;
+            }
+            if (TuneWeaveApiClient.isAvailable()) {
+                setApiStatus(BinaryApiServerStatus.RUNNING);
+                apiLogger.info("TuneWeave API server started");
+                return;
+            }
+            try {
+                Thread.sleep(250L);
+            } catch (InterruptedException interrupted) {
+                Thread.currentThread().interrupt();
+                return;
+            }
+        }
+        if (process == launchedProcess && launchedProcess.isAlive()) {
+            apiLogger.error("TuneWeave did not become healthy within 30 seconds");
+            launchedProcess.destroy();
         }
     }
 

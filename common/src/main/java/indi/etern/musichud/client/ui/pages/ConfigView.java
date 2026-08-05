@@ -31,7 +31,7 @@ import indi.etern.musichud.interfaces.ClientConfig;
 import indi.etern.musichud.interfaces.IClientLoginService;
 import indi.etern.musichud.interfaces.ServerConfig;
 import indi.etern.musichud.server.api.*;
-import indi.etern.musichud.utils.http.ApiClient;
+import indi.etern.musichud.server.api.tuneweave.TuneWeaveApiClient;
 import lombok.Getter;
 import net.minecraft.util.Util;
 import net.minecraft.client.resources.language.I18n;
@@ -429,104 +429,13 @@ public class ConfigView extends LinearLayout {
                     .setDefaultValue(true);
             startupBinaryApiServerOption.create(apiCategory);
 
-            PreferencesFragment.BooleanOption useRandomCnIpOption = new PreferencesFragment.BooleanOption(
-                    context,
-                    I18n.get(MusicHud.MOD_ID + ".config.apiServer.useRandomCnIp"),
-                    serverConfig::getUseRandomCnIp,
-                    serverConfig::setUseRandomCnIp)
-                    .setDefaultValue(true);
-            useRandomCnIpOption.create(apiCategory);
-
-            new PreferencesFragment.BooleanOption(context,
-                    I18n.get(MusicHud.MOD_ID + ".config.apiServer.enableGeneralUnblock"),
-                    serverConfig::getEnableGeneralUnblock,
-                    serverConfig::setEnableGeneralUnblock)
-                    .setDefaultValue(true)
-                    .create(apiCategory);
-
-            new PreferencesFragment.BooleanOption(context,
-                    I18n.get(MusicHud.MOD_ID + ".config.apiServer.enableFlac"),
-                    serverConfig::getEnableFlac,
-                    serverConfig::setEnableFlac)
-                    .setDefaultValue(true)
-                    .create(apiCategory);
-
-            new PreferencesFragment.BooleanOption(context,
-                    I18n.get(MusicHud.MOD_ID + ".config.apiServer.selectMaxBr"),
-                    serverConfig::getSelectMaxBr,
-                    serverConfig::setSelectMaxBr)
-                    .setDefaultValue(false)
-                    .create(apiCategory);
-
-            new PreferencesFragment.BooleanOption(context,
-                    I18n.get(MusicHud.MOD_ID + ".config.apiServer.followSourceOrder"),
-                    serverConfig::getFollowSourceOrder,
-                    serverConfig::setFollowSourceOrder)
-                    .setDefaultValue(true)
-                    .create(apiCategory);
-
             new PreferencesFragment.IntegerOption(context,
                     I18n.get(MusicHud.MOD_ID + ".config.apiServer.port"),
                     serverConfig::getPort,
                     serverConfig::setPort)
                     .setRange(1, 65535)
-                    .setDefaultValue(3000)
+                    .setDefaultValue(7832)
                     .create(apiCategory);
-
-            new PreferencesFragment.BooleanOption(context,
-                    I18n.get(MusicHud.MOD_ID + ".config.apiServer.enableProxy"),
-                    serverConfig::getEnableProxy,
-                    serverConfig::setEnableProxy)
-                    .setDefaultValue(false)
-                    .create(apiCategory);
-
-            {
-                LinearLayout inputBox = PreferencesFragment.createInputBox(context, I18n.get(MusicHud.MOD_ID + ".config.apiServer.corsAllowOrigin"));
-                EditText input = inputBox.findViewById(R.id.input);
-                if (input != null) {
-                    input.setMinimumWidth(dp(256));
-                    input.setTextAlignment(TEXT_ALIGNMENT_TEXT_START);
-                    input.setText(serverConfig.getCorsAllowOrigin());
-                    input.setOnKeyListener((v, c, e) -> {
-                        if (c == GLFW.GLFW_KEY_ENTER) {
-                            input.clearFocus();
-                            return true;
-                        }
-                        return false;
-                    });
-                    input.setOnFocusChangeListener((v, b) -> {
-                        if (!b) {
-                            serverConfig.setCorsAllowOrigin(input.getText().toString());
-                        }
-                    });
-                }
-                apiCategory.addView(inputBox);
-            }
-
-            {
-                LinearLayout inputBox = PreferencesFragment.createInputBox(context, I18n.get(MusicHud.MOD_ID + ".config.apiServer.proxyUrl"));
-                EditText input = inputBox.findViewById(R.id.input);
-                if (input != null) {
-                    input.setMinimumWidth(dp(256));
-                    input.setTextAlignment(TEXT_ALIGNMENT_TEXT_START);
-                    input.setText(serverConfig.getProxyUrl());
-                    input.setOnKeyListener((v, c, e) -> {
-                        if (c == GLFW.GLFW_KEY_ENTER) {
-                            input.clearFocus();
-                            return true;
-                        }
-                        return false;
-                    });
-                    input.setOnFocusChangeListener((v, b) -> {
-                        if (!b) {
-                            serverConfig.setProxyUrl(input.getText().toString());
-                        }
-                    });
-                }
-                apiCategory.addView(inputBox);
-            }
-
-
             {
                 LinearLayout inputBox = PreferencesFragment.createInputBox(context, I18n.get(MusicHud.MOD_ID + ".config.apiServer.serverApiBaseUrl"));
                 EditText input = inputBox.findViewById(R.id.input);
@@ -628,7 +537,7 @@ public class ConfigView extends LinearLayout {
             TextView apiVersionLabel = new TextView(context);
             apiVersionLabel.setTextSize(14);
             String apiServiceVersionTemplate = I18n.get(MusicHud.MOD_ID + ".text.apiServiceVersion");
-            apiVersionLabel.setText(apiServiceVersionTemplate.replace("{}", I18n.get(ApiClient.getVersion())));
+            updateTuneWeaveVersionLabel(apiVersionLabel, apiServiceVersionTemplate);
 
             Button checkVersionButton = new Button(context);
             checkVersionButton.setText(I18n.get(MusicHud.MOD_ID + ".button.checkApiServerVersion"));
@@ -636,8 +545,7 @@ public class ConfigView extends LinearLayout {
             checkVersionButton.setTextSize(14);
             checkVersionButton.setBackground(backgroundFactory.newBackgroundDrawable());
             checkVersionButton.setOnClickListener((v) -> {
-                ApiClient.checkAvailable();
-                apiVersionLabel.setText(apiServiceVersionTemplate.replace("{}", I18n.get(ApiClient.getVersion())));
+                updateTuneWeaveVersionLabel(apiVersionLabel, apiServiceVersionTemplate);
             });
 
             apiVersionLinearLayout.addView(apiVersionLabel, new LayoutParams(MATCH_PARENT, WRAP_CONTENT, 1));
@@ -712,7 +620,7 @@ public class ConfigView extends LinearLayout {
             Consumer<ApiServerManager.BinaryApiServerStatus> listener = (apiServerStatus) -> {
                 MuiModApi.postToUiThread(() -> {
                     apiStatusLabel.setText(binaryApiStatusTemplate.replace("{}", I18n.get(apiServerStatus.i18nKey())));
-                    apiVersionLabel.setText(apiServiceVersionTemplate.replace("{}", I18n.get(ApiClient.getVersion())));
+                    updateTuneWeaveVersionLabel(apiVersionLabel, apiServiceVersionTemplate);
                     updateApiLogLabel(apiLogLabel);
                 });
             };
@@ -736,6 +644,17 @@ public class ConfigView extends LinearLayout {
             instance = null;
             throw e;
         }
+    }
+
+    private static void updateTuneWeaveVersionLabel(TextView label, String template) {
+        String loading = I18n.get(MusicHud.MOD_ID + ".text.tuneWeaveVersion.loading");
+        String unavailable = I18n.get(MusicHud.MOD_ID + ".text.tuneWeaveVersion.unavailable");
+        label.setText(template.replace("{}", loading));
+        CompletableFuture.supplyAsync(
+                () -> TuneWeaveApiClient.serverVersion().orElse(unavailable),
+                MusicHud.EXECUTOR
+        ).thenAccept(version -> MuiModApi.postToUiThread(
+                () -> label.setText(template.replace("{}", version))));
     }
 
     private static void updateApiLogLabel(TextView label) {
