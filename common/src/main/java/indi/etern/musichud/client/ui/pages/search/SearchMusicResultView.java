@@ -9,6 +9,8 @@ import indi.etern.musichud.beans.music.MusicDetail;
 import indi.etern.musichud.client.services.music.MusicService;
 import indi.etern.musichud.client.ui.ToastUtil;
 import indi.etern.musichud.client.ui.components.MusicListItem;
+import indi.etern.musichud.client.ui.components.RouterContainer;
+import indi.etern.musichud.client.ui.pages.VideoDetailView;
 import indi.etern.musichud.client.ui.utils.ui.ButtonInsetBackgroundFactory;
 import lombok.Getter;
 import net.minecraft.client.resources.language.I18n;
@@ -64,6 +66,10 @@ public class SearchMusicResultView extends LinearLayout {
         String artistsName = musicDetail.getArtists().stream()
                 .map(Artist::getName).collect(Collectors.joining(" / "));
         musicLayout.setOnClickListener((view) -> {
+            if ("video".equals(musicDetail.getSourceKind())) {
+                RouterContainer.getInstance().pushNavigate(new VideoDetailView(context, musicDetail));
+                return;
+            }
             MusicService.getInstance().sendPushMusicToQueue(musicDetail);
             ToastUtil.show(Toast.makeText(context, I18n.get(MusicHud.MOD_ID + ".text.pushedMusicToPlaylist") + "\n" + musicDetail.getName() + " - " + artistsName, Toast.LENGTH_SHORT));
         });

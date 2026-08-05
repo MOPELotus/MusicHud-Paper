@@ -196,14 +196,14 @@ public class MusicListItem extends LinearLayout {
             artistButton.setTextSize(Theme.TEXT_SIZE_NORMAL);
             artistButton.setTextAlignment(TEXT_ALIGNMENT_TEXT_START);
             artistButton.setText(artist.getName());
-            artistButton.setOnClickListener(button -> {
-                RouterContainer routerContainer = RouterContainer.getInstance();
-                if (routerContainer != null) {
-                    routerContainer.pushNavigate(
-                            new ArtistDetailView(context, artist)
-                    );
-                }
-            });
+            if (!"video".equals(musicDetail.getSourceKind()) && !artist.getSourceRef().isBlank()) {
+                artistButton.setOnClickListener(button -> {
+                    RouterContainer routerContainer = RouterContainer.getInstance();
+                    if (routerContainer != null) {
+                        routerContainer.pushNavigate(new ArtistDetailView(context, artist));
+                    }
+                });
+            }
             row2.addView(artistButton);
         }
         TextView split = new TextView(context);
@@ -217,14 +217,14 @@ public class MusicListItem extends LinearLayout {
         albumButton.setTextSize(Theme.TEXT_SIZE_NORMAL);
         albumButton.setText(musicDetail.getAlbum().getName());
         albumButton.setTextAlignment(TEXT_ALIGNMENT_TEXT_START);
-        albumButton.setOnClickListener(button -> {
-            RouterContainer routerContainer = RouterContainer.getInstance();
-            if (routerContainer != null) {
-                routerContainer.pushNavigate(
-                        new MusicCollectionDetailView(context, musicDetail.getAlbum())
-                );
-            }
-        });
+        if (!"video".equals(musicDetail.getSourceKind()) && !musicDetail.getAlbum().getSourceRef().isBlank()) {
+            albumButton.setOnClickListener(button -> {
+                RouterContainer routerContainer = RouterContainer.getInstance();
+                if (routerContainer != null) {
+                    routerContainer.pushNavigate(new MusicCollectionDetailView(context, musicDetail.getAlbum()));
+                }
+            });
+        }
         row2.addView(albumButton);
 
         Duration duration = Duration.of(musicDetail.getDurationMillis(), ChronoUnit.MILLIS);
@@ -256,6 +256,8 @@ public class MusicListItem extends LinearLayout {
         }
 
         addToPlaylistButton.bindMusicDetail(musicDetail);
-        likeButton.bindMusicList(musicService.getMusicTrackState(musicDetail).currentUsersLikeList());
+        boolean video = "video".equals(musicDetail.getSourceKind());
+        likeButton.setVisibility(video ? GONE : VISIBLE);
+        if (!video) likeButton.bindMusicList(musicService.getMusicTrackState(musicDetail).currentUsersLikeList());
     }
 }

@@ -230,6 +230,12 @@ public final class TuneWeaveMusicApiService implements IMusicApiService {
         query.put("quality", qualityName(quality));
         query.put("fallback", "true");
         query.put("fallback_platforms", "netease,qq,kugou,migu,kuwo,soda");
+        if (video) {
+            query.put("type", "video");
+            if (!musicDetail.getSourcePartRef().isBlank()) {
+                query.put("part", musicDetail.getSourcePartRef());
+            }
+        }
         JsonObject stream = unwrap(TuneWeaveApiClient.get(path, query));
         String url = string(stream, "url", "");
         if (url.isBlank()) {

@@ -250,9 +250,12 @@ public final class TuneWeaveClientService {
                         + TuneWeaveApiClient.encodePathSegment(reference), Map.of(), null).data()));
         List<MusicDetail> tracks = new ArrayList<>();
         for (JsonElement item : elements(requestForPlatform(platform, "GET",
-                "/v1/playlists/" + TuneWeaveApiClient.encodePathSegment(reference) + "/tracks",
+                "/v1/playlists/" + TuneWeaveApiClient.encodePathSegment(reference) + "/items",
                 Map.of("limit", "100", "offset", "0"), null).data())) {
-            MusicDetail track = toTrack(platformFromReference(reference), unwrap(item));
+            JsonObject raw = unwrap(item);
+            MusicDetail track = "video".equals(string(raw, "kind", "track"))
+                    ? toVideoTrack(platformFromReference(reference), raw)
+                    : toTrack(platformFromReference(reference), raw);
             if (track != MusicDetail.NONE) tracks.add(track);
         }
         ObservableSequencedSet<MusicDetail> playlistTracks = new ObservableSequencedSet<>();
@@ -331,6 +334,54 @@ public final class TuneWeaveClientService {
         return detail;
     }
 
+    public VideoInfo loadVideoDetail(MusicDetail musicDetail) {
+        requireReference(musicDetail == null ? null : musicDetail.getSourceRef(), "video");
+        TuneWeavePlatform platform = platformFromReference(musicDetail.getSourceRef());
+        JsonObject detail = object(requestForPlatform(platform, "GET", "/v1/videos/"
+                + TuneWeaveApiClient.encodePathSegment(musicDetail.getSourceRef()),
+                Map.of("type", "video"), null).data());
+        JsonObject video = detail.has("video") && detail.get("video").isJsonObject()
+                ? detail.getAsJsonObject("video") : detail;
+        return toVideoInfo(video);
+    }
+
+    public List<VideoPartInfo> loadVideoParts(String reference) {
+        requireReference(reference, "video");
+        TuneWeavePlatform platform = platformFromReference(reference);
+        List<VideoPartInfo> result = new ArrayList<>();
+        int offset = 0;
+        while (true) {
+            List<JsonElement> page = elements(requestForPlatform(platform, "GET", "/v1/videos/"
+                    + TuneWeaveApiClient.encodePathSegment(reference) + "/parts",
+                    Map.of("type", "video", "limit", "100", "offset", Integer.toString(offset)), null).data());
+            for (JsonElement item : page) {
+                JsonObject object = unwrap(item);
+                result.add(new VideoPartInfo(requiredString(object, "ref"), integer(object, "page", result.size() + 1),
+                        string(object, "title", reference), integer(object, "duration_ms", 0),
+                        integer(object, "width", 0), integer(object, "height", 0)));
+            }
+            offset += page.size();
+            if (page.size() < 100) break;
+        }
+        return result;
+    }
+
+    public MusicDetail videoPartTrack(VideoInfo video, VideoPartInfo part) {
+        TuneWeavePlatform platform = platformFromReference(video.reference());
+        List<Artist> creators = video.creators().stream()
+                .map(name -> new Artist(stableId(platform, "video-creator:" + name), name,
+                        "", 0, 0, "", new ArrayList<>(), 0, ""))
+                .toList();
+        Album album = videoAlbum(platform, video.reference(), video.title(), video.coverUrl(), creators);
+        MusicDetail result = MusicDetail.fromTuneWeave(
+                stableId(platform, "video-part:" + video.reference() + ':' + part.reference()),
+                video.reference(), "video", part.title(), part.durationMillis(), album, creators);
+        result.setSourcePartRef(part.reference());
+        result.setPusherInfo(indi.etern.musichud.beans.music.PusherInfo.EMPTY);
+        tracksById.put(result.getId(), result);
+        return result;
+    }
+
     public LyricInfo loadLyrics(MusicDetail musicDetail) {
         if (musicDetail == null || musicDetail.getSourceRef().isBlank()
                 || "video".equals(musicDetail.getSourceKind())) {
@@ -349,7 +400,9 @@ public final class TuneWeaveClientService {
     public void setTrackFavorite(MusicDetail musicDetail, boolean favorite) {
         requireReference(musicDetail == null ? null : musicDetail.getSourceRef(), "track");
         TuneWeavePlatform platform = platformFromReference(musicDetail.getSourceRef());
-        requestForPlatform(platform, favorite ? "PUT" : "DELETE", "/v1/account/favorites/tracks/"
+        String libraryPath = "video".equals(musicDetail.getSourceKind())
+                ? "/v1/account/library/videos/" : "/v1/account/favorites/tracks/";
+        requestForPlatform(platform, favorite ? "PUT" : "DELETE", libraryPath
                 + TuneWeaveApiClient.encodePathSegment(musicDetail.getSourceRef()), Map.of(), null);
     }
 
@@ -386,8 +439,9 @@ public final class TuneWeaveClientService {
         refs.add(musicDetail.getSourceRef());
         body.add("refs", refs);
         TuneWeavePlatform platform = platformFromReference(playlist.getSourceRef());
+        String itemPath = "video".equals(musicDetail.getSourceKind()) ? "/videos" : "/tracks";
         requestForPlatform(platform, add ? "POST" : "DELETE", "/v1/playlists/"
-                + TuneWeaveApiClient.encodePathSegment(playlist.getSourceRef()) + "/tracks", Map.of(), body);
+                + TuneWeaveApiClient.encodePathSegment(playlist.getSourceRef()) + itemPath, Map.of(), body);
     }
 
     public Playlist createPlatformPlaylist(String name, boolean privatePlaylist) {
@@ -613,6 +667,10 @@ public final class TuneWeaveClientService {
         query.put("quality", qualityName(quality));
         query.put("fallback", "true");
         query.put("fallback_platforms", "netease,qq,kugou,migu,kuwo,soda");
+        if ("video".equals(musicDetail.getSourceKind())) {
+            query.put("type", "video");
+            if (!musicDetail.getSourcePartRef().isBlank()) query.put("part", musicDetail.getSourcePartRef());
+        }
         JsonObject stream = unwrap(requestForPlatform(platform, "GET", path, query, null).data());
         String url = string(stream, "url", "");
         if (url.isBlank()) {
@@ -629,7 +687,7 @@ public final class TuneWeaveClientService {
             case ALBUM -> "album";
             case ARTIST -> "artist";
             case PLAYLIST -> "playlist";
-            default -> "track";
+            default -> platform == TuneWeavePlatform.BILIBILI ? "video" : "track";
         };
         JsonElement data = requestForPlatform(platform, "GET", "/v1/search", Map.of(
                 "q", keywords, "type", type, "platform", platform.apiName(),
@@ -643,7 +701,8 @@ public final class TuneWeaveClientService {
             case ALBUM -> rawItems.stream().map(value -> toAlbum(platform, value)).toList();
             case ARTIST -> rawItems.stream().map(value -> toArtist(platform, value)).toList();
             case PLAYLIST -> rawItems.stream().map(value -> toPlaylist(platform, value)).toList();
-            default -> rawItems.stream().map(value -> toTrack(platform, value)).toList();
+            default -> rawItems.stream().map(value -> platform == TuneWeavePlatform.BILIBILI
+                    ? toVideoTrack(platform, value) : toTrack(platform, value)).toList();
         };
     }
 
@@ -864,6 +923,55 @@ public final class TuneWeaveClientService {
         return result;
     }
 
+    private MusicDetail toVideoTrack(TuneWeavePlatform platform, JsonObject object) {
+        String reference = string(object, "ref", string(object, "reference", ""));
+        if (reference.isBlank()) return MusicDetail.NONE;
+        List<String> creatorNames = new ArrayList<>();
+        JsonElement creatorData = object.get("creators");
+        if (creatorData != null && creatorData.isJsonArray()) {
+            creatorData.getAsJsonArray().forEach(value -> {
+                if (value.isJsonObject()) creatorNames.add(string(value.getAsJsonObject(), "name", ""));
+            });
+        }
+        if (creatorNames.isEmpty()) creatorNames.add(string(object, "uploader", "Bilibili"));
+        List<Artist> creators = creatorNames.stream().filter(value -> value != null && !value.isBlank())
+                .map(name -> new Artist(stableId(platform, "video-creator:" + name), name,
+                        "", 0, 0, "", new ArrayList<>(), 0, ""))
+                .toList();
+        String title = string(object, "title", string(object, "name", reference));
+        Album album = videoAlbum(platform, reference, title, string(object, "cover_url", ""), creators);
+        MusicDetail result = MusicDetail.fromTuneWeave(stableId(platform, "video:" + reference), reference,
+                "video", title, integer(object, "duration_ms", 0), album, creators);
+        result.setPusherInfo(indi.etern.musichud.beans.music.PusherInfo.EMPTY);
+        tracksById.put(result.getId(), result);
+        return result;
+    }
+
+    private static Album videoAlbum(TuneWeavePlatform platform, String reference, String title,
+                                    String coverUrl, List<Artist> creators) {
+        return new Album(stableId(platform, "video-album:" + reference), title,
+                coverUrl == null || coverUrl.isBlank() ? MusicHud.ICON_BASE64 : coverUrl,
+                "Video", "Bilibili", 1, new ObservableSequencedSet<>(),
+                new java.util.LinkedHashSet<>(creators), indi.etern.musichud.beans.music.PusherInfo.EMPTY, "");
+    }
+
+    private VideoInfo toVideoInfo(JsonObject object) {
+        String reference = string(object, "ref", "");
+        List<String> creators = new ArrayList<>();
+        JsonElement creatorData = object.get("creators");
+        if (creatorData != null && creatorData.isJsonArray()) {
+            creatorData.getAsJsonArray().forEach(value -> {
+                if (value.isJsonObject()) creators.add(string(value.getAsJsonObject(), "name", ""));
+            });
+        }
+        JsonObject extensions = object.has("extensions") && object.get("extensions").isJsonObject()
+                ? object.getAsJsonObject("extensions") : new JsonObject();
+        return new VideoInfo(reference, string(object, "title", reference), string(object, "description", ""),
+                string(object, "cover_url", ""), integer(object, "duration_ms", 0),
+                string(object, "published_at", ""), longValue(object, "play_count", 0), creators,
+                integer(extensions, "part_count", 1));
+    }
+
     private static long stableId(TuneWeavePlatform platform, String value) {
         return stableUserId(platform, value);
     }
@@ -963,6 +1071,18 @@ public final class TuneWeaveClientService {
         public UniItemInfo {
             artists = artists == null ? List.of() : Collections.unmodifiableList(new ArrayList<>(artists));
         }
+    }
+
+    public record VideoInfo(String reference, String title, String description, String coverUrl,
+                            int durationMillis, String publishedAt, long playCount,
+                            List<String> creators, int partCount) {
+        public VideoInfo {
+            creators = creators == null ? List.of() : List.copyOf(creators);
+        }
+    }
+
+    public record VideoPartInfo(String reference, int page, String title, int durationMillis,
+                                int width, int height) {
     }
 
     public record SessionProfile(TuneWeavePlatform platform, String userId, String nickname,

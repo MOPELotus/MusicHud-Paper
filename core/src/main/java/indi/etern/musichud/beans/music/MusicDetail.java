@@ -25,7 +25,7 @@ public class MusicDetail implements IdentifiedBeans {
             PusherInfo.CODEC, MusicDetail::getPusherInfo,
             LyricInfo.CODEC, MusicDetail::getLyricInfo,
             Codecs.STRING_UTF8, MusicDetail::getSourceRef,
-            Codecs.STRING_UTF8, MusicDetail::getSourceKind,
+            Codecs.STRING_UTF8, MusicDetail::getWireSourceKind,
             MusicDetail::new
     );
     public static final MusicDetail NONE = new MusicDetail();
@@ -55,6 +55,8 @@ public class MusicDetail implements IdentifiedBeans {
     String sourceRef = "";
     @Setter
     String sourceKind = "track";
+    @Setter
+    String sourcePartRef = "";
 
     // only useful for server, and its a optional api field
     @SerializedName("privilege")
@@ -92,7 +94,12 @@ public class MusicDetail implements IdentifiedBeans {
         this.pusherInfo = pusherInfo;
         this.lyricInfo = lyricInfo;
         this.sourceRef = sourceRef;
-        this.sourceKind = sourceKind;
+        if (sourceKind != null && sourceKind.startsWith("video|part=")) {
+            this.sourceKind = "video";
+            this.sourcePartRef = sourceKind.substring("video|part=".length());
+        } else {
+            this.sourceKind = sourceKind;
+        }
     }
 
     public static MusicDetail fromTuneWeave(long id, String sourceRef, String sourceKind, String name,
@@ -151,6 +158,16 @@ public class MusicDetail implements IdentifiedBeans {
 
     public String getSourceKind() {
         return Objects.requireNonNullElse(sourceKind, "track");
+    }
+
+    /** Wire representation keeps a selected video part in the existing source-kind slot. */
+    public String getWireSourceKind() {
+        return "video".equals(getSourceKind()) && !getSourcePartRef().isBlank()
+                ? "video|part=" + getSourcePartRef() : getSourceKind();
+    }
+
+    public String getSourcePartRef() {
+        return Objects.requireNonNullElse(sourcePartRef, "");
     }
 
     @Override
