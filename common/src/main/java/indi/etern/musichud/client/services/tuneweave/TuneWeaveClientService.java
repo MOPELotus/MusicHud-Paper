@@ -917,6 +917,52 @@ public final class TuneWeaveClientService {
                 new Lyric(wordSyncedTranslated));
     }
 
+    public LyricInfo loadVideoLyrics(MusicDetail musicDetail) {
+        requireReference(musicDetail == null ? null : musicDetail.getSourceRef(), "video");
+        TuneWeavePlatform platform = platformFromReference(musicDetail.getSourceRef());
+        String partReference = musicDetail.getSourcePartRef();
+        if (partReference == null || partReference.isBlank()) {
+            partReference = "page:1";
+        }
+        String videoPath = "/v1/videos/" + TuneWeaveApiClient.encodePathSegment(musicDetail.getSourceRef());
+        Map<String, String> query = Map.of(
+                "type", "video",
+                "part", partReference
+        );
+        JsonObject catalog = object(requestForPlatform(platform, "GET", videoPath + "/subtitles", query, null).data());
+        String defaultLanguage = string(catalog, "default_language", "");
+        JsonObject selected = null;
+        for (JsonElement element : elements(catalog.get("items"))) {
+            JsonObject candidate = unwrap(element);
+            if (string(candidate, "ref", "").isBlank()) continue;
+            if (selected == null || (!defaultLanguage.isBlank()
+                    && defaultLanguage.equals(string(candidate, "language", "")))) {
+                selected = candidate;
+            }
+            if (!defaultLanguage.isBlank() && defaultLanguage.equals(string(candidate, "language", ""))) {
+                break;
+            }
+        }
+        if (selected == null) return LyricInfo.NONE;
+
+        String subtitleReference = string(selected, "ref", "");
+        JsonObject document = object(requestForPlatform(platform, "GET",
+                videoPath + "/subtitles/" + TuneWeaveApiClient.encodePathSegment(subtitleReference), query, null).data());
+        StringBuilder lrc = new StringBuilder();
+        for (JsonElement element : elements(document.get("cues"))) {
+            JsonObject cue = unwrap(element);
+            String text = string(cue, "text", "").replace('\r', ' ').replace('\n', ' ').trim();
+            if (text.isBlank()) continue;
+            long startMillis = Math.max(0L, longValue(cue, "start_ms", 0L));
+            long minutes = startMillis / 60_000L;
+            long seconds = (startMillis / 1_000L) % 60L;
+            long millis = startMillis % 1_000L;
+            lrc.append(String.format(Locale.ROOT, "[%02d:%02d.%03d]%s%n", minutes, seconds, millis, text));
+        }
+        if (lrc.isEmpty()) return LyricInfo.NONE;
+        return new LyricInfo(new Lyric(lrc.toString()), Lyric.NONE, Lyric.NONE, Lyric.NONE);
+    }
+
     public void setTrackFavorite(MusicDetail musicDetail, boolean favorite) {
         requireReference(musicDetail == null ? null : musicDetail.getSourceRef(), "track");
         TuneWeavePlatform platform = platformFromReference(musicDetail.getSourceRef());

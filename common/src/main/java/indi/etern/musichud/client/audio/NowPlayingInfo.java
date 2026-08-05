@@ -276,7 +276,9 @@ public class NowPlayingInfo {
                 && !musicDetail.getSourceRef().isBlank() && tuneWeave.isAvailable()) {
             MusicHud.EXECUTOR.execute(() -> {
                 try {
-                    LyricInfo fetched = tuneWeave.loadLyrics(musicDetail);
+                    LyricInfo fetched = "video".equals(musicDetail.getSourceKind())
+                            ? tuneWeave.loadVideoLyrics(musicDetail)
+                            : tuneWeave.loadLyrics(musicDetail);
                     if (fetched.equals(LyricInfo.NONE) || currentlyPlayingMusicDetail != musicDetail) {
                         return;
                     }

@@ -178,7 +178,8 @@ public class HomeView extends LinearLayout {
 
             playbackContent.addView(videoPreview,
                     new FrameLayout.LayoutParams(MATCH_PARENT, MATCH_PARENT));
-            updatePlaybackContent(NowPlayingInfo.getInstance().getCurrentlyPlayingMusicDetail());
+            NowPlayingInfo nowPlayingInfo = NowPlayingInfo.getInstance();
+            updatePlaybackContent(nowPlayingInfo.getCurrentlyPlayingMusicDetail(), nowPlayingInfo.getLyricLines());
         }
         {
             LinearLayout queueView = new LinearLayout(context);
@@ -419,20 +420,22 @@ public class HomeView extends LinearLayout {
     public void switchMusic(MusicDetail musicDetail, MusicDetail next, Queue<LyricLine> lyricLines) {
         MuiModApi.postToUiThread(() -> {
             if (staggeredLyricScrollView != null) {
-                updatePlaybackContent(musicDetail);
+                updatePlaybackContent(musicDetail, lyricLines);
                 staggeredLyricScrollView.switchLyrics(musicDetail, lyricLines);
                 checkNextToPlay(next);
             }
         });
     }
 
-    private void updatePlaybackContent(MusicDetail musicDetail) {
+    private void updatePlaybackContent(MusicDetail musicDetail, Queue<LyricLine> lyricLines) {
         if (staggeredLyricScrollView == null || videoPreview == null) return;
         boolean video = musicDetail != null && musicDetail != MusicDetail.NONE
                 && "video".equals(musicDetail.getSourceKind());
-        staggeredLyricScrollView.setVisibility(video ? GONE : VISIBLE);
-        videoPreview.setVisibility(video ? VISIBLE : GONE);
-        if (!video) return;
+        boolean hasVideoLyrics = lyricLines != null && !lyricLines.isEmpty();
+        boolean showVideoPreview = video && !hasVideoLyrics;
+        staggeredLyricScrollView.setVisibility(showVideoPreview ? GONE : VISIBLE);
+        videoPreview.setVisibility(showVideoPreview ? VISIBLE : GONE);
+        if (!showVideoPreview) return;
 
         videoPreviewImage.loadUrl(musicDetail.getAlbum().getPicUrl());
         videoPreviewTitle.setText(musicDetail.getName());
