@@ -110,6 +110,14 @@ public class AccountView extends LinearLayout {
 
     public AccountView(Context context) {
         super(context);
+        if (!tuneWeave.hasCredential(selectedPlatform)) {
+            for (TuneWeavePlatform platform : TuneWeavePlatform.values()) {
+                if (tuneWeave.hasCredential(platform)) {
+                    selectedPlatform = platform;
+                    break;
+                }
+            }
+        }
 //        refresh(false);
         instance = this;
         addOnAttachStateChangeListener(new OnAttachStateChangeListener() {

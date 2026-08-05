@@ -73,7 +73,7 @@ public class LoginService implements IClientLoginService {
                 lastLoginErrorMessage = null;
             } else if (type == LoginType.ANONYMOUS && Profile.ANONYMOUS.equals(profile)) {
                 loginCookieInfo.setToClientCookie();
-                if (!tuneWeave.hasCredential(tuneWeave.defaultPlatform())) {
+                if (availableTuneWeavePlatform() == null) {
                     Profile.setCurrent(Profile.ANONYMOUS);
                 } else {
                     restoreTuneWeaveSession();
@@ -139,7 +139,7 @@ public class LoginService implements IClientLoginService {
         LoginType type = loginCookieInfo.type();
         Profile current = Profile.getCurrent();
         boolean realCookie = type != LoginType.UNLOGGED && type != LoginType.ANONYMOUS;
-        boolean tuneWeaveCredential = tuneWeave.hasCredential(tuneWeave.defaultPlatform());
+        boolean tuneWeaveCredential = availableTuneWeavePlatform() != null;
         boolean realProfile = current != null && !current.equals(Profile.ANONYMOUS);
         if ((realCookie || tuneWeaveCredential) && realProfile) {
             return LoginState.LOGGED_IN;
@@ -177,7 +177,7 @@ public class LoginService implements IClientLoginService {
     @Override
     public boolean hasPreviousLoginInfo() {
         LoginCookieInfo loginCookieInfo = LoginCookieInfo.clientCurrentCookie();
-        return tuneWeave.hasCredential(tuneWeave.defaultPlatform())
+        return availableTuneWeavePlatform() != null
                 || loginCookieInfo.type() != LoginType.UNLOGGED
                 && loginCookieInfo.type() != LoginType.ANONYMOUS;
     }
@@ -213,7 +213,7 @@ public class LoginService implements IClientLoginService {
             logger.info("No server-owned login found, joining the Music HUD server anonymously");
             loginAsAnonymousToServer();
         }
-        if (tuneWeave.hasCredential(tuneWeave.defaultPlatform())) {
+        if (availableTuneWeavePlatform() != null) {
             restoreTuneWeaveSession();
         }
     }
@@ -280,15 +280,27 @@ public class LoginService implements IClientLoginService {
     }
 
     public void restoreTuneWeaveSession() {
+        TuneWeavePlatform platform = availableTuneWeavePlatform();
+        if (platform == null) return;
+        tuneWeave.setDefaultPlatform(platform);
         MusicHud.EXECUTOR.execute(() -> {
             try {
-                completeTuneWeaveLogin(tuneWeave.loadSession(tuneWeave.defaultPlatform()));
+                completeTuneWeaveLogin(tuneWeave.loadSession(platform));
             } catch (RuntimeException error) {
                 lastLoginErrorMessage = error.getMessage();
                 logger.warn("Failed to restore the client-owned TuneWeave session: {}", error.getMessage());
                 refreshAccountView();
             }
         });
+    }
+
+    private static TuneWeavePlatform availableTuneWeavePlatform() {
+        TuneWeavePlatform preferred = tuneWeave.defaultPlatform();
+        if (tuneWeave.hasCredential(preferred)) return preferred;
+        for (TuneWeavePlatform platform : TuneWeavePlatform.values()) {
+            if (tuneWeave.hasCredential(platform)) return platform;
+        }
+        return null;
     }
 
     private static void refreshAccountView() {
