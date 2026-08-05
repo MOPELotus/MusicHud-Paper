@@ -125,8 +125,8 @@ public class MainFragment extends Fragment {
                 instance.likeButton.bindMusicList(null);
                 instance.addToPlaylistButton.bindMusicDetail(null);
             } else {
-                boolean program = "podcast".equals(musicDetail.getSourceKind())
-                        || "radio".equals(musicDetail.getSourceKind());
+                boolean program = "podcast_episode".equals(musicDetail.getSourceKind())
+                        || "radio_station".equals(musicDetail.getSourceKind());
                 boolean virtualCollection = program || "video".equals(musicDetail.getSourceKind());
                 instance.titleText.setTextColor(Theme.NORMAL_TEXT_COLOR);
                 instance.albumImage.loadUrl(musicDetail.getAlbum().getThumbnailPicUrl(240));

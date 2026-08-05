@@ -94,7 +94,8 @@ public final class RadioDetailView extends LinearLayout {
         showStatus(I18n.get(MusicHud.MOD_ID + ".text.programs.loading"));
         MusicHud.EXECUTOR.execute(() -> {
             try {
-                TuneWeaveClientService.RadioStationInfo loaded = tuneWeave.loadRadioStationDetail(source.reference());
+                TuneWeaveClientService.RadioStationInfo loaded = source.reference().contains(":difm:")
+                        ? source : tuneWeave.loadRadioStationDetail(source.reference());
                 List<MusicDetail> queue = tuneWeave.loadRadioPlaybackQueue(loaded);
                 MuiModApi.postToUiThread(() -> render(loaded, queue));
             } catch (RuntimeException error) {

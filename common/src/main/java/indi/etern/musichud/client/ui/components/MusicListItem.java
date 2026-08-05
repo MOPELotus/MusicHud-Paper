@@ -255,8 +255,8 @@ public class MusicListItem extends LinearLayout {
             pusherHeadView.setPlayerSkinSupplier(null);
         }
 
-        boolean podcastOrRadio = "podcast".equals(musicDetail.getSourceKind())
-                || "radio".equals(musicDetail.getSourceKind());
+        boolean podcastOrRadio = "podcast_episode".equals(musicDetail.getSourceKind())
+                || "radio_station".equals(musicDetail.getSourceKind());
         addToPlaylistButton.setVisibility(podcastOrRadio ? GONE : VISIBLE);
         addToPlaylistButton.bindMusicDetail(musicDetail);
         boolean video = "video".equals(musicDetail.getSourceKind());
@@ -266,6 +266,6 @@ public class MusicListItem extends LinearLayout {
 
     private static boolean isPlatformTrack(MusicDetail musicDetail) {
         String kind = musicDetail.getSourceKind();
-        return !"video".equals(kind) && !"podcast".equals(kind) && !"radio".equals(kind);
+        return !"video".equals(kind) && !"podcast_episode".equals(kind) && !"radio_station".equals(kind);
     }
 }

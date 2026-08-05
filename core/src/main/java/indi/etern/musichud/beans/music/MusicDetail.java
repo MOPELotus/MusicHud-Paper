@@ -97,9 +97,9 @@ public class MusicDetail implements IdentifiedBeans {
         if (sourceKind != null && sourceKind.startsWith("video|part=")) {
             this.sourceKind = "video";
             this.sourcePartRef = sourceKind.substring("video|part=".length());
-        } else if (sourceKind != null && sourceKind.startsWith("radio|item=")) {
-            this.sourceKind = "radio";
-            this.sourcePartRef = sourceKind.substring("radio|item=".length());
+        } else if (sourceKind != null && sourceKind.startsWith("radio_station|item=")) {
+            this.sourceKind = "radio_station";
+            this.sourcePartRef = sourceKind.substring("radio_station|item=".length());
         } else {
             this.sourceKind = sourceKind;
         }
@@ -167,7 +167,7 @@ public class MusicDetail implements IdentifiedBeans {
     public String getWireSourceKind() {
         if (getSourcePartRef().isBlank()) return getSourceKind();
         if ("video".equals(getSourceKind())) return "video|part=" + getSourcePartRef();
-        if ("radio".equals(getSourceKind())) return "radio|item=" + getSourcePartRef();
+        if ("radio_station".equals(getSourceKind())) return "radio_station|item=" + getSourcePartRef();
         return getSourceKind();
     }
 
