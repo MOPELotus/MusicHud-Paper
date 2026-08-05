@@ -196,6 +196,11 @@ public class ImageUtils {
             URL imageUrl = URI.create(url).toURL();
             connection = (HttpURLConnection) imageUrl.openConnection();
             connection.setRequestMethod("GET");
+            connection.setRequestProperty("User-Agent", "MusicHud/1.0 (+https://github.com/MOPELotus/MusicHud-Paper)");
+            connection.setRequestProperty("Accept", "image/avif,image/webp,image/apng,image/svg+xml,image/*,*/*;q=0.8");
+            if (imageUrl.getHost() != null && imageUrl.getHost().toLowerCase(java.util.Locale.ROOT).contains("gtimg.com")) {
+                connection.setRequestProperty("Referer", "https://y.qq.com/");
+            }
             connection.setConnectTimeout(10000);
             connection.setReadTimeout(10000);
 

@@ -817,10 +817,13 @@ public final class TuneWeaveClientService {
                     + TuneWeaveApiClient.encodePathSegment(musicDetail.getSourceRef()) + "/lyrics",
                     Map.of("word_synced", "true", "translated", "true", "romanized", "true"), null).data());
         }
+        JsonObject extensions = object(lyrics.get("extensions"));
+        String wordSyncedTranslated = string(extensions, "word_synced_translated",
+                string(lyrics, "translated", ""));
         return new LyricInfo(new Lyric(string(lyrics, "plain", "")),
                 new Lyric(string(lyrics, "translated", "")),
                 new Lyric(string(lyrics, "word_synced", "")),
-                new Lyric(string(lyrics, "romanized", "")));
+                new Lyric(wordSyncedTranslated));
     }
 
     public void setTrackFavorite(MusicDetail musicDetail, boolean favorite) {
@@ -1126,8 +1129,6 @@ public final class TuneWeaveClientService {
         };
         Map<String, String> query = new LinkedHashMap<>();
         query.put("quality", qualityName(quality));
-        query.put("fallback", "true");
-        query.put("fallback_platforms", "netease,qq,kugou,migu,kuwo,soda");
         if ("video".equals(musicDetail.getSourceKind())) {
             query.put("type", "video");
             if (!musicDetail.getSourcePartRef().isBlank()) query.put("part", musicDetail.getSourcePartRef());
@@ -1213,8 +1214,6 @@ public final class TuneWeaveClientService {
         JsonObject body = new JsonObject();
         body.add("item", item);
         body.addProperty("quality", qualityName(quality));
-        body.addProperty("fallback", true);
-        body.addProperty("fallback_platforms", "netease,qq,kugou,migu,kuwo,soda");
         JsonObject data = object(requestWithAllCredentials("POST", "/v1/uni/items/stream", Map.of(), body).data());
         JsonObject stream = object(data.get("stream"));
         String url = string(stream, "url", "");
@@ -1467,7 +1466,7 @@ public final class TuneWeaveClientService {
                 string(creatorObject, "name", ""), "", stableId(platform, "user:" + creatorRef), VipType.NORMAL);
         Playlist playlist = Playlist.fromTuneWeave(
                 stableId(platform, "playlist:" + reference), reference,
-                string(object, "name", reference), string(object, "cover_url", ""),
+                string(object, "name", reference), imageUrl(object, "cover_url", "pic_url", "cover"),
                 integer(object, "track_count", integer(object, "item_count", 0)),
                 integer(object, "play_count", 0), creator);
         playlistsById.put(playlist.getId(), playlist);
@@ -1485,7 +1484,7 @@ public final class TuneWeaveClientService {
             });
         }
         Album album = new Album(stableId(platform, "album:" + reference), string(object, "name", reference),
-                string(object, "cover_url", string(object, "pic_url", "")), string(object, "kind", ""),
+                imageUrl(object, "cover_url", "pic_url", "cover_pic_url", "pic"), string(object, "kind", ""),
                 string(object, "company", ""), integer(object, "track_count", 0),
                 new ObservableSequencedSet<>(), artists, indi.etern.musichud.beans.music.PusherInfo.EMPTY, reference);
         albumsById.put(album.getId(), album);
@@ -1518,6 +1517,15 @@ public final class TuneWeaveClientService {
         Album album = Album.NONE;
         JsonElement albumData = object.get("album");
         if (albumData != null && albumData.isJsonObject()) album = toAlbum(platform, albumData.getAsJsonObject());
+        if (album == Album.NONE) {
+            String cover = imageUrl(object, "cover_url", "pic_url", "cover_pic_url", "pic");
+            if (!cover.isBlank()) {
+                album = new Album(stableId(platform, "track-album:" + reference),
+                        string(object, "album_name", string(object, "name", reference)), cover,
+                        "", "", 0, new ObservableSequencedSet<>(), new java.util.LinkedHashSet<>(artists),
+                        indi.etern.musichud.beans.music.PusherInfo.EMPTY, "");
+            }
+        }
         MusicDetail result = MusicDetail.fromTuneWeave(stableId(platform, "track:" + reference), reference,
                 "video".equals(string(object, "kind", "track")) ? "video" : "track",
                 string(object, "name", string(object, "title", reference)),
@@ -1632,6 +1640,22 @@ public final class TuneWeaveClientService {
 
     private static long stableId(TuneWeavePlatform platform, String value) {
         return stableUserId(platform, value);
+    }
+
+    private static String imageUrl(JsonObject object, String... keys) {
+        for (String key : keys) {
+            String value = string(object, key, "");
+            if (!value.isBlank()) {
+                return normalizeImageUrl(value);
+            }
+        }
+        return "";
+    }
+
+    private static String normalizeImageUrl(String value) {
+        String trimmed = value == null ? "" : value.trim();
+        if (trimmed.startsWith("http://")) return "https://" + trimmed.substring("http://".length());
+        return trimmed;
     }
 
     private static List<JsonElement> elements(JsonElement value) {

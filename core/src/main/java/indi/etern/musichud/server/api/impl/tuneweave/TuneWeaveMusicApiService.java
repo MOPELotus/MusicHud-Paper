@@ -228,8 +228,6 @@ public final class TuneWeaveMusicApiService implements IMusicApiService {
                 : "/v1/tracks/" + TuneWeaveApiClient.encodePathSegment(reference) + "/stream";
         Map<String, String> query = providerAccountQuery(playerUUID);
         query.put("quality", qualityName(quality));
-        query.put("fallback", "true");
-        query.put("fallback_platforms", "netease,qq,kugou,migu,kuwo,soda");
         if (video) {
             query.put("type", "video");
             if (!musicDetail.getSourcePartRef().isBlank()) {

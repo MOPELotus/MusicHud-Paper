@@ -18,7 +18,9 @@ import java.util.regex.Pattern;
 
 public class WordByWordLyricParser {
     private static final Pattern mainPattern = Pattern.compile("\\[([0-9]+),([0-9]+)](.*)");
-    private static final Pattern phrasePattern = Pattern.compile("\\((\\d+),(\\d+),(\\d+)\\)([\\s\\S]*?)(?=\\(\\d+,\\d+,(\\d+)\\)|$)");
+    /** Accept both NetEase YRC (three numeric fields) and QQ QRC (two fields). */
+    private static final Pattern phrasePattern = Pattern.compile(
+            "\\((\\d+),(\\d+)(?:,\\d+)?\\)([\\s\\S]*?)(?=\\(\\d+,\\d+(?:,\\d+)?\\)|$)");
     private static final Duration emptyLineIgnoreDuration = Duration.ofSeconds(5);
     private static final Logger logger = MusicHud.getLogger(FullLineLyricParser.class);
 
@@ -198,7 +200,7 @@ public class WordByWordLyricParser {
 //                String phraseStartTimestamp = phraseMatcher.group(1);
                 String phraseDurationMillis = phraseMatcher.group(2);
 //                String unknown = phraseMatcher.group(3);
-                String phraseText = phraseMatcher.group(4);
+                String phraseText = phraseMatcher.group(3);
                 String suffix = phraseText.endsWith(" ") ? " " : "";
                 phraseText = phraseText.replace('\u00A0', ' ').replace("\n", "").trim() + suffix;
                 lineText.append(phraseText);
