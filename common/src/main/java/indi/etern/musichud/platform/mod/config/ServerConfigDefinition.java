@@ -25,7 +25,7 @@ public class ServerConfigDefinition implements ServerConfig {
     private boolean enableFlac = true;
     private boolean selectMaxBr;
     private boolean followSourceOrder = true;
-    private int port = 3000;
+    private int port = 7832;
     @Setter
     @Getter
     private boolean configured;
@@ -61,6 +61,11 @@ public class ServerConfigDefinition implements ServerConfig {
         selectMaxBr = SimpleTomlConfig.getBoolean(values, "selectMaxBr", selectMaxBr);
         followSourceOrder = SimpleTomlConfig.getBoolean(values, "followSourceOrder", followSourceOrder);
         port = clampPort(SimpleTomlConfig.getInt(values, "port", port));
+        // TuneWeave replaced the legacy API's 3000 default. Migrate an untouched
+        // local config that already points at the new loopback origin.
+        if ("http://127.0.0.1:7832".equals(serverApiBaseUrl) && port == 3000) {
+            port = 7832;
+        }
         configured = true;
         save();
     }
