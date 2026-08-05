@@ -12,9 +12,12 @@ import icyllis.modernui.widget.ScrollView;
 import icyllis.modernui.widget.ArrayAdapter;
 import icyllis.modernui.widget.Spinner;
 import icyllis.modernui.widget.TextView;
+import icyllis.modernui.widget.Toast;
 import indi.etern.musichud.MusicHud;
+import indi.etern.musichud.client.services.music.MusicService;
 import indi.etern.musichud.client.services.tuneweave.TuneWeaveClientService;
 import indi.etern.musichud.client.ui.Theme;
+import indi.etern.musichud.client.ui.ToastUtil;
 import indi.etern.musichud.client.ui.components.Modal;
 import indi.etern.musichud.client.ui.components.RouterContainer;
 import indi.etern.musichud.client.ui.utils.ui.ButtonInsetBackgroundFactory;
@@ -48,6 +51,7 @@ public final class UniPlaylistDetailView extends LinearLayout {
         title.setTextColor(Theme.EMPHASIZE_TEXT_COLOR);
         toolbar.addView(title, new LayoutParams(0, WRAP_CONTENT, 1));
         toolbar.addView(action(context, ".button.refresh", v -> refresh()), new LayoutParams(WRAP_CONTENT, WRAP_CONTENT));
+        toolbar.addView(action(context, ".button.playAll", v -> playAll()), new LayoutParams(WRAP_CONTENT, WRAP_CONTENT));
         toolbar.addView(action(context, ".button.add", v -> showAddDialog()), new LayoutParams(WRAP_CONTENT, WRAP_CONTENT));
         addView(toolbar, new LayoutParams(MATCH_PARENT, WRAP_CONTENT));
 
@@ -109,6 +113,7 @@ public final class UniPlaylistDetailView extends LinearLayout {
             meta.setTextSize(Theme.TEXT_SIZE_SMALL);
             text.addView(meta, new LayoutParams(MATCH_PARENT, WRAP_CONTENT));
             row.addView(text, new LayoutParams(0, WRAP_CONTENT, 1));
+            row.addView(action(getContext(), ".button.play", v -> play(item)), new LayoutParams(WRAP_CONTENT, WRAP_CONTENT));
             if (itemIndex > 0) row.addView(action(getContext(), ".button.moveUp", v -> move(itemIndex, itemIndex - 1)), new LayoutParams(WRAP_CONTENT, WRAP_CONTENT));
             if (itemIndex + 1 < items.size()) row.addView(action(getContext(), ".button.moveDown", v -> move(itemIndex, itemIndex + 1)), new LayoutParams(WRAP_CONTENT, WRAP_CONTENT));
             row.addView(action(getContext(), ".button.remove", v -> remove(item)), new LayoutParams(WRAP_CONTENT, WRAP_CONTENT));
@@ -171,6 +176,20 @@ public final class UniPlaylistDetailView extends LinearLayout {
     private void add(String reference, String kind) {
         MusicHud.EXECUTOR.execute(() -> { try { tuneWeave.addUniPlaylistItem(playlist.reference(), reference, kind); refresh(); }
         catch (RuntimeException error) { MuiModApi.postToUiThread(() -> showMessage(error.getMessage())); } });
+    }
+
+    private void play(TuneWeaveClientService.UniItemInfo item) {
+        try {
+            MusicService.getInstance().sendPushMusicToQueue(tuneWeave.uniPlaylistItemTrack(item));
+        } catch (RuntimeException error) {
+            String message = error.getMessage() == null || error.getMessage().isBlank()
+                    ? I18n.get(MusicHud.MOD_ID + ".text.musicPushError") : error.getMessage();
+            ToastUtil.show(Toast.makeText(getContext(), message, Toast.LENGTH_SHORT));
+        }
+    }
+
+    private void playAll() {
+        for (TuneWeaveClientService.UniItemInfo item : items) play(item);
     }
 
     private void remove(TuneWeaveClientService.UniItemInfo item) {

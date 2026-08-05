@@ -34,6 +34,7 @@ import java.util.Collections;
 import java.util.HexFormat;
 import java.util.List;
 import java.util.LinkedHashMap;
+import java.util.Locale;
 import java.util.Map;
 import java.util.Objects;
 import java.util.concurrent.ConcurrentHashMap;
@@ -979,9 +980,36 @@ public final class TuneWeaveClientService {
             }
             result.add(new UniItemInfo(string(object, "id", ""), integer(object, "position", result.size()),
                     string(object, "kind", "track"), itemRef,
-                    string(snapshot, "title", itemRef), artists));
+                    string(snapshot, "title", itemRef), artists,
+                    string(snapshot, "album", ""), integer(snapshot, "duration_ms", 0),
+                    string(snapshot, "cover_url", "")));
         }
         return result;
+    }
+
+    public MusicDetail uniPlaylistItemTrack(UniItemInfo item) {
+        requireReference(item == null ? null : item.sourceRef(), "Uni Playlist item");
+        TuneWeavePlatform platform = platformFromReference(item.sourceRef());
+        List<Artist> artists = item.artists().stream()
+                .map(name -> new Artist(stableId(platform, "uni-artist:" + name), name,
+                        "", 0, 0, "", new ArrayList<>(), 0, ""))
+                .toList();
+        String albumName = item.album().isBlank() ? item.title() : item.album();
+        Album album = new Album(stableId(platform, "uni-album:" + item.sourceRef()), albumName,
+                item.coverUrl().isBlank() ? MusicHud.ICON_BASE64 : item.coverUrl(), "Uni Playlist", "", 0,
+                new ObservableSequencedSet<>(), new java.util.LinkedHashSet<>(artists),
+                indi.etern.musichud.beans.music.PusherInfo.EMPTY, "");
+        String sourceKind = "mv".equals(item.kind()) ? "video" : item.kind();
+        int duration = item.durationMillis();
+        if (duration <= 0 && "radio_station".equals(sourceKind)) duration = 24 * 60 * 60 * 1000;
+        if (duration <= 0) throw new IllegalArgumentException("Uni Playlist item has no playable duration");
+        MusicDetail track = MusicDetail.fromTuneWeave(stableId(platform,
+                "uni-item:" + item.id() + ':' + item.sourceRef()), item.sourceRef(), sourceKind,
+                item.title(), duration, album, artists);
+        track.setClientHostedUni(true);
+        track.setPusherInfo(indi.etern.musichud.beans.music.PusherInfo.EMPTY);
+        tracksById.put(track.getId(), track);
+        return track;
     }
 
     public void addUniPlaylistItems(String reference, List<String> resourceRefs) {
@@ -1085,6 +1113,9 @@ public final class TuneWeaveClientService {
         String reference = musicDetail.getSourceRef();
         TuneWeavePlatform platform = TuneWeavePlatform.fromApiName(reference.contains(":")
                 ? reference.substring(0, reference.indexOf(':')) : config.getDefaultMusicPlatform());
+        if (musicDetail.isClientHostedUni()) {
+            return loadUniClientItemResource(musicDetail, quality);
+        }
         if ("radio_station".equals(musicDetail.getSourceKind())) {
             return loadRadioResource(musicDetail, platform);
         }
@@ -1139,6 +1170,59 @@ public final class TuneWeaveClientService {
         if (url.isBlank()) return MusicResourceInfo.NONE;
         return new MusicResourceInfo(musicDetail.getId(), url, 0, 0L,
                 FormatType.AUTO, "", Fee.UNSET, duration, headers);
+    }
+
+    private MusicResourceInfo loadUniClientItemResource(MusicDetail musicDetail,
+                                                         indi.etern.musichud.beans.music.Quality quality) {
+        JsonObject item = new JsonObject();
+        item.addProperty("id", String.format(Locale.ROOT, "item_%016x", musicDetail.getId()));
+        item.addProperty("position", 0);
+        item.addProperty("kind", musicDetail.getSourceKind());
+        item.addProperty("source_ref", musicDetail.getSourceRef());
+        JsonObject snapshot = new JsonObject();
+        snapshot.addProperty("title", musicDetail.getName());
+        JsonArray artists = new JsonArray();
+        musicDetail.getArtists().stream().map(Artist::getName).forEach(artists::add);
+        snapshot.add("artists", artists);
+        String albumName = musicDetail.getAlbum().getName();
+        if (albumName.isBlank()) snapshot.add("album", JsonNull.INSTANCE);
+        else snapshot.addProperty("album", albumName);
+        snapshot.addProperty("duration_ms", musicDetail.getDurationMillis());
+        snapshot.add("isrc", JsonNull.INSTANCE);
+        String coverUrl = musicDetail.getAlbum().getPicUrl();
+        if (coverUrl != null && coverUrl.startsWith("https://")) snapshot.addProperty("cover_url", coverUrl);
+        else snapshot.add("cover_url", JsonNull.INSTANCE);
+        snapshot.add("version_tags", new JsonArray());
+        JsonObject snapshotExtensions = new JsonObject();
+        snapshotExtensions.addProperty("canonical_ref", musicDetail.getSourceRef());
+        snapshotExtensions.add("playable", JsonNull.INSTANCE);
+        snapshotExtensions.add("available_qualities", new JsonArray());
+        for (String key : List.of("mv_ref", "video_kind", "published_at", "podcast_ref", "audio_ref",
+                "serial_number", "description", "category", "region", "current_program", "has_direct_stream")) {
+            snapshotExtensions.add(key, JsonNull.INSTANCE);
+        }
+        snapshot.add("extensions", snapshotExtensions);
+        item.add("snapshot", snapshot);
+        item.addProperty("added_at_ms", System.currentTimeMillis());
+        JsonObject itemExtensions = new JsonObject();
+        for (String key : List.of("import_source_index", "import_source_ref", "import_source_type",
+                "imported_from_item_id")) {
+            itemExtensions.add(key, JsonNull.INSTANCE);
+        }
+        item.add("extensions", itemExtensions);
+        JsonObject body = new JsonObject();
+        body.add("item", item);
+        body.addProperty("quality", qualityName(quality));
+        body.addProperty("fallback", true);
+        body.addProperty("fallback_platforms", "netease,qq,kugou,migu,kuwo,soda");
+        JsonObject data = object(requestWithAllCredentials("POST", "/v1/uni/items/stream", Map.of(), body).data());
+        JsonObject stream = object(data.get("stream"));
+        String url = string(stream, "url", "");
+        if (url.isBlank()) return MusicResourceInfo.NONE;
+        return new MusicResourceInfo(musicDetail.getId(), url, integer(stream, "bitrate", 0),
+                longValue(stream, "size", 0L), FormatType.fromSerializedName(
+                string(stream, "format", string(stream, "codec", ""))), "", Fee.UNSET,
+                integer(stream, "duration_ms", musicDetail.getDurationMillis()), stringMap(stream.get("headers")));
     }
 
     private static boolean isStyledRadioReference(String reference) {
@@ -1641,7 +1725,8 @@ public final class TuneWeaveClientService {
     }
 
     public record UniItemInfo(String id, int position, String kind, String sourceRef,
-                              String title, List<String> artists) {
+                              String title, List<String> artists, String album,
+                              int durationMillis, String coverUrl) {
         public UniItemInfo {
             artists = artists == null ? List.of() : Collections.unmodifiableList(new ArrayList<>(artists));
         }

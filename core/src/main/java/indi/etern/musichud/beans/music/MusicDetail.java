@@ -57,6 +57,7 @@ public class MusicDetail implements IdentifiedBeans {
     String sourceKind = "track";
     @Setter
     String sourcePartRef = "";
+    boolean clientHostedUni;
 
     // only useful for server, and its a optional api field
     @SerializedName("privilege")
@@ -94,14 +95,19 @@ public class MusicDetail implements IdentifiedBeans {
         this.pusherInfo = pusherInfo;
         this.lyricInfo = lyricInfo;
         this.sourceRef = sourceRef;
-        if (sourceKind != null && sourceKind.startsWith("video|part=")) {
+        String normalizedKind = sourceKind;
+        if (normalizedKind != null && normalizedKind.endsWith("|uni=true")) {
+            clientHostedUni = true;
+            normalizedKind = normalizedKind.substring(0, normalizedKind.length() - "|uni=true".length());
+        }
+        if (normalizedKind != null && normalizedKind.startsWith("video|part=")) {
             this.sourceKind = "video";
-            this.sourcePartRef = sourceKind.substring("video|part=".length());
-        } else if (sourceKind != null && sourceKind.startsWith("radio_station|item=")) {
+            this.sourcePartRef = normalizedKind.substring("video|part=".length());
+        } else if (normalizedKind != null && normalizedKind.startsWith("radio_station|item=")) {
             this.sourceKind = "radio_station";
-            this.sourcePartRef = sourceKind.substring("radio_station|item=".length());
+            this.sourcePartRef = normalizedKind.substring("radio_station|item=".length());
         } else {
-            this.sourceKind = sourceKind;
+            this.sourceKind = normalizedKind;
         }
     }
 
@@ -163,16 +169,26 @@ public class MusicDetail implements IdentifiedBeans {
         return Objects.requireNonNullElse(sourceKind, "track");
     }
 
-    /** Wire representation keeps a selected video part in the existing source-kind slot. */
+    /** Wire representation carries playback selectors without changing the packet schema. */
     public String getWireSourceKind() {
-        if (getSourcePartRef().isBlank()) return getSourceKind();
-        if ("video".equals(getSourceKind())) return "video|part=" + getSourcePartRef();
-        if ("radio_station".equals(getSourceKind())) return "radio_station|item=" + getSourcePartRef();
-        return getSourceKind();
+        String wireKind = getSourceKind();
+        if (!getSourcePartRef().isBlank()) {
+            if ("video".equals(getSourceKind())) wireKind = "video|part=" + getSourcePartRef();
+            if ("radio_station".equals(getSourceKind())) wireKind = "radio_station|item=" + getSourcePartRef();
+        }
+        return clientHostedUni ? wireKind + "|uni=true" : wireKind;
     }
 
     public String getSourcePartRef() {
         return Objects.requireNonNullElse(sourcePartRef, "");
+    }
+
+    public boolean isClientHostedUni() {
+        return clientHostedUni;
+    }
+
+    public void setClientHostedUni(boolean clientHostedUni) {
+        this.clientHostedUni = clientHostedUni;
     }
 
     @Override
