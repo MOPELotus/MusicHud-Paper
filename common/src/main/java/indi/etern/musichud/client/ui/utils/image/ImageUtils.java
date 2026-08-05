@@ -197,12 +197,11 @@ public class ImageUtils {
             connection = (HttpURLConnection) imageUrl.openConnection();
             connection.setRequestMethod("GET");
             connection.setRequestProperty("User-Agent", "MusicHud/1.0 (+https://github.com/MOPELotus/MusicHud-Paper)");
-            boolean qqCdn = imageUrl.getHost() != null
-                    && imageUrl.getHost().toLowerCase(java.util.Locale.ROOT).contains("gtimg.com");
+            boolean qqCdn = isQqImageHost(imageUrl.getHost());
             // ModernUI's bitmap decoder does not accept the WebP variant
             // returned by QQ CDN when it is advertised in Accept.
             connection.setRequestProperty("Accept", qqCdn
-                    ? "image/jpeg,image/png,image/*,*/*;q=0.8"
+                    ? "image/jpeg,image/png;q=0.9"
                     : "image/avif,image/webp,image/apng,image/svg+xml,image/*,*/*;q=0.8");
             if (qqCdn) {
                 connection.setRequestProperty("Referer", "https://y.qq.com/");
@@ -226,6 +225,22 @@ public class ImageUtils {
                 connection.disconnect();
             }
         }
+    }
+
+    static boolean isQqImageHost(String host) {
+        if (host == null || host.isBlank()) return false;
+        String normalized = host.toLowerCase(java.util.Locale.ROOT);
+        return isHostOrSubdomain(normalized, "gtimg.cn")
+                || isHostOrSubdomain(normalized, "gtimg.com")
+                || isHostOrSubdomain(normalized, "qpic.cn")
+                || isHostOrSubdomain(normalized, "qpic.com")
+                || isHostOrSubdomain(normalized, "qlogo.cn")
+                || isHostOrSubdomain(normalized, "qlogo.com")
+                || isHostOrSubdomain(normalized, "qq.com");
+    }
+
+    private static boolean isHostOrSubdomain(String host, String domain) {
+        return host.equals(domain) || host.endsWith('.' + domain);
     }
 
     public static NativeImage convertBitmapToNativeImage(Bitmap bitmap) {

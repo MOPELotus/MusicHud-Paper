@@ -324,10 +324,6 @@ public class MainFragment extends Fragment {
                 LinearLayout titleRow = new LinearLayout(context);
                 titleRow.setOrientation(LinearLayout.HORIZONTAL);
                 titleRow.setGravity(Gravity.CENTER_VERTICAL);
-                platformIcon = new ImageView(context);
-                platformIcon.setScaleType(ImageView.ScaleType.CENTER_INSIDE);
-                platformIcon.setVisibility(View.INVISIBLE);
-                titleRow.addView(platformIcon, new LinearLayout.LayoutParams(titleRow.dp(24), titleRow.dp(24)));
                 titleRow.addView(titleText, new LinearLayout.LayoutParams(0, WRAP_CONTENT, 1));
                 musicInfo.addView(titleRow);
 
@@ -347,8 +343,15 @@ public class MainFragment extends Fragment {
                 pusherRow.setOrientation(LinearLayout.HORIZONTAL);
                 pusherRow.setGravity(Gravity.CENTER_VERTICAL);
 
-                pusherHeadView = new PlayerHeadView(context);
+                platformIcon = new ImageView(context);
+                platformIcon.setScaleType(ImageView.ScaleType.CENTER_INSIDE);
+                platformIcon.setVisibility(View.INVISIBLE);
                 int rowHeight = pusherText.dp(Theme.TEXT_SIZE_LARGER);
+                LinearLayout.LayoutParams platformIconParams = new LinearLayout.LayoutParams(rowHeight, rowHeight);
+                platformIconParams.setMargins(0, 0, pusherText.dp(4), 0);
+                pusherRow.addView(platformIcon, platformIconParams);
+
+                pusherHeadView = new PlayerHeadView(context);
                 //noinspection SuspiciousNameCombination
                 pusherHeadView.setLayoutParams(new LinearLayout.LayoutParams(rowHeight, rowHeight));
                 pusherHeadView.setVisibility(View.GONE);

@@ -186,12 +186,14 @@ public class HudRendererManager {
 
             contentInterval = Math.min(contentUnit * 2.5f, 2f);
 
-            float maxTitleWidth = contentWidth - titleSize - Math.max(4, contentInterval);
-
+            float availableTitleWidth = contentWidth - titleSize - Math.max(4, contentInterval);
             float titleY = showProgress ? contentPadding + 1f : contentPadding + (contentHeight - titleSize) / 2;
             float statusX = Math.max(mainContentX + contentWidth - titleSize, imageHeightAndWidth + contentPadding - titleSize);
-            boolean statusVisible = !(maxTitleWidth - 1.25 * titleSize <= 0);
+            boolean statusVisible = !(availableTitleWidth - 1.25 * titleSize <= 0);
             float headX = statusX - (statusVisible ? titleSize + Math.max(4, contentInterval) : 0);
+            float platformIconX = Math.max(mainContentX,
+                    headX - titleSize - Math.max(4, contentInterval));
+            float maxTitleWidth = Math.max(0, platformIconX - mainContentX - Math.max(4, contentInterval));
 
             boolean showInfoLine = contentHeight - titleSize > 11f;
             float infoTextSize = showInfoLine ? contentUnit * 5.5f : 0;
@@ -216,11 +218,9 @@ public class HudRendererManager {
 
             Layout titleLayout = Layout.ofTextLayout("Title", mainContentX, titleY, maxTitleWidth, titleSize);
             titleLayout.setParent(baseLayout);
-            Layout platformIconLayout = new Layout("PlatformIcon", mainContentX, titleY, titleSize, titleSize, 0f);
+            Layout platformIconLayout = new Layout("PlatformIcon", platformIconX, titleY, titleSize, titleSize, 0f);
             platformIconLayout.setParent(baseLayout);
             PLATFORM_ICON_RENDERER.configure(platformIconLayout);
-            titleLayout.setX(mainContentX + titleSize + Math.max(4, contentInterval));
-            titleLayout.setWidth(Math.max(0, maxTitleWidth - titleSize - Math.max(4, contentInterval)));
             TITLE_RENDERER.configure(titleLayout, Theme.EMPHASIZE_TEXT_COLOR, TextRenderer.Position.LEFT);
 
             float lyricHeight = contentHeight - titleSize - progressHeight - infoTextSize - contentInterval * 2;
