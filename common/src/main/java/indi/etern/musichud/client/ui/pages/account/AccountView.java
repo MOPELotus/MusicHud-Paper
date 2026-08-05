@@ -20,6 +20,7 @@ import indi.etern.musichud.client.ui.Theme;
 import indi.etern.musichud.client.ui.components.ArtistCard;
 import indi.etern.musichud.client.ui.components.FlexWrapLayout;
 import indi.etern.musichud.client.ui.components.MusicCollectionCard;
+import indi.etern.musichud.client.ui.components.RouterContainer;
 import indi.etern.musichud.client.ui.components.UrlImageView;
 import indi.etern.musichud.client.ui.utils.ui.ButtonInsetBackgroundFactory;
 import indi.etern.musichud.interfaces.IClientLoginService;
@@ -209,6 +210,17 @@ public class AccountView extends LinearLayout {
             refresh(true);
         });
         buttonsLayout.addView(refreshButton);
+
+        Button managePlaylistsButton = new Button(context);
+        managePlaylistsButton.setText(I18n.get(MusicHud.MOD_ID + ".button.managePlaylists"));
+        managePlaylistsButton.setTextColor(Theme.PRIMARY_COLOR);
+        managePlaylistsButton.setTextSize(Theme.TEXT_SIZE_NORMAL);
+        managePlaylistsButton.setBackground(backgroundFactory.newBackgroundDrawable());
+        managePlaylistsButton.setOnClickListener(button -> RouterContainer.getInstance().pushNavigate(
+                new PlatformPlaylistManagerView(context)));
+        LayoutParams manageParams = new LayoutParams(WRAP_CONTENT, WRAP_CONTENT);
+        manageParams.setMargins(0, 0, dp(8), 0);
+        buttonsLayout.addView(managePlaylistsButton, manageParams);
 
         Button logoutButton = new Button(context);
         logoutButton.setText(I18n.get(MusicHud.MOD_ID + ".button.logout"));

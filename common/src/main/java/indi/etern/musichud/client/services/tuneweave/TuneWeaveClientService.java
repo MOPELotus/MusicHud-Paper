@@ -390,6 +390,76 @@ public final class TuneWeaveClientService {
                 + TuneWeaveApiClient.encodePathSegment(playlist.getSourceRef()) + "/tracks", Map.of(), body);
     }
 
+    public Playlist createPlatformPlaylist(String name, boolean privatePlaylist) {
+        TuneWeavePlatform platform = defaultPlatform();
+        JsonObject body = new JsonObject();
+        body.addProperty("platform", platform.apiName());
+        body.addProperty("name", name == null ? "" : name.trim());
+        body.addProperty("visibility", privatePlaylist ? "private" : "public");
+        body.addProperty("kind", "normal");
+        JsonObject result = object(requestForPlatform(platform, "POST", "/v1/playlists", Map.of(), body).data());
+        JsonElement playlistData = result.get("playlist");
+        if (playlistData != null && playlistData.isJsonObject()) {
+            return toPlaylist(platform, playlistData.getAsJsonObject());
+        }
+        String reference = string(result, "playlist_ref", "");
+        if (reference.isBlank()) {
+            throw new TuneWeaveApiClient.TuneWeaveException(
+                    "TuneWeave did not return the created playlist reference", false);
+        }
+        return loadPlaylistDetail(reference);
+    }
+
+    public void updatePlatformPlaylist(Playlist playlist, String name, String description) {
+        requireReference(playlist == null ? null : playlist.getSourceRef(), "playlist");
+        JsonObject body = new JsonObject();
+        if (name != null) body.addProperty("name", name.trim());
+        if (description != null) body.addProperty("description", description.trim());
+        if (body.isEmpty()) return;
+        TuneWeavePlatform platform = platformFromReference(playlist.getSourceRef());
+        requestForPlatform(platform, "PATCH", "/v1/playlists/"
+                + TuneWeaveApiClient.encodePathSegment(playlist.getSourceRef()), Map.of(), body);
+    }
+
+    public void deletePlatformPlaylist(Playlist playlist) {
+        requireReference(playlist == null ? null : playlist.getSourceRef(), "playlist");
+        TuneWeavePlatform platform = platformFromReference(playlist.getSourceRef());
+        requestForPlatform(platform, "DELETE", "/v1/playlists/"
+                + TuneWeaveApiClient.encodePathSegment(playlist.getSourceRef()), Map.of(), null);
+        playlistsById.remove(playlist.getId());
+    }
+
+    public void reorderPlatformPlaylists(List<Playlist> playlists) {
+        if (playlists == null || playlists.isEmpty()) return;
+        TuneWeavePlatform platform = platformFromReference(playlists.getFirst().getSourceRef());
+        JsonObject body = new JsonObject();
+        JsonArray refs = new JsonArray();
+        for (Playlist playlist : playlists) {
+            requireReference(playlist.getSourceRef(), "playlist");
+            if (platformFromReference(playlist.getSourceRef()) != platform) {
+                throw new IllegalArgumentException("Platform playlist order cannot mix providers");
+            }
+            refs.add(playlist.getSourceRef());
+        }
+        body.add("refs", refs);
+        body.addProperty("platform", platform.apiName());
+        requestForPlatform(platform, "PUT", "/v1/account/playlists/order", Map.of(), body);
+    }
+
+    public void reorderPlaylistTracks(Playlist playlist, List<MusicDetail> tracks) {
+        requireReference(playlist == null ? null : playlist.getSourceRef(), "playlist");
+        TuneWeavePlatform platform = platformFromReference(playlist.getSourceRef());
+        JsonObject body = new JsonObject();
+        JsonArray refs = new JsonArray();
+        for (MusicDetail track : tracks) {
+            requireReference(track == null ? null : track.getSourceRef(), "track");
+            refs.add(track.getSourceRef());
+        }
+        body.add("refs", refs);
+        requestForPlatform(platform, "PUT", "/v1/playlists/"
+                + TuneWeaveApiClient.encodePathSegment(playlist.getSourceRef()) + "/tracks/order", Map.of(), body);
+    }
+
     private static void requireReference(String reference, String kind) {
         if (reference == null || reference.isBlank()) {
             throw new IllegalArgumentException("TuneWeave " + kind + " reference is missing");

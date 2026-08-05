@@ -16,6 +16,7 @@ import indi.etern.musichud.MusicHud;
 import indi.etern.musichud.beans.music.*;
 import indi.etern.musichud.beans.user.Profile;
 import indi.etern.musichud.client.services.music.MusicService;
+import indi.etern.musichud.client.services.tuneweave.TuneWeaveClientService;
 import indi.etern.musichud.client.ui.Theme;
 import indi.etern.musichud.client.ui.ToastUtil;
 import indi.etern.musichud.client.ui.drawable.ScaledImageDrawable;
@@ -41,14 +42,20 @@ public class MusicCollectionDetailView extends LinearLayout {
     private final UrlImageView imageView;
     private TextView musicTrackCountView;
     private MusicCollection musicCollection;
+    private final boolean editablePlaylist;
     private Unregister tracksSyncUnregister = null;
     private final AtomicBoolean syncPending = new AtomicBoolean();
     private String currentCoverUrl = null;
 
     public MusicCollectionDetailView(Context context, MusicCollection musicCollection) {
+        this(context, musicCollection, false);
+    }
+
+    public MusicCollectionDetailView(Context context, MusicCollection musicCollection, boolean editablePlaylist) {
         super(context);
 
         this.musicCollection = musicCollection;
+        this.editablePlaylist = editablePlaylist;
         setOrientation(VERTICAL);
         String collectionNameI18n = musicCollection.getNameI18nKey();
 
@@ -407,7 +414,77 @@ public class MusicCollectionDetailView extends LinearLayout {
             MusicService.getInstance().sendPushMusicToQueue(musicDetail);
             ToastUtil.show(Toast.makeText(context, I18n.get(MusicHud.MOD_ID + ".text.pushedMusicToPlaylist") + "\n" + musicDetail.getName() + " - " + artistsName, Toast.LENGTH_SHORT));
         });
+        if (editablePlaylist && musicCollection instanceof Playlist) {
+            musicLayout.getButtonsLayout().addView(trackOrderButton(context, "↑", ".button.moveUp",
+                    v -> moveTrack(musicLayout, -1)), new LinearLayout.LayoutParams(dp(32), dp(40)));
+            musicLayout.getButtonsLayout().addView(trackOrderButton(context, "↓", ".button.moveDown",
+                    v -> moveTrack(musicLayout, 1)), new LinearLayout.LayoutParams(dp(32), dp(40)));
+            ImageButton remove = new ImageButton(context);
+            remove.setScaleType(ImageView.ScaleType.CENTER_INSIDE);
+            Image trash = ImageUtils.getImageFromResource("/assets/music_hud/textures/gui/icons/trash_2.png");
+            if (trash != null) {
+                remove.setImageDrawable(new ScaledImageDrawable(context.getResources(), trash, dp(16), dp(16)));
+            }
+            remove.setTooltipText(I18n.get(MusicHud.MOD_ID + ".button.remove"));
+            remove.setBackground(ButtonInsetBackgroundFactory.builder().cornerRadius(dp(4)).inset(dp(2))
+                    .build().newBackgroundDrawable());
+            remove.setOnClickListener(v -> removeTrack(musicLayout));
+            musicLayout.getButtonsLayout().addView(remove, new LinearLayout.LayoutParams(dp(36), dp(40)));
+        }
         return musicLayout;
+    }
+
+    private Button trackOrderButton(Context context, String symbol, String tooltipKey, OnClickListener listener) {
+        Button button = new Button(context);
+        button.setText(symbol);
+        button.setTextSize(Theme.TEXT_SIZE_LARGE);
+        button.setTextColor(Theme.PRIMARY_COLOR);
+        button.setTooltipText(I18n.get(MusicHud.MOD_ID + tooltipKey));
+        button.setBackground(ButtonInsetBackgroundFactory.builder().cornerRadius(dp(4)).inset(dp(2))
+                .build().newBackgroundDrawable());
+        button.setOnClickListener(listener);
+        return button;
+    }
+
+    private void moveTrack(MusicListItem item, int delta) {
+        if (!(musicCollection instanceof Playlist playlist)) return;
+        int from = tracksListView.indexOfChild(item);
+        int to = from + delta;
+        List<MusicDetail> reordered = new ArrayList<>(playlist.getMusicDetails());
+        if (from < 0 || to < 0 || to >= reordered.size()) return;
+        MusicDetail moved = reordered.remove(from);
+        reordered.add(to, moved);
+        MusicHud.EXECUTOR.execute(() -> {
+            try {
+                TuneWeaveClientService.getInstance().reorderPlaylistTracks(playlist, reordered);
+                ObservableSequencedSet<MusicDetail> tracks = new ObservableSequencedSet<>();
+                tracks.addAll(reordered);
+                playlist.setTracks(tracks);
+                MuiModApi.postToUiThread(() -> syncTracksList(tracks));
+            } catch (RuntimeException error) {
+                MuiModApi.postToUiThread(() -> ToastUtil.show(Toast.makeText(getContext(),
+                        error.getMessage(), Toast.LENGTH_SHORT)));
+            }
+        });
+    }
+
+    private void removeTrack(MusicListItem item) {
+        if (!(musicCollection instanceof Playlist playlist)) return;
+        MusicDetail track = item.getMusicDetail();
+        MusicHud.EXECUTOR.execute(() -> {
+            try {
+                TuneWeaveClientService.getInstance().modifyPlaylistTracks(playlist, track, false);
+                playlist.getTracks().remove(track);
+                playlist.setMusicTrackCount(Math.max(0, playlist.getMusicTrackCount() - 1));
+                MuiModApi.postToUiThread(() -> {
+                    tracksListView.removeView(item);
+                    updatePlaylistTrackCountView(playlist);
+                });
+            } catch (RuntimeException error) {
+                MuiModApi.postToUiThread(() -> ToastUtil.show(Toast.makeText(getContext(),
+                        error.getMessage(), Toast.LENGTH_SHORT)));
+            }
+        });
     }
 
     private String mappedAlbumType(String type) {
