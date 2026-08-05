@@ -331,8 +331,8 @@ public final class UniPlaylistView extends LinearLayout {
                     MusicHud.EXECUTOR.execute(() -> {
                         try {
                             String sourceId = mode == 0
-                                    ? referenceId(selectedPlaylist.getSourceRef(), selected) : input;
-                            String sourceType = mode == 0 ? "playlist"
+                                    ? importSourceId(selectedPlaylist, selected) : input;
+                            String sourceType = mode == 0 ? importSourceType(selectedPlaylist, selected)
                                     : sourceTypes[type.getSelectedItemPosition()];
                             tuneWeave.importUniPlaylistSources(playlistName, List.of(
                                     new TuneWeaveClientService.UniImportSource(
@@ -367,8 +367,8 @@ public final class UniPlaylistView extends LinearLayout {
                             tuneWeave.importUniPlaylistSources(
                                     requestedName.isBlank() ? selected.getName() : requestedName,
                                     List.of(new TuneWeaveClientService.UniImportSource(
-                                            platform.apiName(), "playlist",
-                                            referenceId(selected.getSourceRef(), platform))));
+                                            platform.apiName(), importSourceType(selected, platform),
+                                            importSourceId(selected, platform))));
                             refreshOnUi();
                         } catch (RuntimeException error) {
                             MuiModApi.postToUiThread(() -> showProgress(error.getMessage()));
@@ -387,6 +387,24 @@ public final class UniPlaylistView extends LinearLayout {
         String prefix = platform.apiName() + ':';
         return reference != null && reference.startsWith(prefix)
                 ? reference.substring(prefix.length()) : reference;
+    }
+
+    private static String importSourceType(Playlist playlist, TuneWeavePlatform platform) {
+        String id = referenceId(playlist.getSourceRef(), platform);
+        if (platform == TuneWeavePlatform.BILIBILI && id != null) {
+            if (id.startsWith("favorite:")) return "favorite_folder";
+            if (id.startsWith("season:")) return "season";
+        }
+        return "playlist";
+    }
+
+    private static String importSourceId(Playlist playlist, TuneWeavePlatform platform) {
+        String id = referenceId(playlist.getSourceRef(), platform);
+        if (platform == TuneWeavePlatform.BILIBILI && id != null) {
+            int separator = id.indexOf(':');
+            if (separator >= 0 && separator + 1 < id.length()) return id.substring(separator + 1);
+        }
+        return id;
     }
 
     private void importDocument() {

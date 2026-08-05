@@ -32,6 +32,11 @@ public final class TuneWeaveRoutePolicy {
         if (normalized.contains("..") || normalized.indexOf('?') >= 0 || normalized.indexOf('#') >= 0) {
             return false;
         }
+        if ("GET".equalsIgnoreCase(method)
+                && normalized.startsWith("/v1/users/")
+                && normalized.endsWith("/playlists/created")) {
+            return true;
+        }
         return !isSocialPath(normalized);
     }
 

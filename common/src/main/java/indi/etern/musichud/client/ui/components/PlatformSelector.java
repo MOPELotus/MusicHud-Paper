@@ -40,6 +40,7 @@ public final class PlatformSelector extends LinearLayout {
     );
 
     private final Map<TuneWeavePlatform, CheckableImageButton> buttons = new EnumMap<>(TuneWeavePlatform.class);
+    private CheckableImageButton auxiliaryButton;
     private TuneWeavePlatform selected;
     private Consumer<TuneWeavePlatform> listener;
 
@@ -91,10 +92,43 @@ public final class PlatformSelector extends LinearLayout {
         this.listener = listener;
     }
 
+    public void addAuxiliarySegment(Image image, CharSequence label, boolean checked, Runnable listener) {
+        if (auxiliaryButton != null) removeView(auxiliaryButton);
+        CheckableImageButton button = new CheckableImageButton(getContext());
+        button.setScaleType(ImageView.ScaleType.CENTER_INSIDE);
+        if (image != null) {
+            button.setImageDrawable(new InsetDrawable(
+                    new indi.etern.musichud.client.ui.drawable.ScaledImageDrawable(
+                            getContext().getResources(), image, dp(18), dp(22)), dp(3)));
+        }
+        button.setTooltipText(label);
+        button.setContentDescription(label);
+        button.setBackground(ButtonInsetBackgroundFactory.builder()
+                .backgroundColor(SEGMENT_STATES)
+                .padding(new ButtonInsetBackgroundFactory.Padding(dp(4), dp(4), dp(4), dp(4)))
+                .cornerRadius(dp(4)).inset(0).build().newBackgroundDrawable());
+        button.setOnClickListener(view -> {
+            selected = null;
+            buttons.values().forEach(platformButton -> platformButton.setChecked(false));
+            button.setChecked(true);
+            if (listener != null) listener.run();
+        });
+        auxiliaryButton = button;
+        LayoutParams params = new LayoutParams(dp(38), dp(30));
+        params.setMargins(dp(1), 0, dp(1), 0);
+        addView(button, params);
+        if (checked) {
+            selected = null;
+            buttons.values().forEach(platformButton -> platformButton.setChecked(false));
+            button.setChecked(true);
+        }
+    }
+
     private void select(TuneWeavePlatform platform, boolean notify) {
         if (!buttons.containsKey(platform)) return;
         selected = Objects.requireNonNull(platform);
         buttons.forEach((key, button) -> button.setChecked(key == platform));
+        if (auxiliaryButton != null) auxiliaryButton.setChecked(false);
         if (notify && listener != null) listener.accept(platform);
     }
 }
