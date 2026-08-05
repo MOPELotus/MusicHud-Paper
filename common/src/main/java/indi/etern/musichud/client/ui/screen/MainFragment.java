@@ -281,6 +281,8 @@ public class MainFragment extends Fragment {
 
                 //noinspection UnstableApiUsage
                 var sideScrollView = new ClampingScrollView(context);
+                sideScrollView.setVerticalScrollBarEnabled(false);
+                sideScrollView.setHorizontalScrollBarEnabled(false);
                 side.addView(sideScrollView, new LinearLayout.LayoutParams(WRAP_CONTENT, 0, 1));
 
                 var sideContent = new LinearLayout(context);

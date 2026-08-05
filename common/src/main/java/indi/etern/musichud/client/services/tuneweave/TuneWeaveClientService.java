@@ -48,6 +48,7 @@ public final class TuneWeaveClientService {
     private final Map<Long, Album> albumsById = new ConcurrentHashMap<>();
     private final Map<Long, Artist> artistsById = new ConcurrentHashMap<>();
     private final Map<TuneWeavePlatform, SessionProfile> sessionProfiles = new ConcurrentHashMap<>();
+    private final Map<TuneWeavePlatform, String> favoritePlaylistReferences = new ConcurrentHashMap<>();
     private final LocalUniPlaylistStore localPlaylists = new LocalUniPlaylistStore();
 
     private TuneWeaveClientService() {
@@ -187,6 +188,13 @@ public final class TuneWeaveClientService {
         if (platform == TuneWeavePlatform.BILIBILI) {
             return loadBilibiliFavoriteFolders();
         }
+        Playlist liked = toPlaylist(platform, unwrap(requestForPlatform(platform, "GET",
+                "/v1/account/favorites/playlist", Map.of("platform", platform.apiName()), null).data()));
+        if (liked == Playlist.EMPTY) {
+            throw new TuneWeaveApiClient.TuneWeaveException(
+                    "TuneWeave favorite playlist response did not contain a reference", false);
+        }
+        favoritePlaylistReferences.put(platform, liked.getSourceRef());
         JsonElement data = requestForPlatform(platform, "GET", "/v1/account/playlists",
                 Map.of("platform", platform.apiName(), "limit", "100", "offset", "0"), null).data();
         ObservableSequencedSet<Playlist> created = new ObservableSequencedSet<>();
@@ -197,15 +205,10 @@ public final class TuneWeaveClientService {
             if (playlist == Playlist.EMPTY) {
                 continue;
             }
+            if (liked.getSourceRef().equals(playlist.getSourceRef())) {
+                continue;
+            }
             (bool(raw, "subscribed", false) ? subscribed : created).add(playlist);
-        }
-        Playlist liked = Playlist.EMPTY;
-        if (platform != TuneWeavePlatform.NETEASE) {
-            String likeRef = "account:favorite_tracks:" + platform.apiName();
-            liked = Playlist.fromTuneWeave(
-                    stableId(platform, "playlist:" + likeRef), likeRef, "Liked Songs", MusicHud.ICON_BASE64,
-                    0, 0, Profile.ANONYMOUS);
-            playlistsById.put(liked.getId(), liked);
         }
         return new UserCategoryPlaylists(liked, created, subscribed);
     }
@@ -247,6 +250,7 @@ public final class TuneWeaveClientService {
                     0, 0, session.toMusicHudProfile());
             playlistsById.put(defaultFolder.getId(), defaultFolder);
         }
+        favoritePlaylistReferences.put(TuneWeavePlatform.BILIBILI, defaultFolder.getSourceRef());
         return new UserCategoryPlaylists(defaultFolder, created, subscribed);
     }
 
@@ -707,12 +711,12 @@ public final class TuneWeaveClientService {
             return Playlist.EMPTY;
         }
         TuneWeavePlatform platform = platformFromReference(reference);
-        if (reference.startsWith("account:favorite_tracks:")) {
+        if (platform != TuneWeavePlatform.BILIBILI
+                && reference.equals(favoritePlaylistReferences.get(platform))) {
             Playlist playlist = playlistsById.values().stream()
                     .filter(value -> reference.equals(value.getSourceRef()))
                     .findFirst()
-                    .orElseGet(() -> Playlist.fromTuneWeave(stableId(platform, "playlist:" + reference),
-                            reference, "Liked Songs", MusicHud.ICON_BASE64, 0, 0, Profile.ANONYMOUS));
+                    .orElse(Playlist.EMPTY);
             List<MusicDetail> tracks = new ArrayList<>();
             for (JsonElement item : elements(requestForPlatform(platform, "GET", "/v1/account/favorites/tracks",
                     Map.of("platform", platform.apiName(), "limit", "100", "offset", "0"), null).data())) {
@@ -1649,13 +1653,22 @@ public final class TuneWeaveClientService {
     }
 
     private MusicDetail toTrack(TuneWeavePlatform platform, JsonObject object) {
+        object = mergeSnapshot(object);
         String reference = string(object, "ref", string(object, "reference", ""));
         if (reference.isBlank()) return MusicDetail.NONE;
         List<Artist> artists = new ArrayList<>();
         JsonElement artistData = object.get("artists");
         if (artistData != null && artistData.isJsonArray()) {
             artistData.getAsJsonArray().forEach(value -> {
-                if (value.isJsonObject()) artists.add(toArtist(platform, value.getAsJsonObject()));
+                if (value.isJsonObject()) {
+                    artists.add(toArtist(platform, value.getAsJsonObject()));
+                } else if (value.isJsonPrimitive()) {
+                    String name = value.getAsString();
+                    if (!name.isBlank()) {
+                        artists.add(new Artist(stableId(platform, "artist-name:" + name), name,
+                                "", 0, 0, "", new ArrayList<>(), 0, ""));
+                    }
+                }
             });
         }
         Album album = Album.NONE;
@@ -1663,9 +1676,12 @@ public final class TuneWeaveClientService {
         if (albumData != null && albumData.isJsonObject()) album = toAlbum(platform, albumData.getAsJsonObject());
         if (album == Album.NONE) {
             String cover = imageUrl(object, "cover_url", "pic_url", "cover_pic_url", "pic");
-            if (!cover.isBlank()) {
+            String albumName = albumData != null && albumData.isJsonPrimitive()
+                    ? albumData.getAsString()
+                    : string(object, "album_name", string(object, "name", reference));
+            if (!cover.isBlank() || !albumName.isBlank()) {
                 album = new Album(stableId(platform, "track-album:" + reference),
-                        string(object, "album_name", string(object, "name", reference)), cover,
+                        albumName, cover.isBlank() ? MusicHud.ICON_BASE64 : cover,
                         "", "", 0, new ObservableSequencedSet<>(), new java.util.LinkedHashSet<>(artists),
                         indi.etern.musichud.beans.music.PusherInfo.EMPTY, "");
             }
@@ -1677,6 +1693,25 @@ public final class TuneWeaveClientService {
         result.setPusherInfo(indi.etern.musichud.beans.music.PusherInfo.EMPTY);
         tracksById.put(result.getId(), result);
         return result;
+    }
+
+    public boolean isFavoritePlaylist(Playlist playlist) {
+        if (playlist == null || playlist == Playlist.EMPTY || playlist.getSourceRef().isBlank()) return false;
+        TuneWeavePlatform platform = platformFromReference(playlist.getSourceRef());
+        return playlist.getSourceRef().equals(favoritePlaylistReferences.get(platform));
+    }
+
+    private static JsonObject mergeSnapshot(JsonObject object) {
+        JsonElement snapshotData = object.get("snapshot");
+        if (snapshotData == null || !snapshotData.isJsonObject()) return object;
+        JsonObject merged = object.deepCopy();
+        merged.remove("snapshot");
+        snapshotData.getAsJsonObject().entrySet().forEach(entry -> {
+            if (!merged.has(entry.getKey()) || merged.get(entry.getKey()).isJsonNull()) {
+                merged.add(entry.getKey(), entry.getValue().deepCopy());
+            }
+        });
+        return merged;
     }
 
     private CloudTrackInfo toCloudTrack(TuneWeavePlatform platform, JsonObject object) {
