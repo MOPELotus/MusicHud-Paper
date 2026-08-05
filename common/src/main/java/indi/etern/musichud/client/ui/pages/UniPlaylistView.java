@@ -66,8 +66,8 @@ public final class UniPlaylistView extends LinearLayout {
 
         LinearLayout actions = new LinearLayout(context);
         actions.setGravity(Gravity.RIGHT);
-            actions.addView(actionButton(context, "create", v -> showNameDialog(
-                I18n.get(MusicHud.MOD_ID + ".text.uniPlaylist.create"), "", name -> create(name))),
+            actions.addView(actionButton(context, "create", v -> UniPlaylistMetadataDialog.show(
+                getContext(), ".text.uniPlaylist.create", "", "", this::create)),
                 actionParams());
             actions.addView(actionButton(context, "import", v -> showImportDialog()),
                 actionParams());
@@ -142,8 +142,9 @@ public final class UniPlaylistView extends LinearLayout {
                 RouterContainer router = RouterContainer.getInstance();
                 if (router != null) router.pushNavigate(new UniPlaylistDetailView(getContext(), playlist));
             }), actionParams());
-            buttons.addView(actionButton(getContext(), "rename", v -> showNameDialog(
-                    I18n.get(MusicHud.MOD_ID + ".text.uniPlaylist.rename"), playlist.name(), value -> rename(playlist, value))),
+            buttons.addView(actionButton(getContext(), "edit", v -> UniPlaylistMetadataDialog.show(
+                    getContext(), ".text.uniPlaylist.edit", playlist.name(), playlist.description(),
+                    (nameValue, descriptionValue) -> update(playlist, nameValue, descriptionValue))),
                     actionParams());
             buttons.addView(actionButton(getContext(), "export", v -> export(playlist)), actionParams());
             buttons.addView(actionButton(getContext(), "delete", v -> confirmDelete(playlist)), actionParams());
@@ -159,7 +160,7 @@ public final class UniPlaylistView extends LinearLayout {
             case "create" -> ".button.create";
             case "import" -> ".button.import";
             case "open" -> ".button.open";
-            case "rename" -> ".button.rename";
+            case "edit" -> ".button.edit";
             case "delete" -> ".button.delete";
             case "export" -> ".button.export";
             case "importDocument" -> ".button.importDocument";
@@ -170,7 +171,7 @@ public final class UniPlaylistView extends LinearLayout {
             case "import" -> "link.png";
             case "importDocument" -> "unlink.png";
             case "open" -> "arrow_left.png";
-            case "rename" -> "settings.png";
+            case "edit" -> "settings.png";
             case "export" -> "link.png";
             case "delete" -> "trash_2.png";
             default -> "rotate_cw.png";
@@ -198,27 +199,9 @@ public final class UniPlaylistView extends LinearLayout {
         return params;
     }
 
-    private void showNameDialog(String titleText, String initial, Consumer<String> consumer) {
-        EditText input = new EditText(getContext(), null, R.attr.editTextOutlinedStyle);
-        input.setSingleLine(true);
-        input.setText(initial);
-        TextView title = new TextView(getContext());
-        title.setText(titleText);
-        Modal modal = new Modal(getContext(), title, input,
-                new Modal.ActionButton(I18n.get(MusicHud.MOD_ID + ".button.confirm"), (button, dialog) -> {
-                    String value = input.getText().toString().trim();
-                    if (!value.isBlank()) {
-                        dialog.dismiss();
-                        consumer.accept(value);
-                    }
-                }),
-                new Modal.ActionButton(I18n.get(MusicHud.MOD_ID + ".button.cancel"), (button, dialog) -> dialog.dismiss()));
-        modal.show();
-    }
-
-    private void create(String name) {
+    private void create(String name, String description) {
         MusicHud.EXECUTOR.execute(() -> {
-            try { tuneWeave.createUniPlaylist(name, ""); refreshOnUi(); }
+            try { tuneWeave.createUniPlaylist(name, description); refreshOnUi(); }
             catch (RuntimeException error) { MuiModApi.postToUiThread(() -> showProgress(error.getMessage())); }
         });
     }
@@ -477,9 +460,9 @@ public final class UniPlaylistView extends LinearLayout {
         });
     }
 
-    private void rename(TuneWeaveClientService.UniPlaylistInfo playlist, String name) {
+    private void update(TuneWeaveClientService.UniPlaylistInfo playlist, String name, String description) {
         MusicHud.EXECUTOR.execute(() -> {
-            try { tuneWeave.updateUniPlaylist(playlist.reference(), name, null); refreshOnUi(); }
+            try { tuneWeave.updateUniPlaylist(playlist.reference(), name, description); refreshOnUi(); }
             catch (RuntimeException error) { MuiModApi.postToUiThread(() -> showProgress(error.getMessage())); }
         });
     }

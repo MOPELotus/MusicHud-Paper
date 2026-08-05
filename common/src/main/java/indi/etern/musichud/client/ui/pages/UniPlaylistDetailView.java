@@ -38,7 +38,9 @@ import static icyllis.modernui.view.ViewGroup.LayoutParams.WRAP_CONTENT;
 
 public final class UniPlaylistDetailView extends LinearLayout {
     private final TuneWeaveClientService tuneWeave = TuneWeaveClientService.getInstance();
-    private final TuneWeaveClientService.UniPlaylistInfo playlist;
+    private TuneWeaveClientService.UniPlaylistInfo playlist;
+    private final TextView titleView;
+    private final TextView descriptionView;
     private final LinearLayout itemsLayout;
     private List<TuneWeaveClientService.UniItemInfo> items = List.of();
 
@@ -53,24 +55,25 @@ public final class UniPlaylistDetailView extends LinearLayout {
         toolbar.addView(action(context, ".button.back", "arrow_left.png", 0,
                 v -> { if (RouterContainer.getInstance() != null) RouterContainer.getInstance().popNavigate(); }),
                 actionParams());
-        TextView title = new TextView(context);
-        title.setText(playlist.name());
-        title.setTextSize(Theme.TEXT_SIZE_LARGER);
-        title.setTextColor(Theme.EMPHASIZE_TEXT_COLOR);
-        toolbar.addView(title, new LayoutParams(0, WRAP_CONTENT, 1));
+        titleView = new TextView(context);
+        titleView.setText(playlist.name());
+        titleView.setTextSize(Theme.TEXT_SIZE_LARGER);
+        titleView.setTextColor(Theme.EMPHASIZE_TEXT_COLOR);
+        toolbar.addView(titleView, new LayoutParams(0, WRAP_CONTENT, 1));
+        toolbar.addView(action(context, ".button.edit", "settings.png", 0, v -> editMetadata()), actionParams());
         toolbar.addView(action(context, ".button.refresh", "rotate_cw.png", 0, v -> refresh()), actionParams());
         toolbar.addView(action(context, ".button.playAll", "skip_forward_filled.png", 0, v -> playAll()), actionParams());
         toolbar.addView(action(context, ".button.import", "link.png", 0, v -> showImportDialog()), actionParams());
         toolbar.addView(action(context, ".button.add", "list_plus.png", 0, v -> showAddDialog()), actionParams());
         addView(toolbar, new LayoutParams(MATCH_PARENT, WRAP_CONTENT));
 
-        TextView description = new TextView(context);
-        description.setText(playlist.description());
-        description.setTextSize(Theme.TEXT_SIZE_NORMAL);
-        description.setTextColor(Theme.SECONDARY_TEXT_COLOR);
+        descriptionView = new TextView(context);
+        updateMetadataViews();
+        descriptionView.setTextSize(Theme.TEXT_SIZE_NORMAL);
+        descriptionView.setTextColor(Theme.SECONDARY_TEXT_COLOR);
         LayoutParams descriptionParams = new LayoutParams(MATCH_PARENT, WRAP_CONTENT);
         descriptionParams.setMargins(dp(52), dp(4), 0, dp(16));
-        addView(description, descriptionParams);
+        addView(descriptionView, descriptionParams);
 
         ScrollView scroll = new ScrollView(context);
         itemsLayout = new LinearLayout(context);
@@ -163,6 +166,29 @@ public final class UniPlaylistDetailView extends LinearLayout {
 
     private void showImportDialog() {
         UniPlaylistImportDialog.show(getContext(), playlist, this::refresh, this::showToast);
+    }
+
+    private void editMetadata() {
+        UniPlaylistMetadataDialog.show(getContext(), ".text.uniPlaylist.edit",
+                playlist.name(), playlist.description(), (name, description) ->
+                        MusicHud.EXECUTOR.execute(() -> {
+                            try {
+                                TuneWeaveClientService.UniPlaylistInfo updated = tuneWeave.updateUniPlaylist(
+                                        playlist.reference(), name, description);
+                                MuiModApi.postToUiThread(() -> {
+                                    playlist = updated;
+                                    updateMetadataViews();
+                                });
+                            } catch (RuntimeException error) {
+                                MuiModApi.postToUiThread(() -> showToast(error.getMessage()));
+                            }
+                        }));
+    }
+
+    private void updateMetadataViews() {
+        titleView.setText(playlist.name());
+        descriptionView.setText(playlist.description().isBlank()
+                ? I18n.get(MusicHud.MOD_ID + ".text.uniPlaylist.noDescription") : playlist.description());
     }
 
     private void showToast(String message) {
