@@ -331,8 +331,15 @@ public class StreamAudioPlayer {
                                             if (playBuffer.isEmpty() && NowPlayingInfo.getInstance().isCompleted()) {
                                                 // 播放已完成且缓冲区为空，结束播放
                                                 LOGGER.debug("No more audio data available");
+                                                MusicDetail completedMusic = currentMusicDetail;
                                                 currentPlayingFuture.complete(null);
-                                                setStatus(Status.PLAYING);
+                                                setStatus(Status.IDLE);
+                                                NowPlayingInfo playingInfo = NowPlayingInfo.getInstance();
+                                                if (completedMusic != null && completedMusic != MusicDetail.NONE
+                                                        && completedMusic.equals(playingInfo.getCurrentlyPlayingMusicDetail())
+                                                        && playingInfo.isCompleted()) {
+                                                    playingInfo.switchMusicInfo(MusicDetail.NONE, MusicDetail.NONE);
+                                                }
                                                 break;
                                             } else if (!currentDownloadFuture.isDone()) {
                                                 audioData = new byte[BUFFER_SIZE];
