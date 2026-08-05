@@ -1,6 +1,7 @@
 package indi.etern.musichud.client.ui.pages.account;
 
 import icyllis.modernui.core.Context;
+import icyllis.modernui.graphics.Image;
 import icyllis.modernui.mc.MuiModApi;
 import icyllis.modernui.view.Gravity;
 import icyllis.modernui.view.View;
@@ -13,7 +14,6 @@ import indi.etern.musichud.beans.music.Album;
 import indi.etern.musichud.beans.music.Artist;
 import indi.etern.musichud.beans.music.Playlist;
 import indi.etern.musichud.beans.music.UserCategoryPlaylists;
-import indi.etern.musichud.beans.user.Profile;
 import indi.etern.musichud.client.services.LoginService;
 import indi.etern.musichud.client.services.music.MusicService;
 import indi.etern.musichud.client.services.tuneweave.TuneWeaveClientService;
@@ -27,6 +27,7 @@ import indi.etern.musichud.client.ui.pages.CloudView;
 import indi.etern.musichud.client.ui.pages.PodcastRadioView;
 import indi.etern.musichud.client.ui.pages.UniPlaylistView;
 import indi.etern.musichud.client.ui.components.UrlImageView;
+import indi.etern.musichud.client.ui.utils.image.ImageUtils;
 import indi.etern.musichud.client.ui.utils.ui.ButtonInsetBackgroundFactory;
 import indi.etern.musichud.interfaces.IClientLoginService;
 import indi.etern.musichud.interfaces.Unregister;
@@ -49,6 +50,7 @@ public class AccountView extends LinearLayout {
     private final TuneWeaveClientService tuneWeave = TuneWeaveClientService.getInstance();
     private TuneWeavePlatform selectedPlatform = tuneWeave.defaultPlatform();
     private boolean showingUniPlaylists;
+    private int refreshGeneration;
     private final Map<ElementKey, View> elementMap = new HashMap<>();
     private FlexWrapLayout myPlaylistCards;
     private FlexWrapLayout mySubscribedPlaylistCards;
@@ -163,6 +165,8 @@ public class AccountView extends LinearLayout {
     }
 
     public void refresh(boolean ignoreCache) {
+        int generation = ++refreshGeneration;
+        unregisterCollectionListeners();
         removeAllViews();
         elementMap.clear();
         setOrientation(LinearLayout.VERTICAL);
@@ -186,19 +190,14 @@ public class AccountView extends LinearLayout {
             LoginService.getInstance().switchTuneWeavePlatform(platform);
             refresh(false);
         });
+        Image uniIcon = ImageUtils.getImageFromResource(
+                "/assets/music_hud/textures/gui/icons/list_music.png");
+        platformSelector.addAuxiliarySegment(uniIcon,
+                I18n.get(MusicHud.MOD_ID + ".text.page.uniPlaylists"), showingUniPlaylists, () -> {
+                    showingUniPlaylists = true;
+                    refresh(false);
+                });
         platformTabs.addView(platformSelector, new LayoutParams(WRAP_CONTENT, WRAP_CONTENT));
-        Button uniTab = new Button(context);
-        uniTab.setText(I18n.get(MusicHud.MOD_ID + ".text.page.uniPlaylists"));
-        uniTab.setTextSize(Theme.TEXT_SIZE_SMALL);
-        uniTab.setTextColor(showingUniPlaylists ? Theme.PRIMARY_COLOR : Theme.SECONDARY_TEXT_COLOR);
-        uniTab.setBackground(ButtonInsetBackgroundFactory.builder().cornerRadius(dp(4)).inset(dp(1))
-                .padding(new ButtonInsetBackgroundFactory.Padding(dp(12), dp(6), dp(12), dp(6)))
-                .build().newBackgroundDrawable());
-        uniTab.setOnClickListener(button -> {
-            showingUniPlaylists = true;
-            refresh(false);
-        });
-        platformTabs.addView(uniTab, new LayoutParams(WRAP_CONTENT, WRAP_CONTENT));
         addView(platformTabs, new LayoutParams(MATCH_PARENT, WRAP_CONTENT));
 
         tuneWeave.setDefaultPlatform(selectedPlatform);
@@ -212,7 +211,17 @@ public class AccountView extends LinearLayout {
             return;
         }
 
-        Profile currentProfile = Profile.getCurrent();
+        TuneWeaveClientService.SessionProfile sessionProfile = tuneWeave.cachedSession(selectedPlatform);
+        String avatarUrl = sessionProfile != null && sessionProfile.avatarUrl() != null
+                && !sessionProfile.avatarUrl().isBlank()
+                ? sessionProfile.avatarUrl() : MusicHud.ICON_BASE64;
+        String displayName = sessionProfile != null && sessionProfile.nickname() != null
+                && !sessionProfile.nickname().isBlank()
+                ? sessionProfile.nickname()
+                : I18n.get(MusicHud.MOD_ID + ".platform." + selectedPlatform.apiName());
+        String displayId = sessionProfile != null && sessionProfile.userId() != null
+                && !sessionProfile.userId().isBlank()
+                ? sessionProfile.userId() : "";
         setGravity(Gravity.TOP);
         LinearLayout topPanel = new LinearLayout(context);
         topPanel.setOrientation(LinearLayout.HORIZONTAL);
@@ -223,7 +232,7 @@ public class AccountView extends LinearLayout {
         LayoutParams layoutParams = new LayoutParams(dp(68), dp(68));
         avatar.setLayoutParams(layoutParams);
         topPanel.addView(avatar);
-        avatar.loadUrl(currentProfile.getAvatarUrl());
+        avatar.loadUrl(avatarUrl == null || avatarUrl.isBlank() ? MusicHud.ICON_BASE64 : avatarUrl);
 
         LayoutParams infoLp1 = new LayoutParams(MATCH_PARENT, WRAP_CONTENT);
         infoLp1.setMargins(dp(16), 0, 0, 0);
@@ -237,7 +246,7 @@ public class AccountView extends LinearLayout {
         nickName.setSingleLine(true);
         nickName.setTextSize(Theme.TEXT_SIZE_LARGER);
         nickName.setTextColor(Theme.EMPHASIZE_TEXT_COLOR);
-        nickName.setText(currentProfile.getNickname());
+        nickName.setText(displayName);
         infoLayout.addView(nickName, nameLayoutParams);
 
         LayoutParams idLayoutParams = new LayoutParams(WRAP_CONTENT, WRAP_CONTENT);
@@ -245,7 +254,7 @@ public class AccountView extends LinearLayout {
         id.setSingleLine(true);
         id.setTextSize(Theme.TEXT_SIZE_NORMAL);
         id.setTextColor(Theme.SECONDARY_TEXT_COLOR);
-        id.setText(Long.toString(currentProfile.getUserId()));
+        id.setText(displayId);
         infoLayout.addView(id, idLayoutParams);
 
         ButtonInsetBackgroundFactory backgroundFactory = ButtonInsetBackgroundFactory.builder()
@@ -271,16 +280,18 @@ public class AccountView extends LinearLayout {
         });
         buttonsLayout.addView(refreshButton);
 
-        Button managePlaylistsButton = new Button(context);
-        managePlaylistsButton.setText(I18n.get(MusicHud.MOD_ID + ".button.managePlaylists"));
-        managePlaylistsButton.setTextColor(Theme.PRIMARY_COLOR);
-        managePlaylistsButton.setTextSize(Theme.TEXT_SIZE_NORMAL);
-        managePlaylistsButton.setBackground(backgroundFactory.newBackgroundDrawable());
-        managePlaylistsButton.setOnClickListener(button -> RouterContainer.getInstance().pushNavigate(
-                new PlatformPlaylistManagerView(context)));
-        LayoutParams manageParams = new LayoutParams(WRAP_CONTENT, WRAP_CONTENT);
-        manageParams.setMargins(0, 0, dp(8), 0);
-        buttonsLayout.addView(managePlaylistsButton, manageParams);
+        if (selectedPlatform != TuneWeavePlatform.BILIBILI) {
+            Button managePlaylistsButton = new Button(context);
+            managePlaylistsButton.setText(I18n.get(MusicHud.MOD_ID + ".button.managePlaylists"));
+            managePlaylistsButton.setTextColor(Theme.PRIMARY_COLOR);
+            managePlaylistsButton.setTextSize(Theme.TEXT_SIZE_NORMAL);
+            managePlaylistsButton.setBackground(backgroundFactory.newBackgroundDrawable());
+            managePlaylistsButton.setOnClickListener(button -> RouterContainer.getInstance().pushNavigate(
+                    new PlatformPlaylistManagerView(context)));
+            LayoutParams manageParams = new LayoutParams(WRAP_CONTENT, WRAP_CONTENT);
+            manageParams.setMargins(0, 0, dp(8), 0);
+            buttonsLayout.addView(managePlaylistsButton, manageParams);
+        }
 
         if (TuneWeaveClientService.getInstance().defaultPlatform() == TuneWeavePlatform.NETEASE) {
             Button cloudButton = new Button(context);
@@ -415,28 +426,42 @@ public class AccountView extends LinearLayout {
         }
 
         MusicService musicService = MusicService.getInstance();
+        TuneWeavePlatform requestedPlatform = selectedPlatform;
         musicService.loadUserCollections(ignoreCache).thenAccept(userCollections -> {
             MuiModApi.postToUiThread(() -> {
-                if (!isAttachedToWindow()) {
+                if (!isAttachedToWindow() || generation != refreshGeneration
+                        || showingUniPlaylists || selectedPlatform != requestedPlatform) {
                     return;
                 }
                 unregisterCollectionListeners();
                 UserCategoryPlaylists categoryPlaylists = userCollections.getUserCategoryPlaylists();
+                if (categoryPlaylists == null) {
+                    progressBar.setVisibility(View.GONE);
+                    errorText.setVisibility(View.VISIBLE);
+                    return;
+                }
                 Playlist likeList = categoryPlaylists.getLikeList();
-                elementMap.computeIfAbsent(new ElementKey(Playlist.class, likeList.getId()), key -> {
-                    MusicCollectionCard card = new MusicCollectionCard(context, likeList);
-                    card.setTag(likeList.getId());
-                    myPlaylistCards.addView(card);
-                    return card;
-                });
-                ObservableSequencedSet<Playlist> createdPlaylist = categoryPlaylists.getCreatedPlaylist();
+                boolean hasLikeList = likeList != null && likeList.getId() >= 0;
+                if (hasLikeList) {
+                    elementMap.computeIfAbsent(new ElementKey(Playlist.class, likeList.getId()), key -> {
+                        MusicCollectionCard card = new MusicCollectionCard(context, likeList);
+                        card.setTag(likeList.getId());
+                        myPlaylistCards.addView(card);
+                        return card;
+                    });
+                }
+                ObservableSequencedSet<Playlist> loadedCreatedPlaylists = categoryPlaylists.getCreatedPlaylist();
+                ObservableSequencedSet<Playlist> createdPlaylist = loadedCreatedPlaylists == null
+                        ? new ObservableSequencedSet<>() : loadedCreatedPlaylists;
                 createdPlaylist.forEach(playlist -> elementMap.computeIfAbsent(new ElementKey(Playlist.class, playlist.getId()), key -> {
                     MusicCollectionCard card = new MusicCollectionCard(context, playlist);
                     card.setTag(playlist.getId());
                     myPlaylistCards.addView(card);
                     return card;
                 }));
-                ObservableSequencedSet<Playlist> subscribedPlaylist = categoryPlaylists.getSubscribedPlaylist();
+                ObservableSequencedSet<Playlist> loadedSubscribedPlaylists = categoryPlaylists.getSubscribedPlaylist();
+                ObservableSequencedSet<Playlist> subscribedPlaylist = loadedSubscribedPlaylists == null
+                        ? new ObservableSequencedSet<>() : loadedSubscribedPlaylists;
                 subscribedPlaylist.forEach(playlistCardCreator);
                 playlistAddRegister = subscribedPlaylist.registerOnAdd(playlistCardCreator);
                 playlistRemoveRegister = subscribedPlaylist.registerOnRemove(playlist -> {
@@ -450,10 +475,12 @@ public class AccountView extends LinearLayout {
                         }
                     });
                 });
-                myPlaylistsContent.setVisibility(createdPlaylist.isEmpty() ? GONE : VISIBLE);
+                myPlaylistsContent.setVisibility(!hasLikeList && createdPlaylist.isEmpty() ? GONE : VISIBLE);
                 mySubscribedPlaylistsContent.setVisibility(subscribedPlaylist.isEmpty() ? GONE : VISIBLE);
 
-                ObservableSequencedSet<Album> albums = userCollections.getSubscribedAlbums();
+                ObservableSequencedSet<Album> loadedAlbums = userCollections.getSubscribedAlbums();
+                ObservableSequencedSet<Album> albums = loadedAlbums == null
+                        ? new ObservableSequencedSet<>() : loadedAlbums;
                 albums.forEach(albumCardCreator);
                 albumAddRegister = albums.registerOnAdd(albumCardCreator);
                 albumRemoveRegister = albums.registerOnRemove(album -> {
@@ -469,7 +496,9 @@ public class AccountView extends LinearLayout {
                 });
                 mySubscribedAlbumsContent.setVisibility(albums.isEmpty() ? GONE : VISIBLE);
 
-                ObservableSequencedSet<Artist> artists = userCollections.getSubscribedArtists();
+                ObservableSequencedSet<Artist> loadedArtists = userCollections.getSubscribedArtists();
+                ObservableSequencedSet<Artist> artists = loadedArtists == null
+                        ? new ObservableSequencedSet<>() : loadedArtists;
                 artists.forEach(artistCardCreator);
                 artistAddRegister = artists.registerOnAdd(artistCardCreator);
                 artistRemoveRegister = artists.registerOnRemove(artist -> {
@@ -489,7 +518,8 @@ public class AccountView extends LinearLayout {
             });
         }).exceptionally((e) -> {
             MuiModApi.postToUiThread(() -> {
-                if (isAttachedToWindow()) {
+                if (isAttachedToWindow() && generation == refreshGeneration
+                        && !showingUniPlaylists && selectedPlatform == requestedPlatform) {
                     progressBar.setVisibility(View.GONE);
                     errorText.setVisibility(View.VISIBLE);
                 }

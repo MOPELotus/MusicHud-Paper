@@ -105,7 +105,7 @@ public class ApiServerManager implements ServerRegister {
         }
     }
 
-    private void addShutdownHook() {
+    private synchronized void addShutdownHook() {
         if (hook == null) {
             hook = new Thread(this::stopApiServer);
             ICommonEventService.getInstance().registerCommonLifecycleStopping(this::stopApiServer);
@@ -113,9 +113,13 @@ public class ApiServerManager implements ServerRegister {
         }
     }
 
-    private void removeShutdownHook() {
+    private synchronized void removeShutdownHook() {
         if (hook != null) {
-            Runtime.getRuntime().removeShutdownHook(hook);
+            try {
+                Runtime.getRuntime().removeShutdownHook(hook);
+            } catch (IllegalStateException ignored) {
+                // The shutdown hook calls stopApiServer() while JVM shutdown is already in progress.
+            }
             hook = null;
         }
     }

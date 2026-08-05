@@ -47,6 +47,7 @@ public final class TuneWeaveClientService {
     private final Map<Long, Playlist> playlistsById = new ConcurrentHashMap<>();
     private final Map<Long, Album> albumsById = new ConcurrentHashMap<>();
     private final Map<Long, Artist> artistsById = new ConcurrentHashMap<>();
+    private final Map<TuneWeavePlatform, SessionProfile> sessionProfiles = new ConcurrentHashMap<>();
     private final LocalUniPlaylistStore localPlaylists = new LocalUniPlaylistStore();
 
     private TuneWeaveClientService() {
@@ -71,6 +72,10 @@ public final class TuneWeaveClientService {
 
     public boolean hasCredential(TuneWeavePlatform platform) {
         return !credential(platform).isBlank();
+    }
+
+    public SessionProfile cachedSession(TuneWeavePlatform platform) {
+        return sessionProfiles.get(platform);
     }
 
     public boolean hasPlaylist(long id) {
@@ -110,11 +115,11 @@ public final class TuneWeaveClientService {
                 "/v1/auth/qr/" + TuneWeaveApiClient.encodePathSegment(session.transactionId()),
                 Map.of(), null).data());
         String state = requiredString(data, "state");
-        SessionProfile profile = profile(data.get("profile"));
         if ("confirmed".equals(state)) {
             saveCredential(session.platform(), data.get("caller_credential"));
+            return new QrPoll(state, string(data, "message"), loadSession(session.platform()));
         }
-        return new QrPoll(state, string(data, "message"), profile);
+        return new QrPoll(state, string(data, "message"), profile(data.get("profile")));
     }
 
     public SessionProfile loginWithPassword(TuneWeavePlatform platform, String principalType,
@@ -132,7 +137,7 @@ public final class TuneWeaveClientService {
         }
         JsonObject data = object(requestWithoutCredential("POST", "/v1/auth/password", Map.of(), body).data());
         saveCredential(platform, data.get("caller_credential"));
-        return profile(data.get("profile"));
+        return loadSession(platform);
     }
 
     public ChallengeSession startSmsLogin(TuneWeavePlatform platform, String principal, String countryCode) {
@@ -153,13 +158,15 @@ public final class TuneWeaveClientService {
                 "/v1/auth/challenges/" + TuneWeaveApiClient.encodePathSegment(session.transactionId()) + "/verify",
                 Map.of(), body).data());
         saveCredential(session.platform(), data.get("caller_credential"));
-        return profile(data.get("profile"));
+        return loadSession(session.platform());
     }
 
     public SessionProfile loadSession(TuneWeavePlatform platform) {
         JsonElement data = requestForPlatform(
                 platform, "GET", "/v1/auth/session", Map.of("platform", platform.apiName()), null).data();
-        return profile(data);
+        SessionProfile result = enrichSessionProfile(profile(data));
+        if (result != null) sessionProfiles.put(platform, result);
+        return result;
     }
 
     public SessionProfile refreshSession(TuneWeavePlatform platform) {
@@ -167,7 +174,7 @@ public final class TuneWeaveClientService {
         JsonObject data = object(requestForPlatform(
                 platform, "POST", "/v1/auth/session/refresh", Map.of(), body).data());
         saveCredential(platform, data.get("caller_credential"));
-        return profile(data.get("profile"));
+        return loadSession(platform);
     }
 
     /** Loads the caller's account playlists without routing the private credential through Minecraft. */
@@ -177,6 +184,9 @@ public final class TuneWeaveClientService {
 
     public UserCategoryPlaylists loadAccountPlaylists(TuneWeavePlatform platform) {
         Objects.requireNonNull(platform, "platform");
+        if (platform == TuneWeavePlatform.BILIBILI) {
+            return loadBilibiliFavoriteFolders();
+        }
         JsonElement data = requestForPlatform(platform, "GET", "/v1/account/playlists",
                 Map.of("platform", platform.apiName(), "limit", "100", "offset", "0"), null).data();
         ObservableSequencedSet<Playlist> created = new ObservableSequencedSet<>();
@@ -197,8 +207,51 @@ public final class TuneWeaveClientService {
         return new UserCategoryPlaylists(liked, created, subscribed);
     }
 
+    private UserCategoryPlaylists loadBilibiliFavoriteFolders() {
+        SessionProfile session = sessionProfiles.get(TuneWeavePlatform.BILIBILI);
+        if (session == null) session = loadSession(TuneWeavePlatform.BILIBILI);
+        if (session == null || isBlank(session.userId())) {
+            throw new TuneWeaveApiClient.TuneWeaveException(
+                    "Bilibili session did not provide a user id", false);
+        }
+        String reference = "bilibili:" + session.userId();
+        JsonElement data = requestForPlatform(TuneWeavePlatform.BILIBILI, "GET",
+                "/v1/users/" + TuneWeaveApiClient.encodePathSegment(reference) + "/playlists/created",
+                Map.of("limit", "100", "offset", "0"), null).data();
+        ObservableSequencedSet<Playlist> created = new ObservableSequencedSet<>();
+        ObservableSequencedSet<Playlist> subscribed = new ObservableSequencedSet<>();
+        Playlist defaultFolder = null;
+        for (JsonElement item : elements(data)) {
+            JsonObject raw = unwrap(item);
+            String playlistReference = string(raw, "ref", "");
+            if (!playlistReference.startsWith("bilibili:favorite:")) continue;
+            Playlist playlist = toPlaylist(TuneWeavePlatform.BILIBILI, raw);
+            JsonObject extensions = raw.has("extensions") && raw.get("extensions").isJsonObject()
+                    ? raw.getAsJsonObject("extensions") : new JsonObject();
+            if (bool(extensions, "default", false) && defaultFolder == null) {
+                defaultFolder = playlist;
+            } else {
+                created.add(playlist);
+            }
+        }
+        if (defaultFolder == null && !created.isEmpty()) {
+            defaultFolder = created.removeFirst();
+        }
+        if (defaultFolder == null) {
+            defaultFolder = Playlist.fromTuneWeave(
+                    stableId(TuneWeavePlatform.BILIBILI, "playlist:account:favorites"),
+                    "account:favorites:bilibili", "Bilibili Favorites", MusicHud.ICON_BASE64,
+                    0, 0, session.toMusicHudProfile());
+            playlistsById.put(defaultFolder.getId(), defaultFolder);
+        }
+        return new UserCategoryPlaylists(defaultFolder, created, subscribed);
+    }
+
     public java.util.LinkedHashSet<Album> loadAccountAlbums() {
-        TuneWeavePlatform platform = defaultPlatform();
+        return loadAccountAlbums(defaultPlatform());
+    }
+
+    public java.util.LinkedHashSet<Album> loadAccountAlbums(TuneWeavePlatform platform) {
         JsonElement data = requestForPlatform(platform, "GET", "/v1/account/library/albums",
                 Map.of("platform", platform.apiName(), "limit", "100", "offset", "0"), null).data();
         java.util.LinkedHashSet<Album> result = new java.util.LinkedHashSet<>();
@@ -210,7 +263,10 @@ public final class TuneWeaveClientService {
     }
 
     public java.util.LinkedHashSet<Artist> loadAccountArtists() {
-        TuneWeavePlatform platform = defaultPlatform();
+        return loadAccountArtists(defaultPlatform());
+    }
+
+    public java.util.LinkedHashSet<Artist> loadAccountArtists(TuneWeavePlatform platform) {
         JsonElement data = requestForPlatform(platform, "GET", "/v1/account/following/artists",
                 Map.of("platform", platform.apiName(), "limit", "100", "offset", "0"), null).data();
         java.util.LinkedHashSet<Artist> result = new java.util.LinkedHashSet<>();
@@ -1352,6 +1408,7 @@ public final class TuneWeaveClientService {
     }
 
     public void clearCredential(TuneWeavePlatform platform) {
+        sessionProfiles.remove(platform);
         config.clearTuneWeaveCredential(platform.apiName());
         config.save();
     }
@@ -1422,6 +1479,36 @@ public final class TuneWeaveClientService {
         );
     }
 
+    private SessionProfile enrichSessionProfile(SessionProfile session) {
+        if (session == null || !session.authenticated()
+                || (!isBlank(session.nickname()) && !isBlank(session.avatarUrl()))) {
+            return session;
+        }
+        try {
+            JsonObject detail = object(requestForPlatform(session.platform(), "GET", "/v1/account/profile",
+                    Map.of("platform", session.platform().apiName()), null).data());
+            JsonObject user = detail.has("user") && detail.get("user").isJsonObject()
+                    ? detail.getAsJsonObject("user") : new JsonObject();
+            return new SessionProfile(
+                    session.platform(),
+                    prefer(session.userId(), string(user, "id")),
+                    prefer(session.nickname(), string(user, "name")),
+                    prefer(session.avatarUrl(), string(user, "avatar_url")),
+                    session.authenticated());
+        } catch (TuneWeaveApiClient.TuneWeaveException error) {
+            if (!"capability_not_supported".equals(error.getCode())) throw error;
+            return session;
+        }
+    }
+
+    private static String prefer(String primary, String fallback) {
+        return isBlank(primary) ? Objects.requireNonNullElse(fallback, "") : primary;
+    }
+
+    private static boolean isBlank(String value) {
+        return value == null || value.isBlank();
+    }
+
     private static JsonObject object(JsonElement element) {
         if (element == null || element.isJsonNull() || !element.isJsonObject()) {
             throw new TuneWeaveApiClient.TuneWeaveException("TuneWeave response is missing an object", false);
@@ -1464,6 +1551,18 @@ public final class TuneWeaveClientService {
         }
     }
 
+    private static String userIdFromReference(TuneWeavePlatform platform, String reference) {
+        String userId = Objects.requireNonNullElse(reference, "");
+        String platformPrefix = platform.apiName() + ':';
+        if (userId.startsWith(platformPrefix)) {
+            userId = userId.substring(platformPrefix.length());
+        }
+        if (userId.startsWith("user:")) {
+            userId = userId.substring("user:".length());
+        }
+        return userId;
+    }
+
     private Playlist toPlaylist(TuneWeavePlatform platform, JsonObject object) {
         String reference = string(object, "ref");
         if (reference == null || reference.isBlank()) {
@@ -1475,11 +1574,18 @@ public final class TuneWeaveClientService {
         JsonObject creatorObject = object.has("creator") && object.get("creator").isJsonObject()
                 ? object.getAsJsonObject("creator") : new JsonObject();
         String creatorRef = string(creatorObject, "ref");
-        Profile creator = new Profile(
-                string(creatorObject, "name", ""), "", stableId(platform, "user:" + creatorRef), VipType.NORMAL);
+        SessionProfile session = sessionProfiles.get(platform);
+        String creatorUserId = userIdFromReference(platform, creatorRef);
+        boolean isCurrentUser = session != null && (creatorObject.isEmpty()
+                || creatorUserId.equals(userIdFromReference(platform, session.userId())));
+        Profile creator = isCurrentUser
+                ? session.toMusicHudProfile()
+                : new Profile(string(creatorObject, "name", ""), "",
+                stableUserId(platform, creatorUserId), VipType.NORMAL);
+        String cover = imageUrl(object, "cover_url", "pic_url", "cover");
         Playlist playlist = Playlist.fromTuneWeave(
                 stableId(platform, "playlist:" + reference), reference,
-                string(object, "name", reference), imageUrl(object, "cover_url", "pic_url", "cover"),
+                string(object, "name", reference), cover.isBlank() ? MusicHud.ICON_BASE64 : cover,
                 integer(object, "track_count", integer(object, "item_count", 0)),
                 integer(object, "play_count", 0), creator);
         playlistsById.put(playlist.getId(), playlist);
@@ -1829,7 +1935,7 @@ public final class TuneWeaveClientService {
             return new Profile(
                     nickname == null || nickname.isBlank() ? platform.apiName() : nickname,
                     avatarUrl == null ? "" : avatarUrl,
-                    stableUserId(platform, userId),
+                    stableUserId(platform, userIdFromReference(platform, userId)),
                     VipType.NORMAL
             );
         }

@@ -76,22 +76,9 @@ public class LoginApiService implements ILoginApiService {
 
     @Override
     public String getAnonymousCookie() {
-        if (anonymousCookie == null) {
-            synchronized (LoginApiService.class) {
-                if (anonymousCookie == null) {
-                    AnonymousLoginData response = ApiClient.post(
-                            ApiServerEndpointsMeta.Login.ANONYMOUS,
-                            null,
-                            null, true);
-                    if (response.code == 200) {
-                        anonymousCookie = response.cookie;
-                    } else {
-                        logger.warn("Failed to get an anonymous cookie");
-                    }
-                }
-            }
-        }
-        return anonymousCookie;
+        // The TuneWeave client integration does not require an upstream
+        // anonymous NCM session. Keep the network login local to Music HUD.
+        return "";
     }
 
     @Override
@@ -128,16 +115,13 @@ public class LoginApiService implements ILoginApiService {
     @SneakyThrows
     @Override
     public void loginAsAnonymous(IPlayerClient player, boolean sendFail) {
-        try {
-            LoginCookieInfo loginCookieInfo = new LoginCookieInfo(LoginType.ANONYMOUS, getAnonymousCookie(), ZonedDateTime.now());
-            Profile profile = loadUserProfile(player, loginCookieInfo);
-            sendSuccessLoginResultTo(player, loginCookieInfo, profile);
-        } catch (Exception e) {
-            logger.error(e);
-            if (sendFail) {
-                handleLoginExceptions(player, e);
-            }
-        }
+        LoginCookieInfo loginCookieInfo = new LoginCookieInfo(
+                LoginType.ANONYMOUS, getAnonymousCookie(), ZonedDateTime.now());
+        PlayerLoginInfo playerLoginInfo = ILoginApiService.PlayerLoginInfo.of(player, loginCookieInfo);
+        playerLoginInfo.appendProfile(Profile.ANONYMOUS);
+        playerInfoMap.put(player.getUUID(), playerLoginInfo);
+        loginStateChangeListeners.forEach(listener -> listener.accept(playerInfoMap.values()));
+        sendSuccessLoginResultTo(player, loginCookieInfo, Profile.ANONYMOUS);
     }
 
     private void handleLoginExceptions(IPlayerClient player, Exception e) {
@@ -386,6 +370,10 @@ public class LoginApiService implements ILoginApiService {
 
     @Override
     public void loginWithCookie(LoginCookieInfo loginCookieInfo, boolean tryToRefresh, IPlayerClient player) {
+        if (loginCookieInfo.type() == LoginType.ANONYMOUS) {
+            loginAsAnonymous(player, true);
+            return;
+        }
         IServerNetworkService serverNetworkService = IServerNetworkService.getInstance();
         if (tryToRefresh) {
             try {
@@ -399,7 +387,7 @@ public class LoginApiService implements ILoginApiService {
                         )
                 );
             }
-        } else if (loginCookieInfo.type() != LoginType.ANONYMOUS) {
+        } else {
             try {
                 Profile profile =
                         loadUserProfile(player, loginCookieInfo);

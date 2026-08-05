@@ -29,6 +29,7 @@ import indi.etern.musichud.network.IClientNetworkService;
 import indi.etern.musichud.network.payloads.pushMessages.c2s.ClientPushMusicToQueueMessage;
 import indi.etern.musichud.network.payloads.pushMessages.c2s.ClientRemoveMusicFromQueueMessage;
 import indi.etern.musichud.network.payloads.pushMessages.c2s.VoteSkipCurrentMusicMessage;
+import indi.etern.musichud.server.api.tuneweave.TuneWeavePlatform;
 import lombok.*;
 import net.minecraft.client.resources.language.I18n;
 
@@ -449,18 +450,27 @@ public class MusicService implements IClientMusicService {
     }
 
     @Override
-    public CompletableFuture<UserCollections> loadUserCollections(boolean ignoreCache) {
-        if (currentUserCollections != null && currentUserCollections.loaded) {
+    public synchronized CompletableFuture<UserCollections> loadUserCollections(boolean ignoreCache) {
+        if (!ignoreCache && currentUserCollections != null && currentUserCollections.loaded) {
             return CompletableFuture.completedFuture(currentUserCollections);
         } else {
-            currentUserCollections = new UserCollections();
-            if (tuneWeave.hasCredential(tuneWeave.defaultPlatform())) {
+            TuneWeavePlatform platform = tuneWeave.defaultPlatform();
+            UserCollections requestedCollections = new UserCollections();
+            currentUserCollections = requestedCollections;
+            if (tuneWeave.hasCredential(platform)) {
                 return CompletableFuture.supplyAsync(() -> {
-                    currentUserCollections.setUserCategoryPlaylists(tuneWeave.loadAccountPlaylists());
-                    currentUserCollections.setSubscribedAlbums(new ObservableSequencedSet<>(tuneWeave.loadAccountAlbums()));
-                    currentUserCollections.setSubscribedArtists(new ObservableSequencedSet<>(tuneWeave.loadAccountArtists()));
-                    currentUserCollections.loaded = true;
-                    return currentUserCollections;
+                    requestedCollections.setUserCategoryPlaylists(tuneWeave.loadAccountPlaylists(platform));
+                    if (platform == TuneWeavePlatform.BILIBILI) {
+                        requestedCollections.setSubscribedAlbums(new ObservableSequencedSet<>());
+                        requestedCollections.setSubscribedArtists(new ObservableSequencedSet<>());
+                    } else {
+                        requestedCollections.setSubscribedAlbums(new ObservableSequencedSet<>(
+                                tuneWeave.loadAccountAlbums(platform)));
+                        requestedCollections.setSubscribedArtists(new ObservableSequencedSet<>(
+                                tuneWeave.loadAccountArtists(platform)));
+                    }
+                    requestedCollections.loaded = true;
+                    return requestedCollections;
                 }, MusicHud.EXECUTOR);
             }
             return CompletableFuture.failedFuture(new IllegalStateException(

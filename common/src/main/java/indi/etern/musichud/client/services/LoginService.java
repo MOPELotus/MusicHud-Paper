@@ -55,6 +55,7 @@ public class LoginService implements IClientLoginService {
     private double lastPressTime;
     private static final long TOGGLE_DEBOUNCE_DELAY_MILLIS = 300;
     private final AtomicInteger toggleVersion = new AtomicInteger(0);
+    private final AtomicInteger platformSessionVersion = new AtomicInteger(0);
     @Getter
     private ConnectionType connectionType;
     @Getter
@@ -206,6 +207,7 @@ public class LoginService implements IClientLoginService {
 
     @Override
     public void logoutAndReloginAsAnonymous() {
+        platformSessionVersion.incrementAndGet();
         MusicHud.EXECUTOR.execute(() -> {
             try {
                 tuneWeave.logout(tuneWeave.defaultPlatform());
@@ -238,6 +240,7 @@ public class LoginService implements IClientLoginService {
     }
 
     public void switchTuneWeavePlatform(TuneWeavePlatform platform) {
+        int version = platformSessionVersion.incrementAndGet();
         tuneWeave.setDefaultPlatform(platform);
         MusicService.getInstance().invalidateUserCollections();
         if (!tuneWeave.hasCredential(platform)) {
@@ -248,8 +251,11 @@ public class LoginService implements IClientLoginService {
         }
         MusicHud.EXECUTOR.execute(() -> {
             try {
-                completeTuneWeaveLogin(tuneWeave.loadSession(platform));
+                TuneWeaveClientService.SessionProfile profile = tuneWeave.loadSession(platform);
+                if (version != platformSessionVersion.get() || tuneWeave.defaultPlatform() != platform) return;
+                completeTuneWeaveLogin(profile);
             } catch (RuntimeException error) {
+                if (version != platformSessionVersion.get()) return;
                 lastLoginErrorMessage = error.getMessage();
                 refreshAccountView();
             }
@@ -259,11 +265,15 @@ public class LoginService implements IClientLoginService {
     public void restoreTuneWeaveSession() {
         TuneWeavePlatform platform = availableTuneWeavePlatform();
         if (platform == null) return;
+        int version = platformSessionVersion.incrementAndGet();
         tuneWeave.setDefaultPlatform(platform);
         MusicHud.EXECUTOR.execute(() -> {
             try {
-                completeTuneWeaveLogin(tuneWeave.loadSession(platform));
+                TuneWeaveClientService.SessionProfile profile = tuneWeave.loadSession(platform);
+                if (version != platformSessionVersion.get() || tuneWeave.defaultPlatform() != platform) return;
+                completeTuneWeaveLogin(profile);
             } catch (RuntimeException error) {
+                if (version != platformSessionVersion.get()) return;
                 lastLoginErrorMessage = error.getMessage();
                 logger.warn("Failed to restore the client-owned TuneWeave session: {}", error.getMessage());
                 refreshAccountView();
