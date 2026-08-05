@@ -140,7 +140,8 @@ public class ApiServerFetcher {
         return CompletableFuture.runAsync(() -> {
             Path temporary = target.resolveSibling(target.getFileName() + ".part");
             try {
-                Files.createDirectories(target.getParent());
+                Path parent = target.toAbsolutePath().getParent();
+                if (parent != null) Files.createDirectories(parent);
                 MessageDigest digest = MessageDigest.getInstance("SHA-256");
                 String url = proxy.resolveUrl(artifact.getDownloadUrl());
                 HttpRequest request = HttpRequest.newBuilder(URI.create(url))

@@ -89,12 +89,12 @@ public class ApiServerManager implements ServerRegister {
 
     public void stopApiServer() {
         Process running = process;
+        continueRestart = false;
         if (running != null) {
-            continueRestart = false;
             process = null;
             running.destroy();
-            removeShutdownHook();
         }
+        removeShutdownHook();
     }
 
     public void restartApiServer() {

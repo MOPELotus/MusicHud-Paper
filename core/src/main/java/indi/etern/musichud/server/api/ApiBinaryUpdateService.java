@@ -54,7 +54,7 @@ public class ApiBinaryUpdateService {
         String marker = "." + releaseTag + ".temp";
         String baseName = tempName.endsWith(marker)
                 ? tempName.substring(0, tempName.length() - marker.length()) : tempName;
-        Path targetDir = tempFile.getParent();
+        Path targetDir = tempFile.toAbsolutePath().getParent();
         Path namedFile = targetDir.resolve(baseName);
 
         // proactively stop server if target file is the running executable
