@@ -16,15 +16,18 @@ import indi.etern.musichud.beans.music.UserCategoryPlaylists;
 import indi.etern.musichud.beans.user.Profile;
 import indi.etern.musichud.client.services.LoginService;
 import indi.etern.musichud.client.services.music.MusicService;
+import indi.etern.musichud.client.services.tuneweave.TuneWeaveClientService;
 import indi.etern.musichud.client.ui.Theme;
 import indi.etern.musichud.client.ui.components.ArtistCard;
 import indi.etern.musichud.client.ui.components.FlexWrapLayout;
 import indi.etern.musichud.client.ui.components.MusicCollectionCard;
 import indi.etern.musichud.client.ui.components.RouterContainer;
+import indi.etern.musichud.client.ui.pages.CloudView;
 import indi.etern.musichud.client.ui.components.UrlImageView;
 import indi.etern.musichud.client.ui.utils.ui.ButtonInsetBackgroundFactory;
 import indi.etern.musichud.interfaces.IClientLoginService;
 import indi.etern.musichud.interfaces.Unregister;
+import indi.etern.musichud.server.api.tuneweave.TuneWeavePlatform;
 import indi.etern.musichud.utils.collections.ObservableSequencedSet;
 import lombok.Getter;
 import net.minecraft.client.resources.language.I18n;
@@ -221,6 +224,18 @@ public class AccountView extends LinearLayout {
         LayoutParams manageParams = new LayoutParams(WRAP_CONTENT, WRAP_CONTENT);
         manageParams.setMargins(0, 0, dp(8), 0);
         buttonsLayout.addView(managePlaylistsButton, manageParams);
+
+        if (TuneWeaveClientService.getInstance().defaultPlatform() == TuneWeavePlatform.NETEASE) {
+            Button cloudButton = new Button(context);
+            cloudButton.setText(I18n.get(MusicHud.MOD_ID + ".button.cloud"));
+            cloudButton.setTextColor(Theme.PRIMARY_COLOR);
+            cloudButton.setTextSize(Theme.TEXT_SIZE_NORMAL);
+            cloudButton.setBackground(backgroundFactory.newBackgroundDrawable());
+            cloudButton.setOnClickListener(button -> RouterContainer.getInstance().pushNavigate(new CloudView(context)));
+            LayoutParams cloudParams = new LayoutParams(WRAP_CONTENT, WRAP_CONTENT);
+            cloudParams.setMargins(0, 0, dp(8), 0);
+            buttonsLayout.addView(cloudButton, cloudParams);
+        }
 
         Button logoutButton = new Button(context);
         logoutButton.setText(I18n.get(MusicHud.MOD_ID + ".button.logout"));
