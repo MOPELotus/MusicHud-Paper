@@ -23,6 +23,7 @@ import indi.etern.musichud.client.ui.components.FlexWrapLayout;
 import indi.etern.musichud.client.ui.components.MusicCollectionCard;
 import indi.etern.musichud.client.ui.components.RouterContainer;
 import indi.etern.musichud.client.ui.pages.CloudView;
+import indi.etern.musichud.client.ui.pages.PodcastRadioView;
 import indi.etern.musichud.client.ui.components.UrlImageView;
 import indi.etern.musichud.client.ui.utils.ui.ButtonInsetBackgroundFactory;
 import indi.etern.musichud.interfaces.IClientLoginService;
@@ -235,6 +236,17 @@ public class AccountView extends LinearLayout {
             LayoutParams cloudParams = new LayoutParams(WRAP_CONTENT, WRAP_CONTENT);
             cloudParams.setMargins(0, 0, dp(8), 0);
             buttonsLayout.addView(cloudButton, cloudParams);
+
+            Button programsButton = new Button(context);
+            programsButton.setText(I18n.get(MusicHud.MOD_ID + ".button.programs"));
+            programsButton.setTextColor(Theme.PRIMARY_COLOR);
+            programsButton.setTextSize(Theme.TEXT_SIZE_NORMAL);
+            programsButton.setBackground(backgroundFactory.newBackgroundDrawable());
+            programsButton.setOnClickListener(button -> RouterContainer.getInstance().pushNavigate(
+                    new PodcastRadioView(context)));
+            LayoutParams programsParams = new LayoutParams(WRAP_CONTENT, WRAP_CONTENT);
+            programsParams.setMargins(0, 0, dp(8), 0);
+            buttonsLayout.addView(programsButton, programsParams);
         }
 
         Button logoutButton = new Button(context);

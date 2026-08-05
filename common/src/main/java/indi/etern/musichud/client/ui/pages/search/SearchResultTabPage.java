@@ -99,6 +99,7 @@ public class SearchResultTabPage extends FrameLayout {
             SearchArtistResultView.setResult(null);
             SearchPlaylistResultView.setResult(null);
             SearchMusicResultView.setResult(null);
+            SearchPodcastResultView.setResult(null);
             if (pager.getAdapter() != null) {
                 pager.getAdapter().notifyDataSetChanged();
             }
@@ -110,7 +111,7 @@ public class SearchResultTabPage extends FrameLayout {
 
         @Override
         public int getCount() {
-            return 4; // 页面数量
+            return 5; // 页面数量
         }
 
         @NonNull
@@ -154,6 +155,10 @@ public class SearchResultTabPage extends FrameLayout {
                 case 3 -> {
                     searchType = SearchType.ARTIST;
                     yield new SearchArtistResultView(context);
+                }
+                case 4 -> {
+                    searchType = SearchType.RADIO;
+                    yield new SearchPodcastResultView(context);
                 }
                 default -> {
                     searchType = SearchType.MUSIC;
@@ -250,6 +255,7 @@ public class SearchResultTabPage extends FrameLayout {
                     case 1 -> SearchType.PLAYLIST;
                     case 2 -> SearchType.ALBUM;
                     case 3 -> SearchType.ARTIST;
+                    case 4 -> SearchType.RADIO;
                     default -> SearchType.MUSIC;
                 };
                 SearchView instance = SearchView.getInstance();
@@ -282,6 +288,7 @@ public class SearchResultTabPage extends FrameLayout {
                 case 1 -> MusicHud.MOD_ID + ".text.page.search.playlist";
                 case 2 -> MusicHud.MOD_ID + ".text.page.search.album";
                 case 3 -> MusicHud.MOD_ID + ".text.page.search.artist";
+                case 4 -> MusicHud.MOD_ID + ".text.page.search.radio";
                 default -> "";
             });
         }

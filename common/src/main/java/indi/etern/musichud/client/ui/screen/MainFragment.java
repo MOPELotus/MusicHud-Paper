@@ -125,6 +125,9 @@ public class MainFragment extends Fragment {
                 instance.likeButton.bindMusicList(null);
                 instance.addToPlaylistButton.bindMusicDetail(null);
             } else {
+                boolean program = "podcast".equals(musicDetail.getSourceKind())
+                        || "radio".equals(musicDetail.getSourceKind());
+                boolean virtualCollection = program || "video".equals(musicDetail.getSourceKind());
                 instance.titleText.setTextColor(Theme.NORMAL_TEXT_COLOR);
                 instance.albumImage.loadUrl(musicDetail.getAlbum().getThumbnailPicUrl(240));
                 instance.titleText.setText(musicDetail.getName());
@@ -157,17 +160,17 @@ public class MainFragment extends Fragment {
                             .build().newBackgroundDrawable();
                     artistButton.setBackground(background);
                     artistButton.setTextAlignment(View.TEXT_ALIGNMENT_TEXT_START);
-                    artistButton.setTextColor(Theme.PRIMARY_COLOR);
+                    artistButton.setTextColor(virtualCollection ? Theme.SECONDARY_TEXT_COLOR : Theme.PRIMARY_COLOR);
                     artistButton.setTextSize(Theme.TEXT_SIZE_NORMAL);
                     artistButton.setText(artist.getName());
-                    artistButton.setOnClickListener(button -> {
-                        RouterContainer routerContainer = RouterContainer.getInstance();
-                        if (routerContainer != null) {
-                            routerContainer.pushNavigate(
-                                    new ArtistDetailView(context, artist)
-                            );
-                        }
-                    });
+                    if (!virtualCollection) {
+                        artistButton.setOnClickListener(button -> {
+                            RouterContainer routerContainer = RouterContainer.getInstance();
+                            if (routerContainer != null) {
+                                routerContainer.pushNavigate(new ArtistDetailView(context, artist));
+                            }
+                        });
+                    }
                     instance.artists.addView(artistButton);
                 }
 
@@ -179,24 +182,29 @@ public class MainFragment extends Fragment {
                         .padding(new ButtonInsetBackgroundFactory.Padding(0, 0, 0, 0))
                         .build().newBackgroundDrawable();
                 albumButton.setBackground(background);
-                albumButton.setTextColor(Theme.PRIMARY_COLOR);
+                albumButton.setTextColor(virtualCollection ? Theme.SECONDARY_TEXT_COLOR : Theme.PRIMARY_COLOR);
                 albumButton.setTextSize(Theme.TEXT_SIZE_NORMAL);
                 albumButton.setTextAlignment(View.TEXT_ALIGNMENT_TEXT_START);
                 albumButton.setText(musicDetail.getAlbum().getName());
-                albumButton.setOnClickListener(button -> {
-                    RouterContainer routerContainer = RouterContainer.getInstance();
-                    if (routerContainer != null) {
-                        routerContainer.pushNavigate(
-                                new MusicCollectionDetailView(context, musicDetail.getAlbum())
-                        );
-                    }
-                });
+                if (!virtualCollection) {
+                    albumButton.setOnClickListener(button -> {
+                        RouterContainer routerContainer = RouterContainer.getInstance();
+                        if (routerContainer != null) {
+                            routerContainer.pushNavigate(new MusicCollectionDetailView(context, musicDetail.getAlbum()));
+                        }
+                    });
+                }
                 instance.albumContainer.addView(albumButton);
 
                 instance.skipCurrentButton.reset();
                 instance.progressBar.setVisibility(View.VISIBLE);
-                instance.likeButton.bindMusicList(MusicService.getInstance().getMusicTrackState(musicDetail).currentUsersLikeList());
-                instance.addToPlaylistButton.bindMusicDetail(musicDetail);
+                instance.likeButton.setVisibility(virtualCollection ? View.GONE : View.VISIBLE);
+                instance.addToPlaylistButton.setVisibility(program ? View.GONE : View.VISIBLE);
+                if (!virtualCollection) {
+                    instance.likeButton.bindMusicList(MusicService.getInstance()
+                            .getMusicTrackState(musicDetail).currentUsersLikeList());
+                }
+                if (!program) instance.addToPlaylistButton.bindMusicDetail(musicDetail);
                 instance.buttonsLayout.setVisibility(View.VISIBLE);
                 startProgressUpdater(musicDetail);
             }

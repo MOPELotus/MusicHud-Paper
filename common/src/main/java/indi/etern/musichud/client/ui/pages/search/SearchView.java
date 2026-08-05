@@ -144,7 +144,7 @@ public class SearchView extends LinearLayout {
         searchText = searchTextInput.getText().toString();
         if (searchText == null || searchText.isEmpty()) return;
         int currentItem = searchResultTabPage.getPager().getCurrentItem();
-        SearchType[] searchTypes = {SearchType.MUSIC, SearchType.PLAYLIST, SearchType.ALBUM, SearchType.ARTIST};
+        SearchType[] searchTypes = {SearchType.MUSIC, SearchType.PLAYLIST, SearchType.ALBUM, SearchType.ARTIST, SearchType.RADIO};
         SearchType searchType = searchTypes[currentItem];
         SearchMeta searchMeta = searchMetas.get(searchType);
         if (force || searchMeta == null || !searchMeta.text.equals(searchText)) {
@@ -161,7 +161,7 @@ public class SearchView extends LinearLayout {
 
     public void loadMoreSearchResult() {
         int currentItem = searchResultTabPage.getPager().getCurrentItem();
-        SearchType[] searchTypes = {SearchType.MUSIC, SearchType.PLAYLIST, SearchType.ALBUM, SearchType.ARTIST};
+        SearchType[] searchTypes = {SearchType.MUSIC, SearchType.PLAYLIST, SearchType.ALBUM, SearchType.ARTIST, SearchType.RADIO};
         SearchType searchType = searchTypes[currentItem];
         SearchMeta searchMeta = searchMetas.get(searchType);
         String text = searchTextInput.getText().toString();
@@ -197,6 +197,7 @@ public class SearchView extends LinearLayout {
             case PLAYLIST -> setSearchPlaylistResult(offset, (List<Playlist>) result);
             case ALBUM -> setSearchAlbumResult(offset, (List<Album>) result);
             case ARTIST -> setSearchArtistResult(offset, (List<Artist>) result);
+            case RADIO -> setSearchRadioResult(offset, (List<TuneWeaveClientService.PodcastInfo>) result);
             default -> { }
         }
     }
@@ -274,6 +275,17 @@ public class SearchView extends LinearLayout {
             if (instance != null) {
                 instance.append(result);
             }
+        }
+    }
+
+    public void setSearchRadioResult(int offset, List<TuneWeaveClientService.PodcastInfo> result) {
+        SearchType searchType = SearchType.RADIO;
+        refreshSearchMeta(offset, result, searchType);
+        if (offset == 0) {
+            SearchPodcastResultView.setResult(result);
+        } else {
+            SearchPodcastResultView instance = SearchPodcastResultView.getInstance();
+            if (instance != null) instance.append(result);
         }
     }
 
