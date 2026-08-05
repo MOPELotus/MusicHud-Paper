@@ -11,6 +11,7 @@ import indi.etern.musichud.client.services.music.MusicService;
 import indi.etern.musichud.client.services.tuneweave.TuneWeaveClientService;
 import indi.etern.musichud.client.ui.hud.renderer.PlayingStatusRenderer;
 import indi.etern.musichud.interfaces.ClientConfig;
+import indi.etern.musichud.server.api.tuneweave.TuneWeaveApiClient;
 import lombok.Getter;
 import lombok.SneakyThrows;
 import net.minecraft.client.Minecraft;
@@ -200,6 +201,18 @@ public class StreamAudioPlayer {
             } catch (Exception e) {
                 LOGGER.error("Download thread error", e);
                 setStatus(Status.ERROR);
+                if (e instanceof TerminalDownloadException) {
+                    Throwable cause = Objects.requireNonNullElse(e.getCause(), e);
+                    downloadInitializedFuture.completeExceptionally(cause);
+                    startPlayingFuture.completeExceptionally(cause);
+                    MusicDetail failedMusic = currentMusicDetail;
+                    if (failedMusic != null && failedMusic.equals(
+                            NowPlayingInfo.getInstance().getCurrentlyPlayingMusicDetail())) {
+                        MusicService.getInstance().switchMusic(MusicDetail.NONE, MusicDetail.NONE, null,
+                                I18n.get(MusicHud.MOD_ID + ".text.failedToLoadMusicResource"));
+                    }
+                    return;
+                }
                 try {
                     fullyRetryCurrent(startPlayingFuture);
                 } catch (RuntimeException e1) {
@@ -523,6 +536,9 @@ public class StreamAudioPlayer {
                 break;
             } catch (Exception e) {
                 if (e instanceof SocketException e1 && e1.getMessage().equals("Closed by interrupt")) break;
+                if (isTerminalDownloadFailure(e)) {
+                    throw new TerminalDownloadException(e);
+                }
                 LOGGER.error("Download error (attempt {})\n{} : {}", localRetryCount + 1, e.getClass().getSimpleName(), e.getMessage());
 
                 localAudioBuffer.clear();
@@ -546,6 +562,23 @@ public class StreamAudioPlayer {
         }
 
         LOGGER.debug("Download task finished");
+    }
+
+    private static boolean isTerminalDownloadFailure(Throwable error) {
+        Throwable cause = error;
+        while ((cause instanceof ExecutionException || cause instanceof CompletionException)
+                && cause.getCause() != null) {
+            cause = cause.getCause();
+        }
+        if (!(cause instanceof TuneWeaveApiClient.TuneWeaveException tuneWeaveError)) {
+            return false;
+        }
+        if (!tuneWeaveError.isRetryable()) {
+            return true;
+        }
+        return "upstream_error".equals(tuneWeaveError.getCode())
+                && tuneWeaveError.getMessage() != null
+                && tuneWeaveError.getMessage().contains("exceeded the size limit");
     }
 
     private void syncPlaying(CompletableFuture<?> currentDownloadFuture) {
@@ -814,5 +847,11 @@ public class StreamAudioPlayer {
 
     public enum Status {
         IDLE, BUFFERING, PLAYING, RETRYING, ERROR
+    }
+
+    private static final class TerminalDownloadException extends RuntimeException {
+        private TerminalDownloadException(Throwable cause) {
+            super(cause);
+        }
     }
 }
