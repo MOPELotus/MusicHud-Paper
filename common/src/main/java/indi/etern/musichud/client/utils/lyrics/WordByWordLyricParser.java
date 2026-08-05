@@ -1,4 +1,4 @@
-package indi.etern.musichud.client.ui.utils.lyrics;
+package indi.etern.musichud.client.utils.lyrics;
 
 import com.google.gson.JsonElement;
 import com.google.gson.JsonObject;

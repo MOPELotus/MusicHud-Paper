@@ -1,5 +1,6 @@
 package indi.etern.musichud.client.ui.components;
 
+import icyllis.modernui.animation.LayoutTransition;
 import icyllis.modernui.core.Context;
 import icyllis.modernui.graphics.Image;
 import icyllis.modernui.graphics.drawable.Drawable;
@@ -20,13 +21,16 @@ import indi.etern.musichud.client.services.tuneweave.TuneWeaveClientService;
 import indi.etern.musichud.client.ui.Theme;
 import indi.etern.musichud.client.ui.ToastUtil;
 import indi.etern.musichud.client.ui.drawable.ScaledImageDrawable;
-import indi.etern.musichud.client.ui.utils.image.ImageUtils;
-import indi.etern.musichud.client.ui.utils.ui.ButtonInsetBackgroundFactory;
+import indi.etern.musichud.client.utils.image.ImageUtils;
+import indi.etern.musichud.client.utils.ui.ButtonInsetBackgroundFactory;
 import indi.etern.musichud.interfaces.Unregister;
+import indi.etern.musichud.server.api.impl.ncm.CommonCaches;
+import indi.etern.musichud.utils.CollectionUpdateNotifier;
 import indi.etern.musichud.utils.collections.ObservableSequencedSet;
 import net.minecraft.client.resources.language.I18n;
 
 import java.util.*;
+import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.function.Consumer;
 import java.util.stream.Collectors;
@@ -40,12 +44,16 @@ public class MusicCollectionDetailView extends LinearLayout {
     private final LinearLayout tracksListView;
     private final ScrollView scrollView;
     private final UrlImageView imageView;
+    private final LayoutTransition tracksListViewTransition;
     private TextView musicTrackCountView;
     private MusicCollection musicCollection;
     private final boolean editablePlaylist;
     private Unregister tracksSyncUnregister = null;
+    private Unregister updateNotifierUnregister = null;
     private final AtomicBoolean syncPending = new AtomicBoolean();
     private String currentCoverUrl = null;
+    private long collectionId = -1;
+    private boolean albumCollection = false;
 
     public MusicCollectionDetailView(Context context, MusicCollection musicCollection) {
         this(context, musicCollection, false);
@@ -190,7 +198,7 @@ public class MusicCollectionDetailView extends LinearLayout {
             row1.addView(refreshButton, new LayoutParams(dp28, dp28));
         }
         {
-            ToggleSubscribeButton<?> toggleSubscribeButton = new ToggleSubscribeButton<>(context);
+            ToggleSubscribeButton toggleSubscribeButton = new ToggleSubscribeButton(context);
             toggleSubscribeButton.setBackground(backgroundFactory.newBackgroundDrawable());
             row1.addView(toggleSubscribeButton, new LayoutParams(dp28, dp28, 0));
             if (musicCollection instanceof Playlist playlist) {
@@ -240,13 +248,78 @@ public class MusicCollectionDetailView extends LinearLayout {
         tracksListView.setOrientation(VERTICAL);
         scrollView.addView(tracksListView, new LayoutParams(MATCH_PARENT, MATCH_PARENT));
 
+        if (musicCollection instanceof Playlist playlist) {
+            collectionId = playlist.getId();
+            albumCollection = false;
+        } else if (musicCollection instanceof Album album) {
+            collectionId = album.getId();
+            albumCollection = true;
+        }
+        registerUpdateNotifier();
+
         refreshData(false);
+        tracksListViewTransition = new LayoutTransition();
+        tracksListViewTransition.disableTransitionType(LayoutTransition.DISAPPEARING);
+        tracksListViewTransition.disableTransitionType(LayoutTransition.APPEARING);
+        tracksListViewTransition.enableTransitionType(LayoutTransition.CHANGING);
+    }
+
+    @Override
+    protected void onAttachedToWindow() {
+        super.onAttachedToWindow();
+        registerUpdateNotifier();
+    }
+
+    private void registerUpdateNotifier() {
+        if (updateNotifierUnregister != null || collectionId < 0) return;
+        updateNotifierUnregister = albumCollection
+                ? CollectionUpdateNotifier.registerAlbum(collectionId, this::onCollectionUpdateNotified)
+                : CollectionUpdateNotifier.registerPlaylist(collectionId, this::onCollectionUpdateNotified);
+    }
+
+    private void onCollectionUpdateNotified() {
+        // Path 1: list sync from cache (instant, no network round-trip, never
+        // overrides the local optimistic state with an in-flight server state)
+        MuiModApi.postToUiThread(() -> {
+            if (!isAttachedToWindow()) return;
+            MusicCollection latest = albumCollection
+                    ? CommonCaches.albumsCache.getIfPresent(collectionId)
+                    : CommonCaches.playlistsCache.getIfPresent(collectionId);
+            if (latest != null && latest != musicCollection) {
+                musicCollection = latest;
+                unregisterTracksSync();
+                registerTracksSync(latest);
+            }
+            syncTracksView();
+        });
+        // Path 2: cover refresh from network (latest URL only)
+        CompletableFuture<? extends MusicCollection> future;
+        if (albumCollection) {
+            future = musicService.loadAlbumDetail(collectionId, true);
+        } else {
+            future = musicService.loadPlaylistDetail(collectionId, true);
+        }
+        future.whenComplete((latest, throwable) -> {
+            if (throwable != null || latest == null) return;
+            MuiModApi.postToUiThread(() -> {
+                if (!isAttachedToWindow()) return;
+                String newCoverUrl = latest.getImageThumbnailUrl(dp(72));
+                if (!Objects.equals(currentCoverUrl, newCoverUrl)) {
+                    currentCoverUrl = newCoverUrl;
+                    imageView.loadUrl(newCoverUrl);
+                }
+            });
+        });
     }
 
     @Override
     protected void onDetachedFromWindow() {
         super.onDetachedFromWindow();
         unregisterTracksSync();
+        if (updateNotifierUnregister != null) {
+            updateNotifierUnregister.unregister();
+            updateNotifierUnregister = null;
+        }
     }
 
     private void updatePlaylistTrackCountView(Playlist playlist) {
@@ -277,6 +350,7 @@ public class MusicCollectionDetailView extends LinearLayout {
 
     private void refreshData(boolean ignoreCache) {
         Context context = getContext();
+        tracksListView.setLayoutTransition(null);
         tracksListView.removeAllViews();
         syncPending.set(false);
         progressBar.setVisibility(View.VISIBLE);
@@ -301,6 +375,8 @@ public class MusicCollectionDetailView extends LinearLayout {
                 for (MusicDetail musicDetail : musicDetails) {
                     tracksListView.addView(createItem(context, musicDetail));
                 }
+
+                tracksListView.setLayoutTransition(tracksListViewTransition);
                 unregisterTracksSync();
                 registerTracksSync(musicCollection1);
             });

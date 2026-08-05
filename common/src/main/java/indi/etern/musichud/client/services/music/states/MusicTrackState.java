@@ -7,6 +7,7 @@ import indi.etern.musichud.beans.state.IMusicTrackState;
 import indi.etern.musichud.client.services.music.MusicService;
 import indi.etern.musichud.client.services.tuneweave.TuneWeaveClientService;
 import indi.etern.musichud.interfaces.Unregister;
+import indi.etern.musichud.utils.CollectionUpdateNotifier;
 import lombok.AllArgsConstructor;
 import lombok.SneakyThrows;
 
@@ -81,10 +82,17 @@ public class MusicTrackState implements IMusicTrackState {
             if (playlist != null && playlistId != -1) {
                 // Follow the latest cached instance: the cache may have been replaced
                 // by a refresh or re-evicted, and optimistic edits must land on the
-                // same instance the UI listens to, otherwise they only get applied
-                // later via the server-side fallback.
-                Playlist latest = musicService.loadPlaylistDetail(playlistId, false).getNow(null);
-                if (latest != null && latest != playlist) {
+                // same instance the UI listens to.
+                CompletableFuture<Playlist> future = musicService.loadPlaylistDetail(playlistId, false);
+                Playlist latest = future.getNow(null);
+                if (latest == null) {
+                    // cache miss, network in flight: wait for the latest instance
+                    return future.thenApply(p -> {
+                        playlist = p;
+                        return p;
+                    });
+                }
+                if (latest != playlist) {
                     playlist = latest;
                 }
                 return CompletableFuture.completedFuture(playlist);
@@ -125,9 +133,9 @@ public class MusicTrackState implements IMusicTrackState {
             boolean notifyLater;
             if (playlistId != -1) {
                 notifyPlaylistModified(playlistId, musicDetail.getId(), true);
-                notifyLater = true;
-            } else {
                 notifyLater = false;
+            } else {
+                notifyLater = true;
             }
             return loadPlaylist().thenCompose(playlist1 -> {
                 if (notifyLater) {
@@ -140,9 +148,11 @@ public class MusicTrackState implements IMusicTrackState {
                         .handle((ignored, throwable) -> {
                             if (throwable != null) {
                                 edit.rollback();
+                                CollectionUpdateNotifier.notifyPlaylistUpdated(playlist1.getId());
                                 throw new CompletionException(throwable);
                             }
                             edit.commit();
+                            CollectionUpdateNotifier.notifyPlaylistUpdated(playlist1.getId());
                             return null;
                         });
             });
@@ -153,9 +163,9 @@ public class MusicTrackState implements IMusicTrackState {
             boolean notifyLater;
             if (playlistId != -1) {
                 notifyPlaylistModified(playlistId, musicDetail.getId(), false);
-                notifyLater = true;
-            } else {
                 notifyLater = false;
+            } else {
+                notifyLater = true;
             }
             return loadPlaylist().thenCompose(playlist1 -> {
                 if (notifyLater) {
@@ -168,9 +178,11 @@ public class MusicTrackState implements IMusicTrackState {
                         .handle((ignored, throwable) -> {
                             if (throwable != null) {
                                 edit.rollback();
+                                CollectionUpdateNotifier.notifyPlaylistUpdated(playlist1.getId());
                                 throw new CompletionException(throwable);
                             }
                             edit.commit();
+                            CollectionUpdateNotifier.notifyPlaylistUpdated(playlist1.getId());
                             return null;
                         });
             });

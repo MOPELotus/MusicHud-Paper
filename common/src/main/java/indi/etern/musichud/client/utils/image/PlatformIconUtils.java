@@ -1,4 +1,4 @@
-package indi.etern.musichud.client.ui.utils.image;
+package indi.etern.musichud.client.utils.image;
 
 import icyllis.modernui.graphics.Bitmap;
 import icyllis.modernui.graphics.BitmapFactory;
