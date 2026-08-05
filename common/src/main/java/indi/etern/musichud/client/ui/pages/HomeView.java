@@ -15,6 +15,7 @@ import indi.etern.musichud.beans.music.MusicDetail;
 import indi.etern.musichud.beans.music.QueueItem;
 import indi.etern.musichud.client.audio.NowPlayingInfo;
 import indi.etern.musichud.client.services.music.MusicService;
+import indi.etern.musichud.client.services.tuneweave.TuneWeaveClientService;
 import indi.etern.musichud.client.ui.Theme;
 import indi.etern.musichud.client.ui.components.FlexWrapLayout;
 import indi.etern.musichud.client.ui.components.MusicCollectionCard;
@@ -56,6 +57,8 @@ public class HomeView extends LinearLayout {
     private UrlImageView videoPreviewImage;
     private TextView videoPreviewTitle;
     private TextView videoPreviewMeta;
+    private TextView videoPreviewDescription;
+    private volatile MusicDetail videoPreviewMusic;
     private MusicListItem nextToPlayItem;
     private TextView nextToPlayTitle;
     private TextView queueTitle;
@@ -173,8 +176,17 @@ public class HomeView extends LinearLayout {
             videoPreviewMeta.setTextSize(Theme.TEXT_SIZE_NORMAL);
             videoPreviewMeta.setGravity(Gravity.CENTER);
             LinearLayout.LayoutParams previewMetaParams = new LinearLayout.LayoutParams(MATCH_PARENT, WRAP_CONTENT);
-            previewMetaParams.setMargins(dp(32), 0, dp(32), dp(32));
+            previewMetaParams.setMargins(dp(32), 0, dp(32), dp(8));
             videoPreview.addView(videoPreviewMeta, previewMetaParams);
+
+            videoPreviewDescription = new TextView(context);
+            videoPreviewDescription.setTextColor(Theme.SECONDARY_TEXT_COLOR);
+            videoPreviewDescription.setTextSize(Theme.TEXT_SIZE_NORMAL);
+            videoPreviewDescription.setGravity(Gravity.LEFT);
+            videoPreviewDescription.setMaxLines(8);
+            LinearLayout.LayoutParams previewDescriptionParams = new LinearLayout.LayoutParams(MATCH_PARENT, WRAP_CONTENT);
+            previewDescriptionParams.setMargins(dp(32), 0, dp(32), dp(32));
+            videoPreview.addView(videoPreviewDescription, previewDescriptionParams);
 
             playbackContent.addView(videoPreview,
                     new FrameLayout.LayoutParams(MATCH_PARENT, MATCH_PARENT));
@@ -435,6 +447,7 @@ public class HomeView extends LinearLayout {
         boolean showVideoPreview = video && !hasVideoLyrics;
         staggeredLyricScrollView.setVisibility(showVideoPreview ? GONE : VISIBLE);
         videoPreview.setVisibility(showVideoPreview ? VISIBLE : GONE);
+        videoPreviewMusic = showVideoPreview ? musicDetail : null;
         if (!showVideoPreview) return;
 
         videoPreviewImage.loadUrl(musicDetail.getAlbum().getPicUrl());
@@ -444,9 +457,35 @@ public class HomeView extends LinearLayout {
                 .filter(name -> name != null && !name.isBlank())
                 .reduce((left, right) -> left + " / " + right)
                 .orElse("Bilibili");
-        int totalSeconds = Math.max(0, musicDetail.getDurationMillis() / 1000);
-        videoPreviewMeta.setText(artists + "  ·  "
-                + String.format(java.util.Locale.ROOT, "%d:%02d", totalSeconds / 60, totalSeconds % 60));
+        videoPreviewMeta.setText(artists);
+        videoPreviewDescription.setText("");
+        MusicHud.EXECUTOR.execute(() -> {
+            try {
+                TuneWeaveClientService.VideoInfo videoInfo = TuneWeaveClientService.getInstance()
+                        .loadVideoDetail(musicDetail);
+                MuiModApi.postToUiThread(() -> applyVideoPreviewInfo(musicDetail, videoInfo));
+            } catch (RuntimeException ignored) {
+            }
+        });
+    }
+
+    private void applyVideoPreviewInfo(MusicDetail expectedMusic, TuneWeaveClientService.VideoInfo videoInfo) {
+        if (instance != this || videoPreviewMusic != expectedMusic || videoPreview.getVisibility() != VISIBLE) return;
+        videoPreviewTitle.setText(videoInfo.title());
+        String creators = videoInfo.creators().isEmpty()
+                ? expectedMusic.getArtists().stream().map(artist -> artist.getName())
+                .filter(name -> name != null && !name.isBlank())
+                .reduce((left, right) -> left + " / " + right).orElse("Bilibili")
+                : String.join(" / ", videoInfo.creators());
+        String publishedAt = formatPublishedAt(videoInfo.publishedAt());
+        videoPreviewMeta.setText(publishedAt.isBlank() ? creators : creators + "  ·  " + publishedAt);
+        videoPreviewDescription.setText(videoInfo.description());
+    }
+
+    private static String formatPublishedAt(String publishedAt) {
+        if (publishedAt == null || publishedAt.isBlank()) return "";
+        int timeSeparator = publishedAt.indexOf('T');
+        return timeSeparator > 0 ? publishedAt.substring(0, timeSeparator) : publishedAt;
     }
 
     @Override

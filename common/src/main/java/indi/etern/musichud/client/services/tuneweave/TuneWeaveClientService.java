@@ -922,7 +922,12 @@ public final class TuneWeaveClientService {
         TuneWeavePlatform platform = platformFromReference(musicDetail.getSourceRef());
         String partReference = musicDetail.getSourcePartRef();
         if (partReference == null || partReference.isBlank()) {
-            partReference = "page:1";
+            List<JsonElement> parts = elements(requestForPlatform(platform, "GET", "/v1/videos/"
+                    + TuneWeaveApiClient.encodePathSegment(musicDetail.getSourceRef()) + "/parts",
+                    Map.of("type", "video", "limit", "1", "offset", "0"), null).data());
+            if (parts.isEmpty()) return LyricInfo.NONE;
+            partReference = string(unwrap(parts.getFirst()), "ref", "");
+            if (partReference.isBlank()) return LyricInfo.NONE;
         }
         String videoPath = "/v1/videos/" + TuneWeaveApiClient.encodePathSegment(musicDetail.getSourceRef());
         Map<String, String> query = Map.of(
