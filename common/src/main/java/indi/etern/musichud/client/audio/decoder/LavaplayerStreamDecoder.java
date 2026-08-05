@@ -1,24 +1,26 @@
 package indi.etern.musichud.client.audio.decoder;
 
-import com.sedmelluq.discord.lavaplayer.format.AudioPlayerInputStream;
 import com.sedmelluq.discord.lavaplayer.format.StandardAudioDataFormats;
 import com.sedmelluq.discord.lavaplayer.player.AudioLoadResultHandler;
 import com.sedmelluq.discord.lavaplayer.player.AudioPlayer;
 import com.sedmelluq.discord.lavaplayer.player.AudioPlayerManager;
 import com.sedmelluq.discord.lavaplayer.player.DefaultAudioPlayerManager;
+import com.sedmelluq.discord.lavaplayer.player.event.AudioEventAdapter;
 import com.sedmelluq.discord.lavaplayer.source.http.HttpAudioSourceManager;
 import com.sedmelluq.discord.lavaplayer.source.local.LocalAudioSourceManager;
 import com.sedmelluq.discord.lavaplayer.tools.FriendlyException;
 import com.sedmelluq.discord.lavaplayer.track.AudioPlaylist;
 import com.sedmelluq.discord.lavaplayer.track.AudioTrack;
+import com.sedmelluq.discord.lavaplayer.track.AudioTrackEndReason;
+import com.sedmelluq.discord.lavaplayer.track.playback.AudioFrame;
 import org.lwjgl.openal.AL10;
 
-import javax.sound.sampled.AudioInputStream;
 import java.io.IOException;
-import java.util.Objects;
-import java.util.Map;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.List;
+import java.util.Map;
+import java.util.Objects;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.TimeUnit;
@@ -30,18 +32,20 @@ public final class LavaplayerStreamDecoder implements AudioDecoder {
 
     private final AudioPlayer player;
     private final AudioTrack track;
-    private final AudioInputStream audioInputStream;
+    private final PlaybackState playbackState;
     private final int format;
     private final int sampleRate;
     private final int channelCount;
     private final AudioPlayerManager playerManager;
+    private byte[] currentFrameData;
+    private int currentFrameOffset;
     private volatile boolean closed;
 
-    private LavaplayerStreamDecoder(AudioPlayer player, AudioTrack track, AudioInputStream audioInputStream,
+    private LavaplayerStreamDecoder(AudioPlayer player, AudioTrack track, PlaybackState playbackState,
                                     int format, int sampleRate, int channelCount, AudioPlayerManager playerManager) {
         this.player = player;
         this.track = track;
-        this.audioInputStream = audioInputStream;
+        this.playbackState = playbackState;
         this.format = format;
         this.sampleRate = sampleRate;
         this.channelCount = channelCount;
@@ -62,18 +66,24 @@ public final class LavaplayerStreamDecoder implements AudioDecoder {
             throw error;
         }
         AudioPlayer player = playerManager.createPlayer();
+        PlaybackState playbackState = new PlaybackState();
+        player.addListener(new AudioEventAdapter() {
+            @Override
+            public void onTrackEnd(AudioPlayer player, AudioTrack track, AudioTrackEndReason endReason) {
+                playbackState.endReason = endReason;
+            }
+
+            @Override
+            public void onTrackException(AudioPlayer player, AudioTrack track, FriendlyException exception) {
+                playbackState.failure = exception;
+            }
+        });
         player.setVolume(100);
         player.playTrack(track);
-        AudioInputStream audioInputStream = AudioPlayerInputStream.createStream(
-                player,
-                StandardAudioDataFormats.COMMON_PCM_S16_LE,
-                STUCK_TIMEOUT_MILLIS,
-                false
-        );
         int channelCount = StandardAudioDataFormats.COMMON_PCM_S16_LE.channelCount;
         int sampleRate = StandardAudioDataFormats.COMMON_PCM_S16_LE.sampleRate;
         int format = channelCount == 1 ? AL10.AL_FORMAT_MONO16 : AL10.AL_FORMAT_STEREO16;
-        return new LavaplayerStreamDecoder(player, track, audioInputStream, format, sampleRate, channelCount, playerManager);
+        return new LavaplayerStreamDecoder(player, track, playbackState, format, sampleRate, channelCount, playerManager);
     }
 
     @Override
@@ -82,12 +92,52 @@ public final class LavaplayerStreamDecoder implements AudioDecoder {
             return null;
         }
         int boundedSize = (int) Math.min(maxSize, Integer.MAX_VALUE);
+        byte[] result = new byte[boundedSize];
+        int written = 0;
         try {
-            byte[] bytes = audioInputStream.readNBytes(boundedSize);
-            return bytes.length == 0 ? null : bytes;
-        } catch (IOException e) {
-            throw new RuntimeException("Failed to read decoded audio chunk", e);
+            while (written < boundedSize) {
+                if (currentFrameData != null && currentFrameOffset < currentFrameData.length) {
+                    int length = Math.min(boundedSize - written, currentFrameData.length - currentFrameOffset);
+                    System.arraycopy(currentFrameData, currentFrameOffset, result, written, length);
+                    currentFrameOffset += length;
+                    written += length;
+                    continue;
+                }
+
+                currentFrameData = null;
+                currentFrameOffset = 0;
+                throwIfPlaybackFailed();
+                if (hasTrackEnded()) {
+                    break;
+                }
+
+                AudioFrame frame = player.provide(STUCK_TIMEOUT_MILLIS, TimeUnit.MILLISECONDS);
+                if (frame == null) {
+                    throwIfPlaybackFailed();
+                    if (hasTrackEnded()) {
+                        break;
+                    }
+                    throw new RuntimeException("Timed out while reading decoded audio");
+                }
+                if (frame.isTerminator()) {
+                    throwIfPlaybackFailed();
+                    break;
+                }
+                currentFrameData = frame.getData();
+                if (currentFrameData == null || currentFrameData.length == 0) {
+                    currentFrameData = null;
+                }
+            }
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
+            return written == 0 ? null : Arrays.copyOf(result, written);
+        } catch (TimeoutException e) {
+            throwIfPlaybackFailed();
+            if (!hasTrackEnded()) {
+                throw new RuntimeException("Timed out while reading decoded audio", e);
+            }
         }
+        return written == 0 ? null : Arrays.copyOf(result, written);
     }
 
     @Override
@@ -100,6 +150,8 @@ public final class LavaplayerStreamDecoder implements AudioDecoder {
         if (duration > 0L && duration != Long.MAX_VALUE) {
             targetPosition = Math.min(targetPosition, Math.max(0L, duration - 1L));
         }
+        currentFrameData = null;
+        currentFrameOffset = 0;
         track.setPosition(targetPosition);
         return true;
     }
@@ -138,13 +190,24 @@ public final class LavaplayerStreamDecoder implements AudioDecoder {
             return;
         }
         closed = true;
-        try {
-            audioInputStream.close();
-        } catch (IOException ignored) {
-        }
         player.stopTrack();
         player.destroy();
         playerManager.shutdown();
+    }
+
+    private boolean hasTrackEnded() {
+        return playbackState.endReason != null || player.getPlayingTrack() == null;
+    }
+
+    private void throwIfPlaybackFailed() {
+        FriendlyException failure = playbackState.failure;
+        if (failure != null) {
+            throw new RuntimeException("Failed to decode audio track", failure);
+        }
+        AudioTrackEndReason endReason = playbackState.endReason;
+        if (endReason == AudioTrackEndReason.LOAD_FAILED) {
+            throw new RuntimeException("Audio track failed while decoding");
+        }
     }
 
     private static AudioPlayerManager createPlayerManager(Map<String, String> headers) {
@@ -207,5 +270,10 @@ public final class LavaplayerStreamDecoder implements AudioDecoder {
         } catch (TimeoutException e) {
             throw new IOException("Timed out while loading audio track: " + identifier, e);
         }
+    }
+
+    private static final class PlaybackState {
+        private volatile AudioTrackEndReason endReason;
+        private volatile FriendlyException failure;
     }
 }

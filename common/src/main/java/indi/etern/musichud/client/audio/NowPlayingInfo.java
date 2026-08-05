@@ -51,8 +51,8 @@ public class NowPlayingInfo {
     private Duration updateInAdvanceDuration = Duration.of(500, ChronoUnit.MILLIS);
     private MusicDetail smtcPlayingMusicDetail = null;
     @Getter
-    private MusicDetail currentlyPlayingMusicDetail;
-    private MusicDetail nextToPlayIdleMusicDetail;
+    private volatile MusicDetail currentlyPlayingMusicDetail;
+    private volatile MusicDetail nextToPlayIdleMusicDetail;
     @Getter
     private volatile Duration musicDuration = null;
     @Getter
@@ -251,7 +251,12 @@ public class NowPlayingInfo {
         if (musicDuration == null || musicStartTime == null) {
             return 0.0f;
         }
-        return (float) Duration.between(musicStartTime, ZonedDateTime.now()).toMillis() / musicDuration.toMillis();
+        long durationMillis = musicDuration.toMillis();
+        if (durationMillis <= 0L) {
+            return 0.0f;
+        }
+        float progress = (float) Duration.between(musicStartTime, ZonedDateTime.now()).toMillis() / durationMillis;
+        return Math.max(0.0f, Math.min(1.0f, progress));
     }
 
     public void switchMusicInfo(MusicDetail musicDetail, MusicDetail idleNextToPlay) {
@@ -355,6 +360,9 @@ public class NowPlayingInfo {
             return Duration.ZERO;
         }
         Duration startedPlayingDuration = Duration.between(musicStartTime, ZonedDateTime.now());
+        if (startedPlayingDuration.isNegative()) {
+            return Duration.ZERO;
+        }
         if (musicDuration != null && startedPlayingDuration.compareTo(musicDuration) > 0) {
             return musicDuration;
         } else {
@@ -363,8 +371,8 @@ public class NowPlayingInfo {
     }
 
     public boolean isCompleted() {
-        if (musicStartTime == null) {
-            return true;
+        if (musicStartTime == null || musicDuration == null) {
+            return false;
         }
         Duration startedPlayingDuration = Duration.between(musicStartTime, ZonedDateTime.now());
         return startedPlayingDuration.compareTo(musicDuration) > 0;

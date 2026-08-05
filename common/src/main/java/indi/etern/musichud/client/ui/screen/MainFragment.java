@@ -45,6 +45,7 @@ import java.time.format.DateTimeFormatter;
 import java.time.temporal.ChronoUnit;
 import java.util.List;
 import java.util.Queue;
+import java.util.concurrent.atomic.AtomicLong;
 import java.util.function.Consumer;
 
 import static icyllis.modernui.view.ViewGroup.LayoutParams.MATCH_PARENT;
@@ -57,9 +58,12 @@ public class MainFragment extends Fragment {
 
     static {
         MusicHud.getConnectStatusListeners().add(status -> {
-            if (instance != null) {
+            MainFragment target = instance;
+            if (target != null) {
                 MuiModApi.postToUiThread(() -> {
-                    instance.refreshServerConnectStatus();
+                    if (instance == target) {
+                        target.refreshServerConnectStatus();
+                    }
                 });
             }
         });
@@ -84,6 +88,7 @@ public class MainFragment extends Fragment {
     private TextView totalTimeText;
     private ToggleTrackLikeStateButton likeButton;
     private ModifyPlaylistTrackModalButton addToPlaylistButton;
+    private final AtomicLong progressUpdateGeneration = new AtomicLong();
 
     public MainFragment() {
     }
@@ -109,7 +114,9 @@ public class MainFragment extends Fragment {
     }
 
     public static void switchMusic(MusicDetail musicDetail, MusicDetail nextToPlay, Queue<LyricLine> lyricLines) {
-        if (instance != null) {
+        MainFragment target = instance;
+        if (target != null) {
+            long progressGeneration = target.progressUpdateGeneration.incrementAndGet();
             if (musicDetail == null || musicDetail.equals(MusicDetail.NONE)) {
                 instance.albumImage.loadUrl(MusicHud.ICON_BASE64);
                 instance.titleText.setText(I18n.get(MusicHud.MOD_ID + ".text.idle"));
@@ -207,6 +214,7 @@ public class MainFragment extends Fragment {
 
                 instance.skipCurrentButton.reset();
                 instance.progressBar.setVisibility(View.VISIBLE);
+                instance.progressBar.setProgress(0);
                 instance.likeButton.setVisibility(virtualCollection ? View.GONE : View.VISIBLE);
                 instance.addToPlaylistButton.setVisibility(program ? View.GONE : View.VISIBLE);
                 if (!virtualCollection) {
@@ -215,7 +223,7 @@ public class MainFragment extends Fragment {
                 }
                 if (!program) instance.addToPlaylistButton.bindMusicDetail(musicDetail);
                 instance.buttonsLayout.setVisibility(View.VISIBLE);
-                startProgressUpdater(musicDetail);
+                startProgressUpdater(target, musicDetail, progressGeneration);
             }
             HomeView homeView = HomeView.getInstance();
             if (homeView != null) {
@@ -224,34 +232,41 @@ public class MainFragment extends Fragment {
         }
     }
 
-    private static void startProgressUpdater(MusicDetail musicDetail) {
+    private static void startProgressUpdater(MainFragment target, MusicDetail musicDetail, long generation) {
         NowPlayingInfo nowPlayingInfo = NowPlayingInfo.getInstance();
         Duration musicDuration = nowPlayingInfo.getMusicDuration();
+        if (musicDuration == null) {
+            musicDuration = Duration.ofMillis(Math.max(0L, musicDetail.getDurationMillis()));
+        }
         DateTimeFormatter formatter = musicDuration.toHoursPart() >= 1 ?
                 DateTimeFormatter.ofPattern("HH:mm:ss") :
                 DateTimeFormatter.ofPattern("mm:ss");
         String totalTimeString = formatter.format(LocalTime.MIDNIGHT.plusSeconds(musicDuration.toSeconds()));
+        target.playedTimeText.setText(formatter.format(LocalTime.MIDNIGHT));
+        target.totalTimeText.setText(totalTimeString);
         MusicHud.EXECUTOR.execute(() -> {
-            do {
-                if (instance == null || instance.progressBar == null) {
-                    return;
-                }
+            while (instance == target
+                    && target.progressUpdateGeneration.get() == generation
+                    && musicDetail.equals(nowPlayingInfo.getCurrentlyPlayingMusicDetail())) {
                 Duration playedDuration = nowPlayingInfo.getPlayedDuration();
                 String playedTimeString = formatter.format(LocalTime.MIDNIGHT.plusSeconds(playedDuration.toSeconds()));
+                int progress = Math.round(nowPlayingInfo.getProgressRate() * 100);
                 MuiModApi.postToUiThread(() -> {
-                    if (instance != null && instance.progressBar != null) {
-                        instance.progressBar.setProgress((int) (nowPlayingInfo.getProgressRate() * 100));
-                        instance.playedTimeText.setText(playedTimeString);
-                        instance.totalTimeText.setText(totalTimeString);
+                    if (instance == target
+                            && target.progressUpdateGeneration.get() == generation
+                            && musicDetail.equals(nowPlayingInfo.getCurrentlyPlayingMusicDetail())) {
+                        target.progressBar.setProgress(progress);
+                        target.playedTimeText.setText(playedTimeString);
+                        target.totalTimeText.setText(totalTimeString);
                     }
                 });
                 try {
                     Thread.sleep(Duration.of(50, ChronoUnit.MILLIS));
                 } catch (InterruptedException e) {
+                    Thread.currentThread().interrupt();
                     return;
                 }
-            } while (musicDetail.equals(nowPlayingInfo.getCurrentlyPlayingMusicDetail())
-                    && nowPlayingInfo.getProgressRate() < 1);
+            }
         });
     }
 
@@ -567,6 +582,9 @@ public class MainFragment extends Fragment {
     @Override
     public void onDestroyView() {
         super.onDestroyView();
-        instance = null;
+        progressUpdateGeneration.incrementAndGet();
+        if (instance == this) {
+            instance = null;
+        }
     }
 }
