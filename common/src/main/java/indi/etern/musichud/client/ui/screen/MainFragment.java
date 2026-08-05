@@ -30,6 +30,7 @@ import indi.etern.musichud.client.ui.pages.HomeView;
 import indi.etern.musichud.client.ui.pages.account.AccountBaseView;
 import indi.etern.musichud.client.ui.pages.search.SearchView;
 import indi.etern.musichud.client.ui.utils.ui.ButtonInsetBackgroundFactory;
+import indi.etern.musichud.client.ui.utils.image.PlatformIconUtils;
 import indi.etern.musichud.client.ui.utils.PlayerInfoUtil;
 import indi.etern.musichud.interfaces.ClientConfig;
 import indi.etern.musichud.interfaces.IClientLoginService;
@@ -68,6 +69,7 @@ public class MainFragment extends Fragment {
     private final NowPlayingInfo playingInfo = NowPlayingInfo.getInstance();
     private UrlImageView albumImage;
     private TextView titleText;
+    private ImageView platformIcon;
     private FlexWrapLayout artists;
     private LinearLayout albumContainer;
     private TextView pusherText;
@@ -113,6 +115,8 @@ public class MainFragment extends Fragment {
                 instance.albumImage.loadUrl(MusicHud.ICON_BASE64);
                 instance.titleText.setText(I18n.get(MusicHud.MOD_ID + ".text.idle"));
                 instance.titleText.setTextColor(Theme.SECONDARY_TEXT_COLOR);
+                instance.platformIcon.setImageDrawable(null);
+                instance.platformIcon.setVisibility(View.INVISIBLE);
                 instance.artists.removeAllViews();
                 instance.albumContainer.removeAllViews();
                 instance.pusherHeadView.setVisibility(View.GONE);
@@ -130,6 +134,13 @@ public class MainFragment extends Fragment {
                 instance.titleText.setTextColor(Theme.NORMAL_TEXT_COLOR);
                 instance.albumImage.loadUrl(musicDetail.getAlbum().getThumbnailPicUrl(240));
                 instance.titleText.setText(musicDetail.getName());
+                var platform = PlatformIconUtils.platform(musicDetail);
+                var platformImage = platform == null ? null : PlatformIconUtils.image(platform);
+                instance.platformIcon.setImageDrawable(platformImage == null ? null
+                        : new indi.etern.musichud.client.ui.drawable.ScaledImageDrawable(
+                                instance.platformIcon.getContext().getResources(), platformImage,
+                                instance.platformIcon.dp(16), instance.platformIcon.dp(20)));
+                instance.platformIcon.setVisibility(platformImage == null ? View.INVISIBLE : View.VISIBLE);
                 PlayerInfo pusherPlayerInfo = NowPlayingInfo.getInstance().getPusherPlayerInfo();
                 String name = pusherPlayerInfo != null ? pusherPlayerInfo.getProfile().name() : null;
                 if (name == null || name.isEmpty()) {
@@ -310,7 +321,15 @@ public class MainFragment extends Fragment {
                 titleText.setTextSize(Theme.TEXT_SIZE_LARGE);
                 titleText.setTextColor(Theme.NORMAL_TEXT_COLOR);
                 instance.titleText.setText(I18n.get(MusicHud.MOD_ID + ".text.idle"));
-                musicInfo.addView(titleText);
+                LinearLayout titleRow = new LinearLayout(context);
+                titleRow.setOrientation(LinearLayout.HORIZONTAL);
+                titleRow.setGravity(Gravity.CENTER_VERTICAL);
+                platformIcon = new ImageView(context);
+                platformIcon.setScaleType(ImageView.ScaleType.CENTER_INSIDE);
+                platformIcon.setVisibility(View.INVISIBLE);
+                titleRow.addView(platformIcon, new LinearLayout.LayoutParams(titleRow.dp(24), titleRow.dp(24)));
+                titleRow.addView(titleText, new LinearLayout.LayoutParams(0, WRAP_CONTENT, 1));
+                musicInfo.addView(titleRow);
 
                 artists = new FlexWrapLayout(context);
                 musicInfo.addView(artists);

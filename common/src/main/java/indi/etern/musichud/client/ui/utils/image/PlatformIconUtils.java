@@ -4,6 +4,7 @@ import icyllis.modernui.graphics.Bitmap;
 import icyllis.modernui.graphics.BitmapFactory;
 import icyllis.modernui.graphics.Image;
 import indi.etern.musichud.MusicHud;
+import indi.etern.musichud.beans.music.MusicDetail;
 import indi.etern.musichud.server.api.tuneweave.TuneWeavePlatform;
 import org.apache.batik.transcoder.TranscoderInput;
 import org.apache.batik.transcoder.TranscoderOutput;
@@ -41,5 +42,25 @@ public final class PlatformIconUtils {
             MusicHud.getLogger(PlatformIconUtils.class).warn("Failed to load {} platform icon", platform.apiName(), error);
             return null;
         }
+    }
+
+    public static TuneWeavePlatform platform(MusicDetail detail) {
+        if (detail == null || detail == MusicDetail.NONE) return null;
+        TuneWeavePlatform fromReference = fromReference(detail.getSourceRef());
+        if (fromReference != null) return fromReference;
+        return "video".equals(detail.getSourceKind()) ? TuneWeavePlatform.BILIBILI : null;
+    }
+
+    private static TuneWeavePlatform fromReference(String reference) {
+        if (reference == null) return null;
+        int separator = reference.indexOf(':');
+        if (separator <= 0) return null;
+        String prefix = reference.substring(0, separator).trim().toLowerCase(java.util.Locale.ROOT);
+        return switch (prefix) {
+            case "netease", "163" -> TuneWeavePlatform.NETEASE;
+            case "qq", "tencent" -> TuneWeavePlatform.QQ;
+            case "bilibili", "bili" -> TuneWeavePlatform.BILIBILI;
+            default -> null;
+        };
     }
 }

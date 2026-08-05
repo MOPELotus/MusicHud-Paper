@@ -15,6 +15,7 @@ import indi.etern.musichud.client.ui.utils.ui.ColorExtractor;
 import indi.etern.musichud.client.ui.utils.PlayerInfoUtil;
 import indi.etern.musichud.client.ui.utils.image.ImageTextureData;
 import indi.etern.musichud.client.ui.utils.image.ImageUtils;
+import indi.etern.musichud.client.ui.utils.image.PlatformIconUtils;
 import indi.etern.musichud.interfaces.ClientConfig;
 import lombok.Getter;
 import lombok.Setter;
@@ -43,6 +44,7 @@ public class HudRendererManager {
     private final PlayingStatusRenderer PLAYING_STATUS_RENDERER = PlayingStatusRenderer.getInstance();
     private final ProgressRenderer PROGRESS_RENDERER = ProgressRenderer.getInstance();
     private final TextRenderer TITLE_RENDERER = new TextRenderer();
+    private final PlatformIconRenderer PLATFORM_ICON_RENDERER = new PlatformIconRenderer();
     private final TextRenderer ARTISTS_AND_ALBUM_RENDERER = new TextRenderer();
     private final TextRenderer PLAY_TIME_RENDERER = new TextRenderer();
     private final ScrollingLyricLineRenderer LYRICS_LINE_RENDERER = new ScrollingLyricLineRenderer();
@@ -214,6 +216,11 @@ public class HudRendererManager {
 
             Layout titleLayout = Layout.ofTextLayout("Title", mainContentX, titleY, maxTitleWidth, titleSize);
             titleLayout.setParent(baseLayout);
+            Layout platformIconLayout = new Layout("PlatformIcon", mainContentX, titleY, titleSize, titleSize, 0f);
+            platformIconLayout.setParent(baseLayout);
+            PLATFORM_ICON_RENDERER.configure(platformIconLayout);
+            titleLayout.setX(mainContentX + titleSize + Math.max(4, contentInterval));
+            titleLayout.setWidth(Math.max(0, maxTitleWidth - titleSize - Math.max(4, contentInterval)));
             TITLE_RENDERER.configure(titleLayout, Theme.EMPHASIZE_TEXT_COLOR, TextRenderer.Position.LEFT);
 
             float lyricHeight = contentHeight - titleSize - progressHeight - infoTextSize - contentInterval * 2;
@@ -303,6 +310,7 @@ public class HudRendererManager {
                 reset();
             } else {
                 TITLE_RENDERER.setText(musicDetail.getName());
+                PLATFORM_ICON_RENDERER.setPlatform(PlatformIconUtils.platform(musicDetail));
                 String artists = musicDetail.getArtists().stream()
                         .map(Artist::getName)
                         .reduce((a, b) -> a + " / " + b)
@@ -360,6 +368,7 @@ public class HudRendererManager {
 
     public void reset() {
         TITLE_RENDERER.setText(I18n.get(MusicHud.MOD_ID + ".text.idle"));
+        PLATFORM_ICON_RENDERER.setPlatform(null);
         ARTISTS_AND_ALBUM_RENDERER.setText("");
         LYRICS_LINE_RENDERER.clear();
         PLAY_TIME_RENDERER.setText("");
@@ -415,12 +424,12 @@ public class HudRendererManager {
             float progressWidth = PROGRESS_RENDERER.getProgressData().getLayout().getWidth();
             Layout titleLayout = TITLE_RENDERER.getLayout();
             float maxTitleWidth = progressWidth - PLAYER_HEAD_RENDERER.getLayout().getWidth() - Math.max(4, contentInterval);
-            if (PLAYING_STATUS_RENDERER.isVisible()) {
-                titleLayout.setWidth(maxTitleWidth - Math.max(4, contentInterval) - PLAYING_STATUS_RENDERER.getLayout().getWidth());
-            } else {
-                titleLayout.setWidth(maxTitleWidth);
-            }
+            float titleWidth = PLAYING_STATUS_RENDERER.isVisible()
+                    ? maxTitleWidth - Math.max(4, contentInterval) - PLAYING_STATUS_RENDERER.getLayout().getWidth()
+                    : maxTitleWidth;
+            titleLayout.setWidth(Math.max(0, titleWidth - titleLayout.getHeight() - Math.max(4, contentInterval)));
 
+            PLATFORM_ICON_RENDERER.render(hudRenderContext);
             TITLE_RENDERER.render(hudRenderContext);
             LYRICS_LINE_RENDERER.render(hudRenderContext);
 
