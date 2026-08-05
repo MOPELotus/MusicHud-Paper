@@ -45,7 +45,7 @@ public class ImageUtils {
 
     private static final int DEFAULT_MAX_CONCURRENT_DOWNLOADS = 40;
     @Getter(AccessLevel.PACKAGE)
-    private static final Cache<String, ImageTextureData> cachedTexturesData = CacheBuilder.newBuilder()
+    private static final Cache<TextureCacheKey, ImageTextureData> cachedTexturesData = CacheBuilder.newBuilder()
             .expireAfterAccess(Duration.ofMinutes(20))
             .maximumSize(64)
             .build();
@@ -123,7 +123,16 @@ public class ImageUtils {
      * 异步下载图片
      */
     public static CompletableFuture<ImageTextureData> downloadAsync(String url) {
-        ImageTextureData cached = cachedTexturesData.getIfPresent(url);
+        return downloadTextureAsync(url, false);
+    }
+
+    public static CompletableFuture<ImageTextureData> downloadSquareAsync(String url) {
+        return downloadTextureAsync(url, true);
+    }
+
+    private static CompletableFuture<ImageTextureData> downloadTextureAsync(String url, boolean squareCrop) {
+        TextureCacheKey cacheKey = new TextureCacheKey(url, squareCrop);
+        ImageTextureData cached = cachedTexturesData.getIfPresent(cacheKey);
         if (cached != null) {
             LOGGER.debug("Cache hit for URL: {}", url);
             return CompletableFuture.completedFuture(cached);
@@ -133,8 +142,10 @@ public class ImageUtils {
             opts.inPreferredFormat = Bitmap.Format.RGBA_8888;
 
             try (Bitmap source = BitmapFactory.decodeStream(inputStream, opts)) {
-                ImageTextureData imageTextureData = getImageTextureData(url, source);
-                cachedTexturesData.put(url, imageTextureData);
+                ImageTextureData imageTextureData = squareCrop
+                        ? getSquareImageTextureData(url, source)
+                        : getImageTextureData(url, source);
+                cachedTexturesData.put(cacheKey, imageTextureData);
                 return imageTextureData;
             } catch (IOException e) {
                 throw new RuntimeException(e);
@@ -327,6 +338,18 @@ public class ImageUtils {
         return new ImageTextureData(data, texture.get());
     }
 
+    private static ImageTextureData getSquareImageTextureData(String data, Bitmap source) {
+        if (source.getWidth() == source.getHeight()) {
+            return getImageTextureData(data, source);
+        }
+        int side = Math.min(source.getWidth(), source.getHeight());
+        int left = (source.getWidth() - side) / 2;
+        int top = (source.getHeight() - side) / 2;
+        try (Bitmap cropped = source.subImage(left, top, side, side)) {
+            return getImageTextureData(data, cropped);
+        }
+    }
+
     public static @NotNull ImageSpan getIconSpan(Image image) {
         //noinspection UnstableApiUsage
         Context context = UIManager.getInstance().getDecorView().getContext();
@@ -370,5 +393,8 @@ public class ImageUtils {
     }
 
     record PendingKey(String url, Function<InputStream, ?> consumer) {
+    }
+
+    private record TextureCacheKey(String url, boolean squareCrop) {
     }
 }
