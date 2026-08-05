@@ -1204,9 +1204,16 @@ public final class TuneWeaveClientService {
     }
 
     public UniPlaylistInfo importUniPlaylistSources(String name, List<UniImportSource> sources) {
+        return importUniPlaylistSources(name, null, sources);
+    }
+
+    public UniPlaylistInfo importUniPlaylistSources(String name, String description,
+                                                    List<UniImportSource> sources) {
         MaterializedImport materializedImport = materializeImportSources(sources);
         String playlistName = name == null || name.isBlank() ? materializedImport.name() : name;
-        UniPlaylistInfo playlist = createUniPlaylist(playlistName, materializedImport.description());
+        String playlistDescription = description == null
+                ? materializedImport.description() : description;
+        UniPlaylistInfo playlist = createUniPlaylist(playlistName, playlistDescription);
         try {
             JsonObject document = localPlaylists.append(playlist.reference(), materializedImport.items());
             return localPlaylistInfo(document);

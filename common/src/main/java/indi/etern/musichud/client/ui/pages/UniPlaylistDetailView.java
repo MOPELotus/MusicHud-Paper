@@ -63,8 +63,10 @@ public final class UniPlaylistDetailView extends LinearLayout {
         toolbar.addView(action(context, ".button.edit", "settings.png", 0, v -> editMetadata()), actionParams());
         toolbar.addView(action(context, ".button.refresh", "rotate_cw.png", 0, v -> refresh()), actionParams());
         toolbar.addView(action(context, ".button.playAll", "skip_forward_filled.png", 0, v -> playAll()), actionParams());
-        toolbar.addView(action(context, ".button.import", "link.png", 0, v -> showImportDialog()), actionParams());
-        toolbar.addView(action(context, ".button.add", "list_plus.png", 0, v -> showAddDialog()), actionParams());
+        toolbar.addView(action(context, ".text.uniPlaylist.addPlatformPlaylists", "list_plus.png", 0,
+                v -> showImportDialog()), actionParams());
+        toolbar.addView(action(context, ".text.uniPlaylist.add", "audio_lines.png", 0,
+                v -> showAddDialog()), actionParams());
         addView(toolbar, new LayoutParams(MATCH_PARENT, WRAP_CONTENT));
 
         descriptionView = new TextView(context);

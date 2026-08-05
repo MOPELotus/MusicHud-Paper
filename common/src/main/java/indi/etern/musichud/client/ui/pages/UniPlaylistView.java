@@ -69,7 +69,7 @@ public final class UniPlaylistView extends LinearLayout {
             actions.addView(actionButton(context, "create", v -> UniPlaylistMetadataDialog.show(
                 getContext(), ".text.uniPlaylist.create", "", "", this::create)),
                 actionParams());
-            actions.addView(actionButton(context, "import", v -> showImportDialog()),
+            actions.addView(actionButton(context, "import", v -> showMultiImportDialog()),
                 actionParams());
         actions.addView(actionButton(context, "importDocument", v -> importDocument()), actionParams());
         LayoutParams actionsParams = new LayoutParams(MATCH_PARENT, WRAP_CONTENT);
@@ -204,6 +204,11 @@ public final class UniPlaylistView extends LinearLayout {
             try { tuneWeave.createUniPlaylist(name, description); refreshOnUi(); }
             catch (RuntimeException error) { MuiModApi.postToUiThread(() -> showProgress(error.getMessage())); }
         });
+    }
+
+    private void showMultiImportDialog() {
+        UniPlaylistImportDialog.showCreate(getContext(), this::refresh,
+                error -> showProgress(error == null ? "" : error));
     }
 
     private void showImportDialog() {
