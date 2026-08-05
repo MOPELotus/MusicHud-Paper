@@ -156,8 +156,20 @@ dependencies {
 
     implementation "com.github.hypfvieh:dbus-java-transport-native-unixsocket:$rootProject.dbus_version"
     shadowBundle "com.github.hypfvieh:dbus-java-transport-native-unixsocket:$rootProject.dbus_version"
-    implementation "org.apache.xmlgraphics:batik-transcoder:1.17"
-    shadowBundle "org.apache.xmlgraphics:batik-transcoder:1.17"
+    implementation("org.apache.xmlgraphics:batik-transcoder:1.17") {
+        // Java 25 provides the XML APIs from java.xml. Bundling xml-apis
+        // creates duplicate org.w3c.dom/javax.xml classes in the loader.
+        exclude group: "xml-apis", module: "xml-apis"
+    }
+    shadowBundle("org.apache.xmlgraphics:batik-transcoder:1.17") {
+        exclude group: "xml-apis", module: "xml-apis"
+    }
+    implementation("org.apache.xmlgraphics:batik-codec:1.17") {
+        exclude group: "xml-apis", module: "xml-apis"
+    }
+    shadowBundle("org.apache.xmlgraphics:batik-codec:1.17") {
+        exclude group: "xml-apis", module: "xml-apis"
+    }
 }
 
 java {
