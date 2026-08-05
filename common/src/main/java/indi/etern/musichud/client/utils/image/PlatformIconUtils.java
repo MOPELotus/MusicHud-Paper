@@ -17,6 +17,7 @@ import java.util.Map;
 
 /** Loads the small branded SVGs as ModernUI textures once per client session. */
 public final class PlatformIconUtils {
+    private static final float RASTER_SIZE = 256f;
     private static final Map<TuneWeavePlatform, Image> CACHE = new EnumMap<>(TuneWeavePlatform.class);
 
     private PlatformIconUtils() {
@@ -29,8 +30,8 @@ public final class PlatformIconUtils {
         try (InputStream input = MusicHud.class.getResourceAsStream(path)) {
             if (input == null) return null;
             PNGTranscoder transcoder = new PNGTranscoder();
-            transcoder.addTranscodingHint(PNGTranscoder.KEY_WIDTH, 48f);
-            transcoder.addTranscodingHint(PNGTranscoder.KEY_HEIGHT, 48f);
+            transcoder.addTranscodingHint(PNGTranscoder.KEY_WIDTH, RASTER_SIZE);
+            transcoder.addTranscodingHint(PNGTranscoder.KEY_HEIGHT, RASTER_SIZE);
             ByteArrayOutputStream output = new ByteArrayOutputStream();
             transcoder.transcode(new TranscoderInput(input), new TranscoderOutput(output));
             try (Bitmap bitmap = BitmapFactory.decodeByteArray(output.toByteArray(), 0, output.size())) {

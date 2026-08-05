@@ -59,7 +59,7 @@ public final class PlatformSelector extends LinearLayout {
             if (image != null) {
                 button.setImageDrawable(new InsetDrawable(
                         new indi.etern.musichud.client.ui.drawable.ScaledImageDrawable(
-                                context.getResources(), image, dp(18), dp(22)), dp(3)));
+                                context.getResources(), image, dp(20), dp(20)), dp(3)));
             }
             button.setTooltipText(I18n.get(MusicHud.MOD_ID + ".platform." + platform.apiName()));
             button.setBackground(ButtonInsetBackgroundFactory.builder()
@@ -99,7 +99,7 @@ public final class PlatformSelector extends LinearLayout {
         if (image != null) {
             button.setImageDrawable(new InsetDrawable(
                     new indi.etern.musichud.client.ui.drawable.ScaledImageDrawable(
-                            getContext().getResources(), image, dp(18), dp(22)), dp(3)));
+                            getContext().getResources(), image, dp(20), dp(20)), dp(3)));
         }
         button.setTooltipText(label);
         button.setContentDescription(label);

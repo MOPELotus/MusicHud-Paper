@@ -22,6 +22,7 @@ import org.apache.batik.transcoder.image.PNGTranscoder;
 
 /** Draws the current TuneWeave source mark in the HUD title row. */
 public final class PlatformIconRenderer implements HudRenderer {
+    private static final float RASTER_SIZE = 256f;
     private static final Map<TuneWeavePlatform, Identifier> TEXTURES = new EnumMap<>(TuneWeavePlatform.class);
     private static final EnumSet<TuneWeavePlatform> FAILED = EnumSet.noneOf(TuneWeavePlatform.class);
     private Layout layout;
@@ -57,8 +58,8 @@ public final class PlatformIconRenderer implements HudRenderer {
         try (InputStream input = MusicHud.class.getResourceAsStream(path)) {
             if (input == null) return null;
             PNGTranscoder transcoder = new PNGTranscoder();
-            transcoder.addTranscodingHint(PNGTranscoder.KEY_WIDTH, 48f);
-            transcoder.addTranscodingHint(PNGTranscoder.KEY_HEIGHT, 48f);
+            transcoder.addTranscodingHint(PNGTranscoder.KEY_WIDTH, RASTER_SIZE);
+            transcoder.addTranscodingHint(PNGTranscoder.KEY_HEIGHT, RASTER_SIZE);
             ByteArrayOutputStream output = new ByteArrayOutputStream();
             transcoder.transcode(new TranscoderInput(input), new TranscoderOutput(output));
             NativeImage image = NativeImage.read(new ByteArrayInputStream(output.toByteArray()));

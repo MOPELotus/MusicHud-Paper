@@ -198,7 +198,9 @@ public class AccountView extends LinearLayout {
                     refresh(false);
                 });
         platformTabs.addView(platformSelector, new LayoutParams(WRAP_CONTENT, WRAP_CONTENT));
-        addView(platformTabs, new LayoutParams(MATCH_PARENT, WRAP_CONTENT));
+        LayoutParams platformTabsParams = new LayoutParams(MATCH_PARENT, WRAP_CONTENT);
+        platformTabsParams.setMargins(0, dp(16), 0, dp(8));
+        addView(platformTabs, platformTabsParams);
 
         tuneWeave.setDefaultPlatform(selectedPlatform);
         if (showingUniPlaylists) {
