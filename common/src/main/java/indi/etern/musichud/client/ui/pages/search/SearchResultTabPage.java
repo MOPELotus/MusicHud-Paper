@@ -15,7 +15,6 @@ import indi.etern.musichud.beans.api.SearchType;
 import indi.etern.musichud.client.ui.Theme;
 import lombok.Getter;
 import lombok.NonNull;
-import lombok.SneakyThrows;
 import net.minecraft.client.resources.language.I18n;
 import org.jetbrains.annotations.NotNull;
 
@@ -134,7 +133,9 @@ public class SearchResultTabPage extends FrameLayout {
             noMoreResultText.setVisibility(GONE);
 
             sv.setOnScrollChangeListener((v, scrollX, scrollY, oldScrollX, oldScrollY) -> {
-                checkInfiniteScroll(scrollY, sv);
+                if (scrollY > oldScrollY) {
+                    checkInfiniteScroll(scrollY, sv);
+                }
             });
             container.addView(sv);
 
@@ -218,8 +219,11 @@ public class SearchResultTabPage extends FrameLayout {
             }
         }
 
-        @SneakyThrows
         private void checkFuture(TextView noMoreResultText, ProgressBar loadingProgressBar, CompletableFuture<SearchView.CompletingType> completableFuture) {
+            if (completableFuture == null) {
+                loadingProgressBar.setVisibility(GONE);
+                return;
+            }
             if (!completableFuture.isDone()) {
                 MuiModApi.postToUiThread(() -> {
                     if (noMoreResultText.getVisibility() != GONE) {
@@ -238,11 +242,9 @@ public class SearchResultTabPage extends FrameLayout {
                     });
                 });
             } else {
-                SearchView.CompletingType result = completableFuture.get();
-                if (result == SearchView.CompletingType.NO_MORE_RESULT) {
-                    noMoreResultText.setVisibility(VISIBLE);
-                    loadingProgressBar.setVisibility(GONE);
-                }
+                SearchView.CompletingType result = completableFuture.getNow(SearchView.CompletingType.NO_MORE_RESULT);
+                noMoreResultText.setVisibility(result == SearchView.CompletingType.NO_MORE_RESULT ? VISIBLE : GONE);
+                loadingProgressBar.setVisibility(GONE);
             }
         }
 

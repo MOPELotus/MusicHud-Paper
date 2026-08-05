@@ -206,11 +206,11 @@ public class SearchView extends LinearLayout {
         SearchMeta searchMeta = searchMetas.get(searchType);
         if (searchMeta == null) return;
         CompletableFuture<CompletingType> pendingFuture = searchMeta.pendingFuture;
-        searchMeta.pendingFuture = null;
-        searchRefreshListeners.forEach(listener -> listener.accept(searchMeta));
         if (pendingFuture != null) {
             pendingFuture.complete(CompletingType.NO_MORE_RESULT);
         }
+        searchRefreshListeners.forEach(listener -> listener.accept(searchMeta));
+        searchMeta.pendingFuture = null;
     }
 
     private void refreshSearchMeta(int offset, List<?> result, SearchType searchType) {
