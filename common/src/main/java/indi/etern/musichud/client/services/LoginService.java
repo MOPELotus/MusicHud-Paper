@@ -24,6 +24,7 @@ import indi.etern.musichud.network.payloads.pushMessages.c2s.CookieLoginMessage;
 import indi.etern.musichud.network.payloads.pushMessages.c2s.LogoutMessage;
 import indi.etern.musichud.network.payloads.pushMessages.s2c.LoginResultMessage;
 import indi.etern.musichud.server.api.impl.ncm.LoginApiService;
+import indi.etern.musichud.server.api.ApiServerManager;
 import lombok.AccessLevel;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
@@ -361,6 +362,17 @@ public class LoginService implements IClientLoginService {
         @Override
         public void register() {
             IClientEventService eventService = IClientEventService.getInstance();
+            ApiServerManager apiServerManager = ApiServerManager.getInstance();
+            if (apiServerManager != null) {
+                apiServerManager.getApiStatusListeners().add(status -> {
+                    LoginService loginService = LoginService.getInstance();
+                    if (status == ApiServerManager.BinaryApiServerStatus.RUNNING
+                            && loginService.hasPreviousLoginInfo()
+                            && !loginService.isLogined()) {
+                        loginService.loginToServer(null);
+                    }
+                });
+            }
             eventService.registerClientPlayerJoin((player) -> {
                 MusicHud.EXECUTOR.execute(() -> {
                     ServerData currentServer = Minecraft.getInstance().getCurrentServer();

@@ -394,16 +394,10 @@ public class ConfigView extends LinearLayout {
             enableInIntegratedServerOption.setOnChanged(() -> {
                 ILoginApiService loginApiService = ILoginApiService.getInstance(ApiProvider.NCM);
                 if (clientConfig.getEnabledInIntegratedServer()) {
-                    if (apiServerManager != null) {
-                        apiServerManager.restartApiServer();
-                    }
                     loginApiService.reconnectAll();
                 } else {
                     MusicPlayerServerService.getInstance().reset();
                     loginApiService.disconnectToAll();
-                    if (apiServerManager != null) {
-                        apiServerManager.stopApiServer();
-                    }
                 }
             });
 

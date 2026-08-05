@@ -79,9 +79,6 @@ public class ApiServerManager implements ServerRegister {
             return;
         }
         initialized = true;
-        if (MusicHud.getCurrentEnvironment().getSide() == Environment.Side.CLIENT && clientConfig != null && !clientConfig.getEnabledInIntegratedServer()) {
-            return;
-        }
         if (serverConfig.getStartupBinaryApiServerWhenLaunch()) {
             launchApiServerInternal();
         }
@@ -100,8 +97,9 @@ public class ApiServerManager implements ServerRegister {
     public void restartApiServer() {
         triedCount = 0;
         stopApiServer();
-        if (processFuture != null) {
-            processFuture.thenRun(this::launchApiServerInternal);
+        CompletableFuture<Integer> previous = processFuture;
+        if (previous != null && !previous.isDone()) {
+            previous.whenComplete((exitCode, error) -> launchApiServerInternal());
         } else {
             launchApiServerInternal();
         }
@@ -154,8 +152,10 @@ public class ApiServerManager implements ServerRegister {
         String binaryExecutableApiServerPathString = serverConfig.getServerApiBinaryExecutablePath();
         Path binaryExecutableApiServerPath = Paths.get(binaryExecutableApiServerPathString);
         Path windowsExePath = Paths.get(binaryExecutableApiServerPathString + ".exe");
-        boolean executable = Files.isExecutable(binaryExecutableApiServerPath) || Files.isExecutable(windowsExePath);
-        boolean exists = Files.exists(binaryExecutableApiServerPath) || Files.exists(windowsExePath);
+        boolean windows = System.getProperty("os.name", "").toLowerCase(java.util.Locale.ROOT).contains("win");
+        boolean executable = launchable(binaryExecutableApiServerPath, windows)
+                || launchable(windowsExePath, windows);
+        boolean exists = Files.isRegularFile(binaryExecutableApiServerPath) || Files.isRegularFile(windowsExePath);
         if (exists) {
             if (executable) {
                 triedCount++;
@@ -164,7 +164,7 @@ public class ApiServerManager implements ServerRegister {
                     setApiStatus(BinaryApiServerStatus.LAUNCHING);
 
                     Path executablePath;
-                    if (Files.exists(windowsExePath) && Files.isExecutable(windowsExePath)) {
+                    if (launchable(windowsExePath, windows)) {
                         executablePath = windowsExePath;
                     } else {
                         executablePath = binaryExecutableApiServerPath;
@@ -225,6 +225,7 @@ public class ApiServerManager implements ServerRegister {
                             int exitCode = launchedProcess.waitFor();
                             if (writer != null) writer.close();
                             if (process == launchedProcess) process = null;
+                            if (processFuture == future) processFuture = null;
                             setApiStatus(BinaryApiServerStatus.STOPPED);
                             if (continueRestart) {
                                 apiLogger.warn("Api server unexpectedly stopped with code:{}, restarting...", exitCode);
@@ -242,12 +243,23 @@ public class ApiServerManager implements ServerRegister {
                     });
                 } catch (Exception e) {
                     MusicHud.LOGGER.error("Failed to start TuneWeave at path: \"{}\"", binaryExecutableApiServerPathString, e);
+                    setApiStatus(BinaryApiServerStatus.STOPPED);
                     if (processFuture != null) {
                         processFuture.completeExceptionally(e);
                     }
                 }
+            } else {
+                apiLogger.error("TuneWeave binary is not executable: {}", binaryExecutableApiServerPathString);
+                setApiStatus(BinaryApiServerStatus.STOPPED);
             }
+        } else {
+            apiLogger.error("TuneWeave binary was not found: {}", binaryExecutableApiServerPathString);
+            setApiStatus(BinaryApiServerStatus.STOPPED);
         }
+    }
+
+    private static boolean launchable(Path path, boolean windows) {
+        return Files.isRegularFile(path) && (windows || Files.isExecutable(path));
     }
 
     private void waitForTuneWeave(Process launchedProcess) {
