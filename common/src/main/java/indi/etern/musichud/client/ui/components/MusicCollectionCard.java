@@ -178,6 +178,12 @@ public class MusicCollectionCard extends LinearLayout {
         LocalPlayer localPlayer = Minecraft.getInstance().player;
         if (pusherInfo == null || pusherInfo.equals(PusherInfo.EMPTY)
                 || (localPlayer != null && pusherInfo.getPlayerUUID().equals(localPlayer.getUUID()))) {
+            ToggleIdlePlaySourceButton toggleIdleSourceButton = new ToggleIdlePlaySourceButton(context);
+            toggleIdleSourceButton.setBackground(backgroundFactory.newBackgroundDrawable());
+            toggleIdleSourceButton.bindMusicList(
+                    musicService.getIdlePlaySourceState().local().collection(musicCollection));
+            row1.addView(toggleIdleSourceButton, new LayoutParams(row2.dp(22), row2.dp(22), 0));
+
             if (musicCollection instanceof Playlist playlist
                     && tuneWeave.supportsFavoriteIntelligence(playlist)) {
                 ToggleFavoriteIntelligenceButton intelligenceButton =
@@ -185,12 +191,6 @@ public class MusicCollectionCard extends LinearLayout {
                 intelligenceButton.setBackground(backgroundFactory.newBackgroundDrawable());
                 intelligenceButton.bindPlaylist(playlist);
                 row1.addView(intelligenceButton, new LayoutParams(row2.dp(22), row2.dp(22), 0));
-            } else {
-                ToggleIdlePlaySourceButton toggleIdleSourceButton = new ToggleIdlePlaySourceButton(context);
-                toggleIdleSourceButton.setBackground(backgroundFactory.newBackgroundDrawable());
-                toggleIdleSourceButton.bindMusicList(
-                        musicService.getIdlePlaySourceState().local().collection(musicCollection));
-                row1.addView(toggleIdleSourceButton, new LayoutParams(row2.dp(22), row2.dp(22), 0));
             }
         } else {
             LinearLayout pusherRow = new LinearLayout(context);

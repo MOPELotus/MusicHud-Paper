@@ -718,8 +718,8 @@ public final class TuneWeaveClientService {
                     .findFirst()
                     .orElse(Playlist.EMPTY);
             List<MusicDetail> tracks = new ArrayList<>();
-            for (JsonElement item : elements(requestForPlatform(platform, "GET", "/v1/account/favorites/tracks",
-                    Map.of("platform", platform.apiName(), "limit", "100", "offset", "0"), null).data())) {
+            for (JsonElement item : loadAllOffsetPages(platform, "/v1/account/favorites/tracks",
+                    Map.of("platform", platform.apiName()))) {
                 MusicDetail track = toTrack(platform, unwrap(item));
                 if (track != MusicDetail.NONE) tracks.add(track);
             }
@@ -734,19 +734,8 @@ public final class TuneWeaveClientService {
                 platform, "GET", "/v1/playlists/"
                         + TuneWeaveApiClient.encodePathSegment(reference), Map.of(), null).data()));
         List<MusicDetail> tracks = new ArrayList<>();
-        List<JsonElement> playlistItems;
-        try {
-            playlistItems = elements(requestForPlatform(platform, "GET",
-                    "/v1/playlists/" + TuneWeaveApiClient.encodePathSegment(reference) + "/items",
-                    Map.of("limit", "100", "offset", "0"), null).data());
-        } catch (TuneWeaveApiClient.TuneWeaveException error) {
-            // alpha.5 may reject a later Bilibili favorite page as invalid even when its
-            // first page is playable. Keep the account card usable with the first page.
-            if (platform != TuneWeavePlatform.BILIBILI || !error.isRetryable()) throw error;
-            playlistItems = elements(requestForPlatform(platform, "GET",
-                    "/v1/playlists/" + TuneWeaveApiClient.encodePathSegment(reference) + "/items",
-                    Map.of("limit", "20", "offset", "0"), null).data());
-        }
+        List<JsonElement> playlistItems = loadAllOffsetPages(platform,
+                "/v1/playlists/" + TuneWeaveApiClient.encodePathSegment(reference) + "/items", Map.of());
         for (JsonElement item : playlistItems) {
             JsonObject raw = unwrap(item);
             MusicDetail track = "video".equals(string(raw, "kind", "track"))
@@ -773,9 +762,8 @@ public final class TuneWeaveClientService {
         Album album = toAlbum(platform, unwrap(requestForPlatform(platform, "GET", "/v1/albums/"
                 + TuneWeaveApiClient.encodePathSegment(reference), Map.of(), null).data()));
         List<MusicDetail> tracks = new ArrayList<>();
-        for (JsonElement item : elements(requestForPlatform(platform, "GET", "/v1/albums/"
-                + TuneWeaveApiClient.encodePathSegment(reference) + "/tracks",
-                Map.of("limit", "100", "offset", "0"), null).data())) {
+        for (JsonElement item : loadAllOffsetPages(platform, "/v1/albums/"
+                + TuneWeaveApiClient.encodePathSegment(reference) + "/tracks", Map.of())) {
             MusicDetail track = toTrack(platform, unwrap(item));
             if (track != MusicDetail.NONE) tracks.add(track);
         }
@@ -812,6 +800,31 @@ public final class TuneWeaveClientService {
                 Map.of("limit", "50", "offset", Integer.toString(Math.max(0, offset))), null).data())) {
             MusicDetail track = toTrack(platform, unwrap(item));
             if (track != MusicDetail.NONE) result.add(track);
+        }
+        return result;
+    }
+
+    private List<JsonElement> loadAllOffsetPages(TuneWeavePlatform platform, String path,
+                                                  Map<String, String> baseQuery) {
+        List<JsonElement> result = new ArrayList<>();
+        int offset = 0;
+        while (true) {
+            Map<String, String> query = new LinkedHashMap<>(baseQuery);
+            query.put("limit", "100");
+            query.put("offset", Integer.toString(offset));
+            TuneWeaveApiClient.TuneWeaveResponse response = requestForPlatform(
+                    platform, "GET", path, query, null);
+            List<JsonElement> page = elements(response.data());
+            result.addAll(page);
+
+            JsonObject pagination = object(response.meta().get("pagination"));
+            if (!bool(pagination, "has_more", false) || page.isEmpty()) break;
+            int nextOffset = integer(pagination, "next_offset", offset + page.size());
+            if (nextOffset <= offset) {
+                throw new TuneWeaveApiClient.TuneWeaveException(
+                        "TuneWeave returned an invalid pagination offset for " + path, false);
+            }
+            offset = nextOffset;
         }
         return result;
     }
