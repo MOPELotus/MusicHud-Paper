@@ -878,8 +878,7 @@ public final class TuneWeaveClientService {
     public MusicDetail videoPartTrack(VideoInfo video, VideoPartInfo part) {
         TuneWeavePlatform platform = platformFromReference(video.reference());
         List<Artist> creators = video.creators().stream()
-                .map(name -> new Artist(stableId(platform, "video-creator:" + name), name,
-                        "", 0, 0, "", new ArrayList<>(), 0, ""))
+                .map(creator -> videoCreatorArtist(platform, creator))
                 .toList();
         Album album = videoAlbum(platform, video.reference(), video.title(), video.coverUrl(), creators);
         MusicDetail result = MusicDetail.fromTuneWeave(
@@ -1875,20 +1874,8 @@ public final class TuneWeaveClientService {
         if (reference.isBlank()) return MusicDetail.NONE;
         JsonObject snapshot = object.has("snapshot") && object.get("snapshot").isJsonObject()
                 ? object.getAsJsonObject("snapshot") : new JsonObject();
-        List<String> creatorNames = new ArrayList<>();
-        JsonElement creatorData = object.get("creators");
-        if (creatorData != null && creatorData.isJsonArray()) {
-            creatorData.getAsJsonArray().forEach(value -> {
-                if (value.isJsonObject()) creatorNames.add(string(value.getAsJsonObject(), "name", ""));
-            });
-        }
-        if (creatorNames.isEmpty() && snapshot.has("artists") && snapshot.get("artists").isJsonArray()) {
-            snapshot.getAsJsonArray("artists").forEach(value -> creatorNames.add(value.getAsString()));
-        }
-        if (creatorNames.isEmpty()) creatorNames.add(string(object, "uploader", "Bilibili"));
-        List<Artist> creators = creatorNames.stream().filter(value -> value != null && !value.isBlank())
-                .map(name -> new Artist(stableId(platform, "video-creator:" + name), name,
-                        "", 0, 0, "", new ArrayList<>(), 0, ""))
+        List<Artist> creators = videoCreatorInfos(object, snapshot).stream()
+                .map(creator -> videoCreatorArtist(platform, creator))
                 .toList();
         String title = string(object, "title",
                 string(object, "name", string(snapshot, "title", reference)));
@@ -1901,6 +1888,57 @@ public final class TuneWeaveClientService {
         return result;
     }
 
+    private static List<VideoCreatorInfo> videoCreatorInfos(JsonObject object, JsonObject snapshot) {
+        LinkedHashMap<String, VideoCreatorInfo> creators = new LinkedHashMap<>();
+        JsonElement creatorData = object.get("creators");
+        if (creatorData != null && creatorData.isJsonArray()) {
+            creatorData.getAsJsonArray().forEach(value -> {
+                if (value.isJsonObject()) {
+                    JsonObject creator = value.getAsJsonObject();
+                    addVideoCreator(creators, string(creator, "ref", ""),
+                            string(creator, "name", ""), string(creator, "avatar_url", ""));
+                } else if (value.isJsonPrimitive()) {
+                    addVideoCreator(creators, "", value.getAsString(), "");
+                }
+            });
+        }
+        if (creators.isEmpty()) {
+            for (String key : List.of("creator", "owner")) {
+                JsonElement value = object.get(key);
+                if (value != null && value.isJsonObject()) {
+                    JsonObject creator = value.getAsJsonObject();
+                    addVideoCreator(creators, string(creator, "ref", ""),
+                            string(creator, "name", ""), string(creator, "avatar_url", ""));
+                }
+            }
+        }
+        if (creators.isEmpty()) {
+            String uploader = string(object, "uploader", "");
+            if (!uploader.isBlank()) addVideoCreator(creators, "", uploader, "");
+        }
+        if (creators.isEmpty() && snapshot.has("artists") && snapshot.get("artists").isJsonArray()) {
+            snapshot.getAsJsonArray("artists").forEach(value -> {
+                if (value.isJsonPrimitive()) addVideoCreator(creators, "", value.getAsString(), "");
+            });
+        }
+        return List.copyOf(creators.values());
+    }
+
+    private static void addVideoCreator(Map<String, VideoCreatorInfo> creators,
+                                        String reference, String name, String avatarUrl) {
+        if (name == null || name.isBlank()) return;
+        String identity = reference == null || reference.isBlank() ? "name:" + name : reference;
+        creators.putIfAbsent(identity, new VideoCreatorInfo(
+                Objects.requireNonNullElse(reference, ""), name,
+                Objects.requireNonNullElse(avatarUrl, "")));
+    }
+
+    private static Artist videoCreatorArtist(TuneWeavePlatform platform, VideoCreatorInfo creator) {
+        String identity = creator.reference().isBlank() ? creator.name() : creator.reference();
+        return new Artist(stableId(platform, "video-creator:" + identity), creator.name(),
+                creator.avatarUrl(), 0, 0, "", new ArrayList<>(), 0, creator.reference());
+    }
+
     private static Album videoAlbum(TuneWeavePlatform platform, String reference, String title,
                                     String coverUrl, List<Artist> creators) {
         return new Album(stableId(platform, "video-album:" + reference), title,
@@ -1911,13 +1949,7 @@ public final class TuneWeaveClientService {
 
     private VideoInfo toVideoInfo(JsonObject object) {
         String reference = string(object, "ref", "");
-        List<String> creators = new ArrayList<>();
-        JsonElement creatorData = object.get("creators");
-        if (creatorData != null && creatorData.isJsonArray()) {
-            creatorData.getAsJsonArray().forEach(value -> {
-                if (value.isJsonObject()) creators.add(string(value.getAsJsonObject(), "name", ""));
-            });
-        }
+        List<VideoCreatorInfo> creators = videoCreatorInfos(object, new JsonObject());
         JsonObject extensions = object.has("extensions") && object.get("extensions").isJsonObject()
                 ? object.getAsJsonObject("extensions") : new JsonObject();
         return new VideoInfo(reference, string(object, "title", reference), string(object, "description", ""),
@@ -2049,9 +2081,17 @@ public final class TuneWeaveClientService {
 
     public record VideoInfo(String reference, String title, String description, String coverUrl,
                             int durationMillis, String publishedAt, long playCount,
-                            List<String> creators, int partCount) {
+                            List<VideoCreatorInfo> creators, int partCount) {
         public VideoInfo {
             creators = creators == null ? List.of() : List.copyOf(creators);
+        }
+    }
+
+    public record VideoCreatorInfo(String reference, String name, String avatarUrl) {
+        public VideoCreatorInfo {
+            reference = Objects.requireNonNullElse(reference, "");
+            name = Objects.requireNonNullElse(name, "");
+            avatarUrl = Objects.requireNonNullElse(avatarUrl, "");
         }
     }
 

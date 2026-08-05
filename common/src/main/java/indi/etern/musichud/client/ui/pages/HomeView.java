@@ -476,7 +476,9 @@ public class HomeView extends LinearLayout {
                 ? expectedMusic.getArtists().stream().map(artist -> artist.getName())
                 .filter(name -> name != null && !name.isBlank())
                 .reduce((left, right) -> left + " / " + right).orElse("Bilibili")
-                : String.join(" / ", videoInfo.creators());
+                : videoInfo.creators().stream()
+                .map(TuneWeaveClientService.VideoCreatorInfo::name)
+                .reduce((left, right) -> left + " / " + right).orElse("Bilibili");
         String publishedAt = formatPublishedAt(videoInfo.publishedAt());
         videoPreviewMeta.setText(publishedAt.isBlank() ? creators : creators + "  ·  " + publishedAt);
         videoPreviewDescription.setText(videoInfo.description());

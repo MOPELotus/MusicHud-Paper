@@ -104,7 +104,10 @@ public final class VideoDetailView extends LinearLayout {
                         List<TuneWeaveClientService.VideoPartInfo> loadedParts) {
         video = loadedVideo;
         parts = loadedParts;
-        status.setText((loadedVideo.creators().isEmpty() ? "" : String.join(" / ", loadedVideo.creators()) + "\n")
+        String creators = loadedVideo.creators().stream()
+                .map(TuneWeaveClientService.VideoCreatorInfo::name)
+                .reduce((left, right) -> left + " / " + right).orElse("");
+        status.setText((creators.isEmpty() ? "" : creators + "\n")
                 + (loadedVideo.description().isBlank() ? "" : loadedVideo.description() + "\n")
                 + I18n.get(MusicHud.MOD_ID + ".text.video.parts").replace("{}", Integer.toString(loadedParts.size())));
         partsLayout.removeAllViews();
