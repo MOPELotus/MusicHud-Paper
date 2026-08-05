@@ -20,6 +20,7 @@ import indi.etern.musichud.client.ui.components.FlexWrapLayout;
 import indi.etern.musichud.client.ui.components.MusicCollectionCard;
 import indi.etern.musichud.client.ui.components.MusicListItem;
 import indi.etern.musichud.client.ui.components.StaggeredLyricScrollView;
+import indi.etern.musichud.client.ui.components.UrlImageView;
 import indi.etern.musichud.client.ui.drawable.ScaledImageDrawable;
 import indi.etern.musichud.client.ui.dto.LyricLine;
 import indi.etern.musichud.client.ui.utils.image.ImageUtils;
@@ -51,6 +52,10 @@ public class HomeView extends LinearLayout {
     private final Map<MusicCollection, MusicCollectionCard> idlePlaySourceCardMap = new ConcurrentHashMap<>();
     @Getter
     private StaggeredLyricScrollView staggeredLyricScrollView;
+    private LinearLayout videoPreview;
+    private UrlImageView videoPreviewImage;
+    private TextView videoPreviewTitle;
+    private TextView videoPreviewMeta;
     private MusicListItem nextToPlayItem;
     private TextView nextToPlayTitle;
     private TextView queueTitle;
@@ -134,8 +139,46 @@ public class HomeView extends LinearLayout {
             LayoutParams lyricsViewParams = new LayoutParams(0, MATCH_PARENT, 3);
             addView(lyricsView, lyricsViewParams);
 
+            FrameLayout playbackContent = new FrameLayout(context);
+            lyricsView.addView(playbackContent, new LayoutParams(MATCH_PARENT, MATCH_PARENT));
+
             staggeredLyricScrollView = new StaggeredLyricScrollView(context);
-            lyricsView.addView(staggeredLyricScrollView, new LayoutParams(MATCH_PARENT, MATCH_PARENT));
+            playbackContent.addView(staggeredLyricScrollView,
+                    new FrameLayout.LayoutParams(MATCH_PARENT, MATCH_PARENT));
+
+            videoPreview = new LinearLayout(context);
+            videoPreview.setOrientation(VERTICAL);
+            videoPreview.setGravity(Gravity.CENTER);
+            videoPreview.setVisibility(GONE);
+
+            videoPreviewImage = new UrlImageView(context);
+            videoPreviewImage.setSquareCrop(false);
+            videoPreviewImage.setAspectRatio(16f / 9f);
+            videoPreviewImage.setCornerRadius(dp(8));
+            LinearLayout.LayoutParams previewImageParams = new LinearLayout.LayoutParams(MATCH_PARENT, WRAP_CONTENT);
+            previewImageParams.setMargins(dp(32), dp(32), dp(32), dp(16));
+            videoPreview.addView(videoPreviewImage, previewImageParams);
+
+            videoPreviewTitle = new TextView(context);
+            videoPreviewTitle.setTextColor(Theme.EMPHASIZE_TEXT_COLOR);
+            videoPreviewTitle.setTextSize(Theme.TEXT_SIZE_LARGE);
+            videoPreviewTitle.setGravity(Gravity.CENTER);
+            videoPreviewTitle.setMaxLines(2);
+            LinearLayout.LayoutParams previewTitleParams = new LinearLayout.LayoutParams(MATCH_PARENT, WRAP_CONTENT);
+            previewTitleParams.setMargins(dp(32), 0, dp(32), dp(4));
+            videoPreview.addView(videoPreviewTitle, previewTitleParams);
+
+            videoPreviewMeta = new TextView(context);
+            videoPreviewMeta.setTextColor(Theme.SECONDARY_TEXT_COLOR);
+            videoPreviewMeta.setTextSize(Theme.TEXT_SIZE_NORMAL);
+            videoPreviewMeta.setGravity(Gravity.CENTER);
+            LinearLayout.LayoutParams previewMetaParams = new LinearLayout.LayoutParams(MATCH_PARENT, WRAP_CONTENT);
+            previewMetaParams.setMargins(dp(32), 0, dp(32), dp(32));
+            videoPreview.addView(videoPreviewMeta, previewMetaParams);
+
+            playbackContent.addView(videoPreview,
+                    new FrameLayout.LayoutParams(MATCH_PARENT, MATCH_PARENT));
+            updatePlaybackContent(NowPlayingInfo.getInstance().getCurrentlyPlayingMusicDetail());
         }
         {
             LinearLayout queueView = new LinearLayout(context);
@@ -376,10 +419,31 @@ public class HomeView extends LinearLayout {
     public void switchMusic(MusicDetail musicDetail, MusicDetail next, Queue<LyricLine> lyricLines) {
         MuiModApi.postToUiThread(() -> {
             if (staggeredLyricScrollView != null) {
+                updatePlaybackContent(musicDetail);
                 staggeredLyricScrollView.switchLyrics(musicDetail, lyricLines);
                 checkNextToPlay(next);
             }
         });
+    }
+
+    private void updatePlaybackContent(MusicDetail musicDetail) {
+        if (staggeredLyricScrollView == null || videoPreview == null) return;
+        boolean video = musicDetail != null && musicDetail != MusicDetail.NONE
+                && "video".equals(musicDetail.getSourceKind());
+        staggeredLyricScrollView.setVisibility(video ? GONE : VISIBLE);
+        videoPreview.setVisibility(video ? VISIBLE : GONE);
+        if (!video) return;
+
+        videoPreviewImage.loadUrl(musicDetail.getAlbum().getPicUrl());
+        videoPreviewTitle.setText(musicDetail.getName());
+        String artists = musicDetail.getArtists().stream()
+                .map(artist -> artist.getName())
+                .filter(name -> name != null && !name.isBlank())
+                .reduce((left, right) -> left + " / " + right)
+                .orElse("Bilibili");
+        int totalSeconds = Math.max(0, musicDetail.getDurationMillis() / 1000);
+        videoPreviewMeta.setText(artists + "  ·  "
+                + String.format(java.util.Locale.ROOT, "%d:%02d", totalSeconds / 60, totalSeconds % 60));
     }
 
     @Override

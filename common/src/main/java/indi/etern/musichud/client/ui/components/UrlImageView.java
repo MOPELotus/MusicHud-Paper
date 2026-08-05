@@ -52,6 +52,7 @@ public class UrlImageView extends FrameLayout {
     };
     private float aspectRatio = 1.0f; // 默认长宽比
     private boolean squareCrop;
+    private boolean autoSquareCrop = true;
 
     public UrlImageView(Context context) {
         super(context);
@@ -221,7 +222,7 @@ public class UrlImageView extends FrameLayout {
      */
     public void loadUrl(String urlString) {
         cancelLoad();
-        setSquareCrop(isBilibiliImage(urlString));
+        if (autoSquareCrop) applySquareCrop(isBilibiliImage(urlString));
         currentURLString = urlString;
         pendingUrl = urlString;
         hasLoadedImage = false;
@@ -410,7 +411,12 @@ public class UrlImageView extends FrameLayout {
         }
     }
 
-    private void setSquareCrop(boolean squareCrop) {
+    public void setSquareCrop(boolean squareCrop) {
+        autoSquareCrop = false;
+        applySquareCrop(squareCrop);
+    }
+
+    private void applySquareCrop(boolean squareCrop) {
         this.squareCrop = squareCrop;
         ImageView.ScaleType scaleType = squareCrop
                 ? ImageView.ScaleType.CENTER_CROP : ImageView.ScaleType.FIT_CENTER;
