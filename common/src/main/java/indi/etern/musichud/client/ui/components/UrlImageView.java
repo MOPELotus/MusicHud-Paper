@@ -51,6 +51,7 @@ public class UrlImageView extends FrameLayout {
         return true;
     };
     private float aspectRatio = 1.0f; // 默认长宽比
+    private boolean squareCrop;
 
     public UrlImageView(Context context) {
         super(context);
@@ -220,6 +221,7 @@ public class UrlImageView extends FrameLayout {
      */
     public void loadUrl(String urlString) {
         cancelLoad();
+        setSquareCrop(isBilibiliImage(urlString));
         currentURLString = urlString;
         pendingUrl = urlString;
         hasLoadedImage = false;
@@ -310,7 +312,7 @@ public class UrlImageView extends FrameLayout {
             return;
         }
         float ratio = (float) image.getWidth() / image.getHeight();
-        setAspectRatio(ratio);
+        setAspectRatio(squareCrop ? 1.0f : ratio);
 
         RoundedImageDrawable drawable = new RoundedImageDrawable(
                 getContext().getResources(),
@@ -406,6 +408,21 @@ public class UrlImageView extends FrameLayout {
             roundedImageDrawable.setCircular(true);
             nextImageView.invalidate();
         }
+    }
+
+    private void setSquareCrop(boolean squareCrop) {
+        this.squareCrop = squareCrop;
+        ImageView.ScaleType scaleType = squareCrop
+                ? ImageView.ScaleType.CENTER_CROP : ImageView.ScaleType.FIT_CENTER;
+        imageView.setScaleType(scaleType);
+        nextImageView.setScaleType(scaleType);
+        if (squareCrop) setAspectRatio(1.0f);
+    }
+
+    private static boolean isBilibiliImage(String value) {
+        if (value == null) return false;
+        String normalized = value.toLowerCase(java.util.Locale.ROOT);
+        return normalized.contains(".hdslb.com/") || normalized.contains(".biliimg.com/");
     }
 
     public void cancelLoad() {

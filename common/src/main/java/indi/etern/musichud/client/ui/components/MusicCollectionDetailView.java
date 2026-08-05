@@ -96,7 +96,7 @@ public class MusicCollectionDetailView extends LinearLayout {
         LinearLayout briefInfo = new LinearLayout(context);
         briefInfo.setGravity(Gravity.CENTER_VERTICAL);
         briefInfo.setOrientation(VERTICAL);
-        LayoutParams params1 = new LayoutParams(LayoutParams.MATCH_PARENT, LayoutParams.MATCH_PARENT);
+        LayoutParams params1 = new LayoutParams(0, LayoutParams.MATCH_PARENT, 1);
         params1.setMargins(dp(16), 0, 0, 0);
         topBar.addView(briefInfo, params1);
 

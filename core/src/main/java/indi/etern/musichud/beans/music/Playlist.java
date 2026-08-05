@@ -150,7 +150,7 @@ public class Playlist implements MusicCollection {
         if (coverImgUrl.startsWith("data:image")) {
             return coverImgUrl;
         } else {
-            return coverImgUrl + "?param=" + size + "y" + size;
+            return MusicCollection.thumbnailUrl(coverImgUrl, size);
         }
     }
 

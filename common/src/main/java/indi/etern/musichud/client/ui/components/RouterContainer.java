@@ -210,6 +210,7 @@ public class RouterContainer extends FrameLayout {
     public RouterContainer(Context context) {
         super(context);
         RouterContainer thisInstance = this;
+        instance = thisInstance;
         addOnAttachStateChangeListener(new OnAttachStateChangeListener() {
             @Override
             public void onViewAttachedToWindow(View v) {
@@ -218,7 +219,9 @@ public class RouterContainer extends FrameLayout {
 
             @Override
             public void onViewDetachedFromWindow(View v) {
-                instance = null;
+                if (instance == thisInstance) {
+                    instance = null;
+                }
             }
         });
     }

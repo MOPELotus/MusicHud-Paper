@@ -75,7 +75,7 @@ public class Album implements MusicCollection {
     public String getThumbnailPicUrl(int size) {
         String source = getPicUrl();
         if (source.isBlank()) return MusicHud.ICON_BASE64;
-        return source + (source.contains("?") ? "&" : "?") + "param=" + size + "y" + size;
+        return MusicCollection.thumbnailUrl(source, size);
     }
 
     public String getName() {

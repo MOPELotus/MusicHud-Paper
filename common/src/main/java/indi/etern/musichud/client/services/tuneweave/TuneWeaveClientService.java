@@ -199,11 +199,14 @@ public final class TuneWeaveClientService {
             }
             (bool(raw, "subscribed", false) ? subscribed : created).add(playlist);
         }
-        String likeRef = "account:favorite_tracks:" + platform.apiName();
-        Playlist liked = Playlist.fromTuneWeave(
-                stableId(platform, "playlist:" + likeRef), likeRef, "Liked Songs", MusicHud.ICON_BASE64,
-                0, 0, Profile.ANONYMOUS);
-        playlistsById.put(liked.getId(), liked);
+        Playlist liked = Playlist.EMPTY;
+        if (platform != TuneWeavePlatform.NETEASE) {
+            String likeRef = "account:favorite_tracks:" + platform.apiName();
+            liked = Playlist.fromTuneWeave(
+                    stableId(platform, "playlist:" + likeRef), likeRef, "Liked Songs", MusicHud.ICON_BASE64,
+                    0, 0, Profile.ANONYMOUS);
+            playlistsById.put(liked.getId(), liked);
+        }
         return new UserCategoryPlaylists(liked, created, subscribed);
     }
 
@@ -1722,6 +1725,8 @@ public final class TuneWeaveClientService {
     private MusicDetail toVideoTrack(TuneWeavePlatform platform, JsonObject object) {
         String reference = string(object, "ref", string(object, "reference", ""));
         if (reference.isBlank()) return MusicDetail.NONE;
+        JsonObject snapshot = object.has("snapshot") && object.get("snapshot").isJsonObject()
+                ? object.getAsJsonObject("snapshot") : new JsonObject();
         List<String> creatorNames = new ArrayList<>();
         JsonElement creatorData = object.get("creators");
         if (creatorData != null && creatorData.isJsonArray()) {
@@ -1729,15 +1734,20 @@ public final class TuneWeaveClientService {
                 if (value.isJsonObject()) creatorNames.add(string(value.getAsJsonObject(), "name", ""));
             });
         }
+        if (creatorNames.isEmpty() && snapshot.has("artists") && snapshot.get("artists").isJsonArray()) {
+            snapshot.getAsJsonArray("artists").forEach(value -> creatorNames.add(value.getAsString()));
+        }
         if (creatorNames.isEmpty()) creatorNames.add(string(object, "uploader", "Bilibili"));
         List<Artist> creators = creatorNames.stream().filter(value -> value != null && !value.isBlank())
                 .map(name -> new Artist(stableId(platform, "video-creator:" + name), name,
                         "", 0, 0, "", new ArrayList<>(), 0, ""))
                 .toList();
-        String title = string(object, "title", string(object, "name", reference));
-        Album album = videoAlbum(platform, reference, title, string(object, "cover_url", ""), creators);
+        String title = string(object, "title",
+                string(object, "name", string(snapshot, "title", reference)));
+        String coverUrl = string(object, "cover_url", string(snapshot, "cover_url", ""));
+        Album album = videoAlbum(platform, reference, title, coverUrl, creators);
         MusicDetail result = MusicDetail.fromTuneWeave(stableId(platform, "video:" + reference), reference,
-                "video", title, integer(object, "duration_ms", 0), album, creators);
+                "video", title, integer(object, "duration_ms", integer(snapshot, "duration_ms", 0)), album, creators);
         result.setPusherInfo(indi.etern.musichud.beans.music.PusherInfo.EMPTY);
         tracksById.put(result.getId(), result);
         return result;

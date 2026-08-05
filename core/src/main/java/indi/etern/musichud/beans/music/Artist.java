@@ -46,7 +46,7 @@ public class Artist implements IdentifiedBeans {
     }
     public String getAvatarUrl() {return Objects.requireNonNullElse(avatarUrl, "");}
     public String getSourceRef() {return Objects.requireNonNullElse(sourceRef, "");}
-    public String getAvatarThumbnailUrl(int size) {return Objects.requireNonNullElse(avatarUrl, "") + "?param=" + size + "y" + size;}
+    public String getAvatarThumbnailUrl(int size) {return MusicCollection.thumbnailUrl(getAvatarUrl(), size);}
     public String getDescription() {
         return Objects.requireNonNullElse(description, "");
     }
