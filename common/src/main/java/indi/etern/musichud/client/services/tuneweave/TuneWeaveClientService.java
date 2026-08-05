@@ -1240,9 +1240,18 @@ public final class TuneWeaveClientService {
             case RADIO -> "podcast";
             default -> platform == TuneWeavePlatform.BILIBILI ? "video" : "track";
         };
-        JsonElement data = requestForPlatform(platform, "GET", "/v1/search", Map.of(
-                "q", keywords, "type", type, "platform", platform.apiName(),
-                "limit", "50", "offset", Integer.toString(Math.max(0, offset))), null).data();
+        Map<String, String> query = new LinkedHashMap<>();
+        query.put("q", keywords);
+        query.put("type", type);
+        query.put("platform", platform.apiName());
+        query.put("limit", "50");
+        query.put("offset", Integer.toString(Math.max(0, offset)));
+        if (platform == TuneWeavePlatform.BILIBILI && "video".equals(type)) {
+            // Keep the search tab in relevance order; the provider also
+            // accepts newer sorting modes, but they are not the UI default.
+            query.put("order", "relevance");
+        }
+        JsonElement data = requestForPlatform(platform, "GET", "/v1/search", query, null).data();
         List<JsonObject> rawItems = new ArrayList<>();
         for (JsonElement item : elements(data)) {
             JsonObject object = unwrap(item);

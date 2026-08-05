@@ -197,8 +197,14 @@ public class ImageUtils {
             connection = (HttpURLConnection) imageUrl.openConnection();
             connection.setRequestMethod("GET");
             connection.setRequestProperty("User-Agent", "MusicHud/1.0 (+https://github.com/MOPELotus/MusicHud-Paper)");
-            connection.setRequestProperty("Accept", "image/avif,image/webp,image/apng,image/svg+xml,image/*,*/*;q=0.8");
-            if (imageUrl.getHost() != null && imageUrl.getHost().toLowerCase(java.util.Locale.ROOT).contains("gtimg.com")) {
+            boolean qqCdn = imageUrl.getHost() != null
+                    && imageUrl.getHost().toLowerCase(java.util.Locale.ROOT).contains("gtimg.com");
+            // ModernUI's bitmap decoder does not accept the WebP variant
+            // returned by QQ CDN when it is advertised in Accept.
+            connection.setRequestProperty("Accept", qqCdn
+                    ? "image/jpeg,image/png,image/*,*/*;q=0.8"
+                    : "image/avif,image/webp,image/apng,image/svg+xml,image/*,*/*;q=0.8");
+            if (qqCdn) {
                 connection.setRequestProperty("Referer", "https://y.qq.com/");
             }
             connection.setConnectTimeout(10000);

@@ -52,7 +52,7 @@ public class MusicService implements IClientMusicService {
     @Getter(lazy = true)
     private final IIdlePlaySourceState idlePlaySourceState = new IdlePlaySourceState();
     @Getter
-    private final Queue<QueueItem> musicQueue = new ArrayDeque<>();
+    private final Queue<QueueItem> musicQueue = new java.util.concurrent.ConcurrentLinkedQueue<>();
     @Getter
     private final Set<Consumer<Queue<QueueItem>>> musicQueueRefreshListeners = ConcurrentHashMap.newKeySet();
     @Getter

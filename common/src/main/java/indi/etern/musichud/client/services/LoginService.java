@@ -35,8 +35,6 @@ import net.minecraft.client.multiplayer.ServerData;
 import net.minecraft.client.resources.language.I18n;
 import org.apache.logging.log4j.Logger;
 
-import java.time.Period;
-import java.time.ZonedDateTime;
 import java.util.List;
 import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.concurrent.atomic.AtomicInteger;
@@ -49,7 +47,6 @@ public class LoginService implements IClientLoginService {
     private static final ClientConfig clientConfig = ClientConfig.getInstance();
     private static final Logger logger = MusicHud.getLogger(LoginService.class);
     private static final TuneWeaveClientService tuneWeave = TuneWeaveClientService.getInstance();
-    private static final Period refreshInterval = Period.of(0, 0, 1);
     private static volatile LoginService instance = null;
     private final List<Consumer<LoginState>> loginStateListeners = new CopyOnWriteArrayList<>();
     private volatile LoginState loginState = getLoginState();
@@ -118,16 +115,6 @@ public class LoginService implements IClientLoginService {
         return instance;
     }
 
-    private static void loginToServerByCookieWithRefreshCheck() {
-        LoginCookieInfo loginCookieInfo = LoginCookieInfo.clientCurrentCookie();
-        if (loginCookieInfo.generateTime().plus(refreshInterval).isBefore(ZonedDateTime.now())) {
-            logger.info("Refreshing Login Cookie");
-            IClientNetworkService.getInstance().sendToServer(new CookieLoginMessage(loginCookieInfo, true));
-        } else {
-            IClientNetworkService.getInstance().sendToServer(new CookieLoginMessage(loginCookieInfo, false));
-        }
-    }
-
     @Override
     public boolean isLogined() {
         return getLoginState() == LoginState.LOGGED_IN;
@@ -138,10 +125,9 @@ public class LoginService implements IClientLoginService {
         LoginCookieInfo loginCookieInfo = LoginCookieInfo.clientCurrentCookie();
         LoginType type = loginCookieInfo.type();
         Profile current = Profile.getCurrent();
-        boolean realCookie = type != LoginType.UNLOGGED && type != LoginType.ANONYMOUS;
         boolean tuneWeaveCredential = availableTuneWeavePlatform() != null;
         boolean realProfile = current != null && !current.equals(Profile.ANONYMOUS);
-        if ((realCookie || tuneWeaveCredential) && realProfile) {
+        if (tuneWeaveCredential && realProfile) {
             return LoginState.LOGGED_IN;
         }
         if (type == LoginType.ANONYMOUS || Profile.ANONYMOUS.equals(current)) {
@@ -176,10 +162,9 @@ public class LoginService implements IClientLoginService {
 
     @Override
     public boolean hasPreviousLoginInfo() {
-        LoginCookieInfo loginCookieInfo = LoginCookieInfo.clientCurrentCookie();
-        return availableTuneWeavePlatform() != null
-                || loginCookieInfo.type() != LoginType.UNLOGGED
-                && loginCookieInfo.type() != LoginType.ANONYMOUS;
+        // TuneWeave owns platform credentials in client mode. The old server
+        // cookie is intentionally ignored by the new API integration.
+        return availableTuneWeavePlatform() != null;
     }
 
     public boolean hasAnyTuneWeaveLogin() {
@@ -203,16 +188,8 @@ public class LoginService implements IClientLoginService {
         if (type != null) {
             connectionType = type;
         }
-        LoginCookieInfo previous = LoginCookieInfo.clientCurrentCookie();
-        boolean hasLegacyLogin = previous.type() != LoginType.UNLOGGED
-                && previous.type() != LoginType.ANONYMOUS;
-        if (hasLegacyLogin) {
-            logger.info("Previous cookie found");
-            loginToServerByCookieWithRefreshCheck();
-        } else {
-            logger.info("No server-owned login found, joining the Music HUD server anonymously");
-            loginAsAnonymousToServer();
-        }
+        logger.info("Joining the Music HUD server anonymously; TuneWeave credentials stay client-owned");
+        loginAsAnonymousToServer();
         if (availableTuneWeavePlatform() != null) {
             restoreTuneWeaveSession();
         }

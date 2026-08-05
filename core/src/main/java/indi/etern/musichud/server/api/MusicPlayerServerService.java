@@ -45,17 +45,22 @@ public class MusicPlayerServerService {
             .build();
     private final IServerNetworkService serverNetworkService = IServerNetworkService.getInstance();
     private final AtomicInteger debounceToken = new AtomicInteger(0);
-    private final Runnable musicPusher = new Runnable() {
+    private final AtomicInteger pusherGeneration = new AtomicInteger(0);
+    private volatile int runningPusherGeneration = -1;
+
+    private Runnable createMusicPusher(int generation) {
+        return new Runnable() {
 
         @Override
         public void run() {
+            if (!continuable || generation != pusherGeneration.get()) return;
             Thread thread = Thread.currentThread();
             thread.setName("MHWorker-Music-Data-Pusher");
             pusherThread = thread;
             pusherThreadRunning = true;
             String message = "";
             Map<UUID, LoginApiService.PlayerLoginInfo> loginedPlayerInfoMap = loginApiService.getPlayerInfoMap();
-            while (MusicPlayerServerService.this.continuable) {
+            while (MusicPlayerServerService.this.continuable && generation == pusherGeneration.get()) {
                 MusicDetail switchedToPlay = null;
                 try {
                     if (musicQueue.isEmpty()) {
@@ -110,6 +115,7 @@ public class MusicPlayerServerService {
                     //noinspection BusyWait
                     Thread.sleep(switchedToPlay.getDurationMillis() + musicIntervalMillis);
                 } catch (InterruptedException ignored) {//When force switch
+                    if (generation != pusherGeneration.get() || !continuable) break;
                     logger.info("Skip current, switch to nextIdle");
                     if (MusicHud.getCurrentEnvironment().getSide() == Environment.Side.CLIENT
                             && !IClientDistUtil.getInstance().inSinglePlayer()) {
@@ -139,9 +145,13 @@ public class MusicPlayerServerService {
                 }
             }
             logger.info("Music Pusher stopped");
-            pusherThread = null;
-            pusherThreadRunning = false;
-            MusicPlayerServerService.this.stopSendingMusic();
+            if (pusherThread == thread) {
+                pusherThread = null;
+                pusherThreadRunning = false;
+            }
+            if (generation == pusherGeneration.get()) {
+                MusicPlayerServerService.this.stopSendingMusic();
+            }
         }
 
         private Optional<MusicDetail> getRandomMusicFromIdleSources() {
@@ -194,9 +204,10 @@ public class MusicPlayerServerService {
             }
             return Optional.of(randomTrack);
         }
-    };
+        };
+    }
     @Getter
-    ArrayDeque<QueueItem> musicQueue = new ArrayDeque<>();
+    Queue<QueueItem> musicQueue = new java.util.concurrent.ConcurrentLinkedQueue<>();
     boolean continuable;
     @Getter
     private volatile MusicDetail currentMusicDetail = MusicDetail.NONE;
@@ -221,24 +232,31 @@ public class MusicPlayerServerService {
     }
 
     private void updateContinuable(boolean continuable) {
-        this.continuable = continuable;
         if (continuable) {
+            this.continuable = true;
             startMusicPusher();
+        } else {
+            // A client/world disconnect must wake a pusher that is sleeping
+            // for the previous track, otherwise the next world inherits a
+            // live-but-stale thread and queued requests appear to do nothing.
+            stopSendingMusic();
         }
     }
 
     private void startMusicPusher() {
-        if (!pusherThreadRunning) {
-            synchronized (MusicPlayerServerService.class) {
-                if (!pusherThreadRunning) {
-                    pusherThreadRunning = true;
-                    MusicHud.EXECUTOR.execute(musicPusher);
-                }
+        synchronized (MusicPlayerServerService.class) {
+            if (pusherThreadRunning && runningPusherGeneration == pusherGeneration.get()) {
+                return;
             }
+            int generation = pusherGeneration.incrementAndGet();
+            runningPusherGeneration = generation;
+            pusherThreadRunning = true;
+            MusicHud.EXECUTOR.execute(createMusicPusher(generation));
         }
     }
 
     private void stopSendingMusic() {
+        pusherGeneration.incrementAndGet();
         this.continuable = false;
         if (pusherThread != null) {
             pusherThread.interrupt();
