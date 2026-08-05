@@ -415,9 +415,9 @@ public class MusicCollectionDetailView extends LinearLayout {
             ToastUtil.show(Toast.makeText(context, I18n.get(MusicHud.MOD_ID + ".text.pushedMusicToPlaylist") + "\n" + musicDetail.getName() + " - " + artistsName, Toast.LENGTH_SHORT));
         });
         if (editablePlaylist && musicCollection instanceof Playlist) {
-            musicLayout.getButtonsLayout().addView(trackOrderButton(context, "↑", ".button.moveUp",
+            musicLayout.getButtonsLayout().addView(trackOrderButton(context, 90, ".button.moveUp",
                     v -> moveTrack(musicLayout, -1)), new LinearLayout.LayoutParams(dp(32), dp(40)));
-            musicLayout.getButtonsLayout().addView(trackOrderButton(context, "↓", ".button.moveDown",
+            musicLayout.getButtonsLayout().addView(trackOrderButton(context, -90, ".button.moveDown",
                     v -> moveTrack(musicLayout, 1)), new LinearLayout.LayoutParams(dp(32), dp(40)));
             ImageButton remove = new ImageButton(context);
             remove.setScaleType(ImageView.ScaleType.CENTER_INSIDE);
@@ -434,12 +434,18 @@ public class MusicCollectionDetailView extends LinearLayout {
         return musicLayout;
     }
 
-    private Button trackOrderButton(Context context, String symbol, String tooltipKey, OnClickListener listener) {
-        Button button = new Button(context);
-        button.setText(symbol);
-        button.setTextSize(Theme.TEXT_SIZE_LARGE);
-        button.setTextColor(Theme.PRIMARY_COLOR);
-        button.setTooltipText(I18n.get(MusicHud.MOD_ID + tooltipKey));
+    private ImageButton trackOrderButton(Context context, float rotation, String tooltipKey,
+                                         OnClickListener listener) {
+        ImageButton button = new ImageButton(context);
+        String label = I18n.get(MusicHud.MOD_ID + tooltipKey);
+        button.setTooltipText(label);
+        button.setContentDescription(label);
+        button.setScaleType(ImageView.ScaleType.CENTER_INSIDE);
+        Image arrow = ImageUtils.getImageFromResource("/assets/music_hud/textures/gui/icons/arrow_left.png");
+        if (arrow != null) {
+            button.setImageDrawable(new ScaledImageDrawable(context.getResources(), arrow, dp(16), dp(16)));
+        }
+        button.setRotation(rotation);
         button.setBackground(ButtonInsetBackgroundFactory.builder().cornerRadius(dp(4)).inset(dp(2))
                 .build().newBackgroundDrawable());
         button.setOnClickListener(listener);

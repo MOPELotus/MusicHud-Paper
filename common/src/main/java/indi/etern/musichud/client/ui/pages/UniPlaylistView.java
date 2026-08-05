@@ -2,11 +2,14 @@ package indi.etern.musichud.client.ui.pages;
 
 import icyllis.modernui.R;
 import icyllis.modernui.core.Context;
+import icyllis.modernui.graphics.Image;
+import icyllis.modernui.graphics.drawable.InsetDrawable;
 import icyllis.modernui.mc.MuiModApi;
 import icyllis.modernui.view.Gravity;
 import icyllis.modernui.view.View;
-import icyllis.modernui.widget.Button;
 import icyllis.modernui.widget.EditText;
+import icyllis.modernui.widget.ImageButton;
+import icyllis.modernui.widget.ImageView;
 import icyllis.modernui.widget.LinearLayout;
 import icyllis.modernui.widget.ScrollView;
 import icyllis.modernui.widget.ArrayAdapter;
@@ -22,6 +25,8 @@ import indi.etern.musichud.client.ui.Theme;
 import indi.etern.musichud.client.ui.components.Modal;
 import indi.etern.musichud.client.ui.components.PlatformSelector;
 import indi.etern.musichud.client.ui.components.RouterContainer;
+import indi.etern.musichud.client.ui.drawable.ScaledImageDrawable;
+import indi.etern.musichud.client.ui.utils.image.ImageUtils;
 import indi.etern.musichud.client.ui.utils.ui.ButtonInsetBackgroundFactory;
 import indi.etern.musichud.server.api.tuneweave.TuneWeavePlatform;
 import net.minecraft.client.resources.language.I18n;
@@ -56,17 +61,17 @@ public final class UniPlaylistView extends LinearLayout {
         title.setTextSize(Theme.TEXT_SIZE_LARGER);
         title.setTextColor(Theme.EMPHASIZE_TEXT_COLOR);
         toolbar.addView(title, new LayoutParams(0, WRAP_CONTENT, 1));
-        toolbar.addView(actionButton(context, "refresh", v -> refresh()), new LayoutParams(WRAP_CONTENT, WRAP_CONTENT));
+        toolbar.addView(actionButton(context, "refresh", v -> refresh()), actionParams());
         addView(toolbar, new LayoutParams(MATCH_PARENT, WRAP_CONTENT));
 
         LinearLayout actions = new LinearLayout(context);
         actions.setGravity(Gravity.RIGHT);
-        actions.addView(actionButton(context, "create", v -> showNameDialog(
+            actions.addView(actionButton(context, "create", v -> showNameDialog(
                 I18n.get(MusicHud.MOD_ID + ".text.uniPlaylist.create"), "", name -> create(name))),
-                new LayoutParams(WRAP_CONTENT, WRAP_CONTENT));
-        actions.addView(actionButton(context, "import", v -> showImportDialog()),
-                new LayoutParams(WRAP_CONTENT, WRAP_CONTENT));
-        actions.addView(actionButton(context, "importDocument", v -> importDocument()), new LayoutParams(WRAP_CONTENT, WRAP_CONTENT));
+                actionParams());
+            actions.addView(actionButton(context, "import", v -> showImportDialog()),
+                actionParams());
+        actions.addView(actionButton(context, "importDocument", v -> importDocument()), actionParams());
         LayoutParams actionsParams = new LayoutParams(MATCH_PARENT, WRAP_CONTENT);
         actionsParams.setMargins(0, dp(8), 0, 0);
         addView(actions, actionsParams);
@@ -133,13 +138,15 @@ public final class UniPlaylistView extends LinearLayout {
             row.addView(description, new LayoutParams(MATCH_PARENT, WRAP_CONTENT));
             LinearLayout buttons = new LinearLayout(getContext());
             buttons.setGravity(Gravity.RIGHT);
-            buttons.addView(actionButton(getContext(), "open", v -> RouterContainer.getInstance().pushNavigate(
-                    new UniPlaylistDetailView(getContext(), playlist))), new LayoutParams(WRAP_CONTENT, WRAP_CONTENT));
+            buttons.addView(actionButton(getContext(), "open", v -> {
+                RouterContainer router = RouterContainer.getInstance();
+                if (router != null) router.pushNavigate(new UniPlaylistDetailView(getContext(), playlist));
+            }), actionParams());
             buttons.addView(actionButton(getContext(), "rename", v -> showNameDialog(
                     I18n.get(MusicHud.MOD_ID + ".text.uniPlaylist.rename"), playlist.name(), value -> rename(playlist, value))),
-                    new LayoutParams(WRAP_CONTENT, WRAP_CONTENT));
-            buttons.addView(actionButton(getContext(), "export", v -> export(playlist)), new LayoutParams(WRAP_CONTENT, WRAP_CONTENT));
-            buttons.addView(actionButton(getContext(), "delete", v -> confirmDelete(playlist)), new LayoutParams(WRAP_CONTENT, WRAP_CONTENT));
+                    actionParams());
+            buttons.addView(actionButton(getContext(), "export", v -> export(playlist)), actionParams());
+            buttons.addView(actionButton(getContext(), "delete", v -> confirmDelete(playlist)), actionParams());
             row.addView(buttons, new LayoutParams(MATCH_PARENT, WRAP_CONTENT));
             LayoutParams rowParams = new LayoutParams(MATCH_PARENT, WRAP_CONTENT);
             rowParams.setMargins(0, 0, 0, dp(8));
@@ -147,7 +154,7 @@ public final class UniPlaylistView extends LinearLayout {
         }
     }
 
-    private Button actionButton(Context context, String action, View.OnClickListener listener) {
+    private ImageButton actionButton(Context context, String action, View.OnClickListener listener) {
         String key = switch (action) {
             case "create" -> ".button.create";
             case "import" -> ".button.import";
@@ -158,13 +165,37 @@ public final class UniPlaylistView extends LinearLayout {
             case "importDocument" -> ".button.importDocument";
             default -> ".button.refresh";
         };
-        Button button = new Button(context);
-        button.setText(I18n.get(MusicHud.MOD_ID + key));
-        button.setTextSize(Theme.TEXT_SIZE_SMALL);
-        button.setTextColor(Theme.PRIMARY_COLOR);
+        String icon = switch (action) {
+            case "create" -> "list_plus.png";
+            case "import" -> "link.png";
+            case "importDocument" -> "unlink.png";
+            case "open" -> "arrow_left.png";
+            case "rename" -> "settings.png";
+            case "export" -> "link.png";
+            case "delete" -> "trash_2.png";
+            default -> "rotate_cw.png";
+        };
+        ImageButton button = new ImageButton(context);
+        String label = I18n.get(MusicHud.MOD_ID + key);
+        button.setTooltipText(label);
+        button.setContentDescription(label);
+        button.setScaleType(ImageView.ScaleType.CENTER_INSIDE);
+        Image image = ImageUtils.getImageFromResource(
+                "/assets/music_hud/textures/gui/icons/" + icon);
+        if (image != null) {
+            button.setImageDrawable(new InsetDrawable(new ScaledImageDrawable(
+                    context.getResources(), image, dp(16), dp(16)), dp(5)));
+        }
+        if ("open".equals(action)) button.setRotation(180);
         button.setBackground(ButtonInsetBackgroundFactory.builder().cornerRadius(dp(4)).inset(dp(1)).build().newBackgroundDrawable());
         button.setOnClickListener(listener);
         return button;
+    }
+
+    private LayoutParams actionParams() {
+        LayoutParams params = new LayoutParams(dp(32), dp(32));
+        params.setMargins(dp(1), 0, dp(1), 0);
+        return params;
     }
 
     private void showNameDialog(String titleText, String initial, Consumer<String> consumer) {

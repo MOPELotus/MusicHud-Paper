@@ -158,11 +158,12 @@ public class QRLoginView extends LinearLayout implements ILoginView {
         }
         try {
             TuneWeaveClientService.QrPoll poll = tuneWeave.pollQrLogin(session);
+            String localizedMessage = localizedPollMessage(poll.state(), poll.message());
             MuiModApi.postToUiThread(() -> {
                 if ("scanned".equals(poll.state())) {
                     messageTextView.setText(I18n.get(MusicHud.MOD_ID + ".text.login.scanned"));
-                } else if (poll.message() != null && !poll.message().isBlank()) {
-                    messageTextView.setText(poll.message());
+                } else if (!localizedMessage.isBlank()) {
+                    messageTextView.setText(localizedMessage);
                 }
             });
             if (poll.terminal()) {
@@ -170,7 +171,7 @@ public class QRLoginView extends LinearLayout implements ILoginView {
                 if ("confirmed".equals(poll.state())) {
                     LoginService.getInstance().completeTuneWeaveLogin(poll.profile());
                 } else {
-                    showError(poll.message() == null ? poll.state() : poll.message());
+                    showError(localizedMessage);
                     setBusy(false);
                 }
             }
@@ -183,6 +184,16 @@ public class QRLoginView extends LinearLayout implements ILoginView {
 
     private TuneWeavePlatform selectedPlatform() {
         return platformSelector.getSelectedPlatform();
+    }
+
+    private static String localizedPollMessage(String state, String fallback) {
+        return switch (state == null ? "" : state) {
+            case "waiting" -> I18n.get(MusicHud.MOD_ID + ".text.login.waitingForScan");
+            case "scanned" -> I18n.get(MusicHud.MOD_ID + ".text.login.scanned");
+            case "expired" -> I18n.get(MusicHud.MOD_ID + ".text.login.qrExpired");
+            case "failed" -> I18n.get(MusicHud.MOD_ID + ".text.login.failed");
+            default -> fallback == null ? "" : fallback;
+        };
     }
 
     private void setBusy(boolean busy) {

@@ -1,10 +1,13 @@
 package indi.etern.musichud.client.ui.pages;
 
 import icyllis.modernui.core.Context;
+import icyllis.modernui.graphics.Image;
+import icyllis.modernui.graphics.drawable.InsetDrawable;
 import icyllis.modernui.mc.MuiModApi;
 import icyllis.modernui.view.Gravity;
 import icyllis.modernui.view.View;
-import icyllis.modernui.widget.Button;
+import icyllis.modernui.widget.ImageButton;
+import icyllis.modernui.widget.ImageView;
 import icyllis.modernui.widget.LinearLayout;
 import icyllis.modernui.widget.ScrollView;
 import icyllis.modernui.widget.TextView;
@@ -16,6 +19,8 @@ import indi.etern.musichud.client.ui.Theme;
 import indi.etern.musichud.client.ui.components.Modal;
 import indi.etern.musichud.client.ui.components.RouterContainer;
 import indi.etern.musichud.client.ui.components.UrlImageView;
+import indi.etern.musichud.client.ui.drawable.ScaledImageDrawable;
+import indi.etern.musichud.client.ui.utils.image.ImageUtils;
 import indi.etern.musichud.client.ui.utils.ui.ButtonInsetBackgroundFactory;
 import net.minecraft.client.resources.language.I18n;
 
@@ -41,16 +46,17 @@ public final class VideoDetailView extends LinearLayout {
 
         LinearLayout toolbar = new LinearLayout(context);
         toolbar.setGravity(Gravity.CENTER_VERTICAL);
-        toolbar.addView(action(".button.back", v -> RouterContainer.getInstance().popNavigate()),
-                new LayoutParams(WRAP_CONTENT, WRAP_CONTENT));
+        toolbar.addView(action(".button.back", v -> {
+            if (RouterContainer.getInstance() != null) RouterContainer.getInstance().popNavigate();
+        }), actionParams());
         TextView title = new TextView(context);
         title.setText(source.getName());
         title.setTextSize(Theme.TEXT_SIZE_LARGER);
         title.setTextColor(Theme.EMPHASIZE_TEXT_COLOR);
         title.setMaxLines(2);
         toolbar.addView(title, new LayoutParams(0, WRAP_CONTENT, 1));
-        toolbar.addView(action(".button.refresh", v -> refresh()), new LayoutParams(WRAP_CONTENT, WRAP_CONTENT));
-        toolbar.addView(action(".button.playAll", v -> playAll()), new LayoutParams(WRAP_CONTENT, WRAP_CONTENT));
+        toolbar.addView(action(".button.refresh", v -> refresh()), actionParams());
+        toolbar.addView(action(".button.playAll", v -> playAll()), actionParams());
         addView(toolbar, new LayoutParams(MATCH_PARENT, WRAP_CONTENT));
 
         LinearLayout summary = new LinearLayout(context);
@@ -122,7 +128,7 @@ public final class VideoDetailView extends LinearLayout {
             duration.setText(formatDuration(part.durationMillis()));
             duration.setTextColor(Theme.SECONDARY_TEXT_COLOR);
             row.addView(duration, new LayoutParams(WRAP_CONTENT, WRAP_CONTENT));
-            row.addView(action(".button.play", v -> play(part)), new LayoutParams(WRAP_CONTENT, WRAP_CONTENT));
+            row.addView(action(".button.play", v -> play(part)), actionParams());
             LayoutParams params = new LayoutParams(MATCH_PARENT, WRAP_CONTENT);
             params.setMargins(0, 0, 0, dp(6));
             partsLayout.addView(row, params);
@@ -139,26 +145,29 @@ public final class VideoDetailView extends LinearLayout {
         MusicService.getInstance().sendPushMusicToQueue(tuneWeave.videoPartTrack(video, part));
     }
 
-    private Button action(String key, View.OnClickListener listener) {
-        Button button = new Button(getContext());
+    private ImageButton action(String key, View.OnClickListener listener) {
+        ImageButton button = new ImageButton(getContext());
         String label = I18n.get(MusicHud.MOD_ID + key);
-        if (key.endsWith(".play")) {
-            button.setText("\u25b6");
-            button.setTooltipText(label);
-            button.setContentDescription(label);
-        } else if (key.endsWith(".playAll")) {
-            button.setText("\u25b6\u25b6");
-            button.setTooltipText(label);
-            button.setContentDescription(label);
-        } else {
-            button.setText(label);
+        String icon = key.endsWith(".back") ? "arrow_left.png"
+                : key.endsWith(".refresh") ? "rotate_cw.png" : "skip_forward_filled.png";
+        button.setTooltipText(label);
+        button.setContentDescription(label);
+        button.setScaleType(ImageView.ScaleType.CENTER_INSIDE);
+        Image image = ImageUtils.getImageFromResource("/assets/music_hud/textures/gui/icons/" + icon);
+        if (image != null) {
+            button.setImageDrawable(new InsetDrawable(new ScaledImageDrawable(
+                    getContext().getResources(), image, dp(16), dp(16)), dp(5)));
         }
-        button.setTextSize(Theme.TEXT_SIZE_SMALL);
-        button.setTextColor(Theme.PRIMARY_COLOR);
         button.setBackground(ButtonInsetBackgroundFactory.builder().cornerRadius(dp(4)).inset(dp(1))
                 .build().newBackgroundDrawable());
         button.setOnClickListener(listener);
         return button;
+    }
+
+    private LayoutParams actionParams() {
+        LayoutParams params = new LayoutParams(dp(32), dp(32));
+        params.setMargins(dp(1), 0, dp(1), 0);
+        return params;
     }
 
     private void showStatus(String text) {
