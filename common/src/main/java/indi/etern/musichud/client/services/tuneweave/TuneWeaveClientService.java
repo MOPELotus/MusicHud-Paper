@@ -43,6 +43,7 @@ public final class TuneWeaveClientService {
     private final Map<Long, Playlist> playlistsById = new ConcurrentHashMap<>();
     private final Map<Long, Album> albumsById = new ConcurrentHashMap<>();
     private final Map<Long, Artist> artistsById = new ConcurrentHashMap<>();
+    private final LocalUniPlaylistStore localPlaylists = new LocalUniPlaylistStore();
 
     private TuneWeaveClientService() {
     }
@@ -396,47 +397,31 @@ public final class TuneWeaveClientService {
     }
 
     public List<UniPlaylistInfo> listUniPlaylists() {
-        JsonElement data = requestWithAllCredentials("GET", "/v1/uni/playlists",
-                Map.of("limit", "100", "offset", "0"), null).data();
         List<UniPlaylistInfo> result = new ArrayList<>();
-        for (JsonElement item : elements(data)) {
-            JsonObject object = unwrap(item);
-            String reference = string(object, "ref", string(object, "resource_ref", ""));
-            if (!reference.isBlank()) {
-                result.add(new UniPlaylistInfo(reference, string(object, "name", reference),
-                        string(object, "description", ""), integer(object, "item_count", 0)));
-            }
+        for (JsonObject document : localPlaylists.list()) {
+            result.add(localPlaylistInfo(document));
         }
         return result;
     }
 
     public UniPlaylistInfo createUniPlaylist(String name, String description) {
-        JsonObject body = new JsonObject();
-        body.addProperty("name", name);
-        body.addProperty("description", description == null ? "" : description);
-        return toUniPlaylist(requestWithAllCredentials("POST", "/v1/uni/playlists", Map.of(), body).data());
+        return localPlaylistInfo(localPlaylists.create(name, description));
     }
 
     public UniPlaylistInfo updateUniPlaylist(String reference, String name, String description) {
-        JsonObject body = new JsonObject();
-        if (name != null) body.addProperty("name", name);
-        if (description != null) body.addProperty("description", description);
-        return toUniPlaylist(requestWithAllCredentials("PATCH", uniPath(reference), Map.of(), body).data());
+        return localPlaylistInfo(localPlaylists.update(reference, name, description));
     }
 
     public void deleteUniPlaylist(String reference) {
-        requestWithAllCredentials("DELETE", uniPath(reference), Map.of(), null);
+        localPlaylists.delete(reference);
     }
 
     public List<UniItemInfo> listUniPlaylistItems(String reference) {
-        JsonElement data = requestWithAllCredentials("GET", uniPath(reference) + "/items",
-                Map.of("limit", "500", "offset", "0"), null).data();
         List<UniItemInfo> result = new ArrayList<>();
-        for (JsonElement item : elements(data)) {
-            JsonObject object = unwrap(item);
+        for (JsonObject object : localPlaylists.items(reference)) {
             JsonObject snapshot = object.has("snapshot") && object.get("snapshot").isJsonObject()
                     ? object.getAsJsonObject("snapshot") : new JsonObject();
-            String itemRef = string(object, "ref", string(object, "source_ref", ""));
+            String itemRef = string(object, "source_ref", "");
             if (itemRef.isBlank()) continue;
             List<String> artists = new ArrayList<>();
             JsonElement artistData = snapshot.get("artists");
@@ -461,8 +446,7 @@ public final class TuneWeaveClientService {
             items.add(item);
         });
         body.add("items", items);
-        body.add("accounts", new JsonObject());
-        requestWithAllCredentials("POST", uniPath(reference) + "/items", Map.of(), body);
+        localPlaylists.append(reference, materializeItems(body));
     }
 
     public void addUniPlaylistItem(String reference, String resourceRef, String kind) {
@@ -474,40 +458,32 @@ public final class TuneWeaveClientService {
         item.addProperty("kind", kind == null || kind.isBlank() ? "track" : kind);
         items.add(item);
         body.add("items", items);
-        body.add("accounts", new JsonObject());
-        requestWithAllCredentials("POST", uniPath(reference) + "/items", Map.of(), body);
+        localPlaylists.append(reference, materializeItems(body));
     }
 
     public void deleteUniPlaylistItem(String reference, String itemId) {
-        requestWithAllCredentials("DELETE", uniPath(reference) + "/items/"
-                + TuneWeaveApiClient.encodePathSegment(itemId), Map.of(), null);
+        localPlaylists.removeItem(reference, itemId);
     }
 
     public void reorderUniPlaylistItems(String reference, List<String> itemIds) {
-        JsonObject body = new JsonObject();
-        JsonArray ids = new JsonArray();
-        itemIds.forEach(ids::add);
-        body.add("item_ids", ids);
-        requestWithAllCredentials("PATCH", uniPath(reference) + "/items/order", Map.of(), body);
+        localPlaylists.reorder(reference, itemIds);
     }
 
     public UniPlaylistInfo importUniPlaylist(String name, List<String> sourceRefs) {
-        JsonObject body = new JsonObject();
-        if (name != null && !name.isBlank()) body.addProperty("name", name);
-        JsonArray sources = new JsonArray();
-        sourceRefs.stream().filter(value -> value != null && !value.isBlank()).limit(50).forEach(value -> {
-            JsonObject source = new JsonObject();
-            source.addProperty("ref", value);
-            source.addProperty("type", "playlist");
-            sources.add(source);
-        });
-        body.add("sources", sources);
-        return toUniPlaylist(requestWithAllCredentials("POST", "/v1/uni/playlists/imports", Map.of(), body).data());
+        return importUniPlaylistSources(name, sourceRefs.stream()
+                .filter(value -> value != null && !value.isBlank()).limit(50)
+                .map(value -> {
+                    int separator = value.indexOf(':');
+                    if (separator <= 0 || separator + 1 >= value.length()) {
+                        throw new IllegalArgumentException("TuneWeave playlist reference is invalid");
+                    }
+                    return new UniImportSource(value.substring(0, separator), "playlist",
+                            value.substring(separator + 1));
+                }).toList());
     }
 
     public UniPlaylistInfo importUniPlaylistSources(String name, List<UniImportSource> sources) {
         JsonObject body = new JsonObject();
-        if (name != null && !name.isBlank()) body.addProperty("name", name);
         JsonArray sourceArray = new JsonArray();
         sources.stream().limit(50).forEach(source -> {
             JsonObject value = new JsonObject();
@@ -517,17 +493,39 @@ public final class TuneWeaveClientService {
             sourceArray.add(value);
         });
         body.add("sources", sourceArray);
-        return toUniPlaylist(requestWithAllCredentials("POST", "/v1/uni/playlists/imports", Map.of(), body).data());
+        List<JsonObject> materialized = new ArrayList<>();
+        String materializedName = "";
+        String materializedDescription = "";
+        int offset = 0;
+        int total;
+        do {
+            JsonObject data = object(requestWithAllCredentials("POST", "/v1/uni/materialize/imports",
+                    Map.of("limit", "500", "offset", Integer.toString(offset)), body).data());
+            if (materializedName.isBlank()) materializedName = string(data, "name", "");
+            if (materializedDescription.isBlank()) materializedDescription = string(data, "description", "");
+            List<JsonElement> page = elements(data);
+            for (JsonElement value : page) materialized.add(unwrap(value).deepCopy());
+            total = integer(data, "item_count", materialized.size());
+            offset += page.size();
+            if (page.isEmpty()) break;
+        } while (offset < total);
+        String playlistName = name == null || name.isBlank() ? materializedName : name;
+        UniPlaylistInfo playlist = createUniPlaylist(playlistName, materializedDescription);
+        try {
+            localPlaylists.append(playlist.reference(), materialized);
+            return new UniPlaylistInfo(playlist.reference(), playlist.name(), playlist.description(), materialized.size());
+        } catch (RuntimeException error) {
+            localPlaylists.delete(playlist.reference());
+            throw error;
+        }
     }
 
     public JsonObject exportUniPlaylist(String reference) {
-        return unwrap(requestWithAllCredentials("GET", uniPath(reference) + "/export", Map.of(), null).data());
+        return localPlaylists.exportDocument(reference);
     }
 
     public UniPlaylistInfo importUniPlaylistDocument(JsonObject document) {
-        JsonObject body = new JsonObject();
-        body.add("document", Objects.requireNonNull(document));
-        return toUniPlaylist(requestWithAllCredentials("POST", "/v1/uni/playlists/import-document", Map.of(), body).data());
+        return localPlaylistInfo(localPlaylists.importDocument(Objects.requireNonNull(document)));
     }
 
     public MusicResourceInfo getMusicResourceInfo(MusicDetail musicDetail,
@@ -579,10 +577,6 @@ public final class TuneWeaveClientService {
         };
     }
 
-    private static String uniPath(String reference) {
-        return "/v1/uni/playlists/" + TuneWeaveApiClient.encodePathSegment(reference);
-    }
-
     private TuneWeavePlatform platformFromReference(String reference) {
         if (reference.startsWith("account:favorite_tracks:")) {
             int lastSeparator = reference.lastIndexOf(':');
@@ -594,14 +588,19 @@ public final class TuneWeaveClientService {
                 : defaultPlatform();
     }
 
-    private static UniPlaylistInfo toUniPlaylist(JsonElement element) {
-        JsonObject object = unwrap(element);
-        if (object.has("playlist") && object.get("playlist").isJsonObject()) {
-            object = unwrap(object.get("playlist"));
-        }
-        String reference = string(object, "ref", string(object, "resource_ref", ""));
-        return new UniPlaylistInfo(reference, string(object, "name", reference),
-                string(object, "description", ""), integer(object, "item_count", 0));
+    private List<JsonObject> materializeItems(JsonObject body) {
+        JsonObject data = object(requestWithAllCredentials(
+                "POST", "/v1/uni/materialize/items", Map.of(), body).data());
+        List<JsonObject> result = new ArrayList<>();
+        for (JsonElement value : elements(data)) result.add(unwrap(value).deepCopy());
+        if (result.isEmpty()) throw new IllegalArgumentException("TuneWeave did not materialize any playlist items");
+        return result;
+    }
+
+    private static UniPlaylistInfo localPlaylistInfo(JsonObject document) {
+        String reference = LocalUniPlaylistStore.reference(document);
+        return new UniPlaylistInfo(reference, string(document, "name", reference),
+                string(document, "description", ""), integer(document, "item_count", 0));
     }
 
     public void logout(TuneWeavePlatform platform) {
