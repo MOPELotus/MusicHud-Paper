@@ -727,9 +727,20 @@ public final class TuneWeaveClientService {
                 platform, "GET", "/v1/playlists/"
                         + TuneWeaveApiClient.encodePathSegment(reference), Map.of(), null).data()));
         List<MusicDetail> tracks = new ArrayList<>();
-        for (JsonElement item : elements(requestForPlatform(platform, "GET",
-                "/v1/playlists/" + TuneWeaveApiClient.encodePathSegment(reference) + "/items",
-                Map.of("limit", "100", "offset", "0"), null).data())) {
+        List<JsonElement> playlistItems;
+        try {
+            playlistItems = elements(requestForPlatform(platform, "GET",
+                    "/v1/playlists/" + TuneWeaveApiClient.encodePathSegment(reference) + "/items",
+                    Map.of("limit", "100", "offset", "0"), null).data());
+        } catch (TuneWeaveApiClient.TuneWeaveException error) {
+            // alpha.5 may reject a later Bilibili favorite page as invalid even when its
+            // first page is playable. Keep the account card usable with the first page.
+            if (platform != TuneWeavePlatform.BILIBILI || !error.isRetryable()) throw error;
+            playlistItems = elements(requestForPlatform(platform, "GET",
+                    "/v1/playlists/" + TuneWeaveApiClient.encodePathSegment(reference) + "/items",
+                    Map.of("limit", "20", "offset", "0"), null).data());
+        }
+        for (JsonElement item : playlistItems) {
             JsonObject raw = unwrap(item);
             MusicDetail track = "video".equals(string(raw, "kind", "track"))
                     ? toVideoTrack(platformFromReference(reference), raw)
