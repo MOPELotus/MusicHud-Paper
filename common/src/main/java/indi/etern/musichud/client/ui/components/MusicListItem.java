@@ -196,7 +196,7 @@ public class MusicListItem extends LinearLayout {
             artistButton.setTextSize(Theme.TEXT_SIZE_NORMAL);
             artistButton.setTextAlignment(TEXT_ALIGNMENT_TEXT_START);
             artistButton.setText(artist.getName());
-            if (!"video".equals(musicDetail.getSourceKind()) && !artist.getSourceRef().isBlank()) {
+            if (isPlatformTrack(musicDetail) && !artist.getSourceRef().isBlank()) {
                 artistButton.setOnClickListener(button -> {
                     RouterContainer routerContainer = RouterContainer.getInstance();
                     if (routerContainer != null) {
@@ -217,7 +217,7 @@ public class MusicListItem extends LinearLayout {
         albumButton.setTextSize(Theme.TEXT_SIZE_NORMAL);
         albumButton.setText(musicDetail.getAlbum().getName());
         albumButton.setTextAlignment(TEXT_ALIGNMENT_TEXT_START);
-        if (!"video".equals(musicDetail.getSourceKind()) && !musicDetail.getAlbum().getSourceRef().isBlank()) {
+        if (isPlatformTrack(musicDetail) && !musicDetail.getAlbum().getSourceRef().isBlank()) {
             albumButton.setOnClickListener(button -> {
                 RouterContainer routerContainer = RouterContainer.getInstance();
                 if (routerContainer != null) {
@@ -255,9 +255,17 @@ public class MusicListItem extends LinearLayout {
             pusherHeadView.setPlayerSkinSupplier(null);
         }
 
+        boolean podcastOrRadio = "podcast".equals(musicDetail.getSourceKind())
+                || "radio".equals(musicDetail.getSourceKind());
+        addToPlaylistButton.setVisibility(podcastOrRadio ? GONE : VISIBLE);
         addToPlaylistButton.bindMusicDetail(musicDetail);
         boolean video = "video".equals(musicDetail.getSourceKind());
-        likeButton.setVisibility(video ? GONE : VISIBLE);
-        if (!video) likeButton.bindMusicList(musicService.getMusicTrackState(musicDetail).currentUsersLikeList());
+        likeButton.setVisibility(video || podcastOrRadio ? GONE : VISIBLE);
+        if (!video && !podcastOrRadio) likeButton.bindMusicList(musicService.getMusicTrackState(musicDetail).currentUsersLikeList());
+    }
+
+    private static boolean isPlatformTrack(MusicDetail musicDetail) {
+        String kind = musicDetail.getSourceKind();
+        return !"video".equals(kind) && !"podcast".equals(kind) && !"radio".equals(kind);
     }
 }
