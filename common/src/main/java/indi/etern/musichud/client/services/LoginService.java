@@ -16,6 +16,7 @@ import indi.etern.musichud.client.ui.ToastUtil;
 import indi.etern.musichud.client.ui.pages.account.AccountBaseView;
 import indi.etern.musichud.client.ui.pages.account.LoginView;
 import indi.etern.musichud.client.services.tuneweave.TuneWeaveClientService;
+import indi.etern.musichud.client.services.music.MusicService;
 import indi.etern.musichud.interfaces.*;
 import indi.etern.musichud.network.IClientNetworkService;
 import indi.etern.musichud.network.NetworkReceiver;
@@ -25,6 +26,7 @@ import indi.etern.musichud.network.payloads.pushMessages.c2s.LogoutMessage;
 import indi.etern.musichud.network.payloads.pushMessages.s2c.LoginResultMessage;
 import indi.etern.musichud.server.api.impl.ncm.LoginApiService;
 import indi.etern.musichud.server.api.ApiServerManager;
+import indi.etern.musichud.server.api.tuneweave.TuneWeavePlatform;
 import lombok.AccessLevel;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
@@ -180,6 +182,13 @@ public class LoginService implements IClientLoginService {
                 && loginCookieInfo.type() != LoginType.ANONYMOUS;
     }
 
+    public boolean hasAnyTuneWeaveLogin() {
+        for (TuneWeavePlatform platform : TuneWeavePlatform.values()) {
+            if (tuneWeave.hasCredential(platform)) return true;
+        }
+        return false;
+    }
+
     @Override
     public void connectAsPrevious() {
         if (connectionType == ConnectionType.EXTERNAL) {
@@ -239,6 +248,8 @@ public class LoginService implements IClientLoginService {
         if (sessionProfile == null || !sessionProfile.authenticated()) {
             throw new IllegalArgumentException("TuneWeave did not return an authenticated profile");
         }
+        tuneWeave.setDefaultPlatform(sessionProfile.platform());
+        MusicService.getInstance().invalidateUserCollections();
         Profile profile = sessionProfile.toMusicHudProfile();
         Profile.setCurrent(profile);
         ProfileConfigData profileConfigData = ProfileConfigData.getInstance();
@@ -247,6 +258,25 @@ public class LoginService implements IClientLoginService {
         lastLoginErrorMessage = null;
         notifyLoginStateChanged();
         refreshAccountView();
+    }
+
+    public void switchTuneWeavePlatform(TuneWeavePlatform platform) {
+        tuneWeave.setDefaultPlatform(platform);
+        MusicService.getInstance().invalidateUserCollections();
+        if (!tuneWeave.hasCredential(platform)) {
+            Profile.setCurrent(Profile.ANONYMOUS);
+            notifyLoginStateChanged();
+            refreshAccountView();
+            return;
+        }
+        MusicHud.EXECUTOR.execute(() -> {
+            try {
+                completeTuneWeaveLogin(tuneWeave.loadSession(platform));
+            } catch (RuntimeException error) {
+                lastLoginErrorMessage = error.getMessage();
+                refreshAccountView();
+            }
+        });
     }
 
     public void restoreTuneWeaveSession() {
@@ -367,6 +397,7 @@ public class LoginService implements IClientLoginService {
                 apiServerManager.getApiStatusListeners().add(status -> {
                     LoginService loginService = LoginService.getInstance();
                     if (status == ApiServerManager.BinaryApiServerStatus.RUNNING
+                            && Minecraft.getInstance().player != null
                             && loginService.hasPreviousLoginInfo()
                             && !loginService.isLogined()) {
                         loginService.loginToServer(null);

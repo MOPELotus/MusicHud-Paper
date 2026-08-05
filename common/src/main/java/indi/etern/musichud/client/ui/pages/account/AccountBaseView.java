@@ -48,7 +48,8 @@ public class AccountBaseView extends LinearLayout {
         Status status1;
         if (MusicHud.getConnectStatus() != MusicHud.ConnectStatus.CONNECTED && !ClientConfig.getInstance().getEnableIsolatedMode() || !enabled) {
             status1 = Status.UNAVAILABLE;
-        } else if (LoginService.getInstance().isLogined()) {
+        } else if (LoginService.getInstance().isLogined()
+                || LoginService.getInstance().hasAnyTuneWeaveLogin()) {
             status1 = Status.LOGGED;
         } else if (LoginService.getInstance().hasPreviousLoginInfo()) {
             status1 = Status.LOADING;
@@ -56,6 +57,12 @@ public class AccountBaseView extends LinearLayout {
             status1 = Status.UNLOGGED;
         }
 
+        if (status == status1) {
+            if (status == Status.LOGGED && AccountView.getInstance() != null) {
+                AccountView.getInstance().refresh(false);
+            }
+            return;
+        }
         if (status != status1) {
             status = status1;
             removeAllViews();

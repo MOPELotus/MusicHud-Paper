@@ -24,6 +24,7 @@ import indi.etern.musichud.client.ui.components.MusicCollectionCard;
 import indi.etern.musichud.client.ui.components.RouterContainer;
 import indi.etern.musichud.client.ui.pages.CloudView;
 import indi.etern.musichud.client.ui.pages.PodcastRadioView;
+import indi.etern.musichud.client.ui.pages.UniPlaylistView;
 import indi.etern.musichud.client.ui.components.UrlImageView;
 import indi.etern.musichud.client.ui.utils.ui.ButtonInsetBackgroundFactory;
 import indi.etern.musichud.interfaces.IClientLoginService;
@@ -44,6 +45,9 @@ public class AccountView extends LinearLayout {
     @Getter
     private static AccountView instance;
     private final IClientLoginService IClientLoginService = LoginService.getInstance();
+    private final TuneWeaveClientService tuneWeave = TuneWeaveClientService.getInstance();
+    private TuneWeavePlatform selectedPlatform = tuneWeave.defaultPlatform();
+    private boolean showingUniPlaylists;
     private final Map<ElementKey, View> elementMap = new HashMap<>();
     private FlexWrapLayout myPlaylistCards;
     private FlexWrapLayout mySubscribedPlaylistCards;
@@ -155,6 +159,57 @@ public class AccountView extends LinearLayout {
         setOrientation(LinearLayout.VERTICAL);
         setLayoutParams(new LayoutParams(MATCH_PARENT, MATCH_PARENT));
         Context context = getContext();
+
+        TuneWeavePlatform activePlatform = tuneWeave.defaultPlatform();
+        if (!tuneWeave.hasCredential(selectedPlatform) && tuneWeave.hasCredential(activePlatform)) {
+            selectedPlatform = activePlatform;
+        }
+
+        LinearLayout platformTabs = new LinearLayout(context);
+        platformTabs.setOrientation(LinearLayout.HORIZONTAL);
+        platformTabs.setGravity(Gravity.CENTER);
+        for (TuneWeavePlatform platform : TuneWeavePlatform.values()) {
+            Button tab = new Button(context);
+            tab.setText(I18n.get(MusicHud.MOD_ID + ".platform." + platform.apiName()));
+            tab.setTextSize(Theme.TEXT_SIZE_SMALL);
+            tab.setTextColor(!showingUniPlaylists && selectedPlatform == platform
+                    ? Theme.PRIMARY_COLOR : Theme.SECONDARY_TEXT_COLOR);
+            tab.setBackground(ButtonInsetBackgroundFactory.builder().cornerRadius(dp(4)).inset(dp(1))
+                    .padding(new ButtonInsetBackgroundFactory.Padding(dp(12), dp(6), dp(12), dp(6)))
+                    .build().newBackgroundDrawable());
+            tab.setOnClickListener(button -> {
+                showingUniPlaylists = false;
+                selectedPlatform = platform;
+                tuneWeave.setDefaultPlatform(platform);
+                LoginService.getInstance().switchTuneWeavePlatform(platform);
+                refresh(false);
+            });
+            platformTabs.addView(tab, new LayoutParams(WRAP_CONTENT, WRAP_CONTENT));
+        }
+        Button uniTab = new Button(context);
+        uniTab.setText(I18n.get(MusicHud.MOD_ID + ".text.page.uniPlaylists"));
+        uniTab.setTextSize(Theme.TEXT_SIZE_SMALL);
+        uniTab.setTextColor(showingUniPlaylists ? Theme.PRIMARY_COLOR : Theme.SECONDARY_TEXT_COLOR);
+        uniTab.setBackground(ButtonInsetBackgroundFactory.builder().cornerRadius(dp(4)).inset(dp(1))
+                .padding(new ButtonInsetBackgroundFactory.Padding(dp(12), dp(6), dp(12), dp(6)))
+                .build().newBackgroundDrawable());
+        uniTab.setOnClickListener(button -> {
+            showingUniPlaylists = true;
+            refresh(false);
+        });
+        platformTabs.addView(uniTab, new LayoutParams(WRAP_CONTENT, WRAP_CONTENT));
+        addView(platformTabs, new LayoutParams(MATCH_PARENT, WRAP_CONTENT));
+
+        tuneWeave.setDefaultPlatform(selectedPlatform);
+        if (showingUniPlaylists) {
+            addView(new UniPlaylistView(context), new LayoutParams(MATCH_PARENT, 0, 1));
+            return;
+        }
+        if (!tuneWeave.hasCredential(selectedPlatform)) {
+            LoginView loginView = new LoginView(context);
+            addView(loginView, new LayoutParams(MATCH_PARENT, 0, 1));
+            return;
+        }
 
         Profile currentProfile = Profile.getCurrent();
         setGravity(Gravity.TOP);

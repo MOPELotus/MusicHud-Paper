@@ -468,6 +468,10 @@ public class MusicService implements IClientMusicService {
         }
     }
 
+    public synchronized void invalidateUserCollections() {
+        currentUserCollections = null;
+    }
+
     @RegisterMark
     public static class RegisterImpl implements ClientRegister {
         @Override
