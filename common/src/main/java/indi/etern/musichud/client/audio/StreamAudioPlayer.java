@@ -29,6 +29,7 @@ import java.nio.ByteBuffer;
 import java.time.Duration;
 import java.time.ZonedDateTime;
 import java.util.HashSet;
+import java.util.List;
 import java.util.Objects;
 import java.util.Set;
 import java.util.concurrent.*;
@@ -473,20 +474,34 @@ public class StreamAudioPlayer {
         boolean forceSyncInternal = forceSync;
 
         MusicResourceInfo musicResourceInfo = MusicResourceInfo.NONE;
+        List<String> resourceUrls = List.of();
+        int resourceUrlIndex = 0;
+        boolean refreshResource = true;
         while (!currentDownloadFuture.isDone() && currentDownloadFuture == downloadFuture) {
             try {
-                if (directPlayback) {
+                if (directPlayback && refreshResource) {
                     musicResourceInfo = directMusicResourceInfo;
-                } else if (musicResourceInfo == null || musicResourceInfo.equals(MusicResourceInfo.NONE) || localRetryCount % 3 == 0) {
+                    resourceUrls = musicResourceInfo.getCandidateUrls();
+                    resourceUrlIndex = 0;
+                    refreshResource = false;
+                } else if (!directPlayback && refreshResource) {
                     musicResourceInfo = getCurrentMusicResourceInfo(clientConfig.getPrimaryChosenQuality(), musicResourceInfo).get();
                     if (musicResourceInfo == null) {
                         continue;
                     }
+                    resourceUrls = musicResourceInfo.getCandidateUrls();
+                    resourceUrlIndex = 0;
+                    refreshResource = false;
                 }
+                if (resourceUrls.isEmpty()) throw new IllegalStateException("No audio resource URLs available");
 
                 LOGGER.debug("Starting audio download (attempt {})", localRetryCount + 1);
+                if (resourceUrlIndex > 0) {
+                    LOGGER.info("Trying backup audio URL {}/{}", resourceUrlIndex, resourceUrls.size() - 1);
+                }
 
-                AudioDecoder decoder = loadAudioDecoder(musicResourceInfo.getUrl(), musicResourceInfo.getType(), musicResourceInfo.getHeaders());
+                AudioDecoder decoder = loadAudioDecoder(resourceUrls.get(resourceUrlIndex),
+                        musicResourceInfo.getType(), musicResourceInfo.getHeaders());
                 currentDecoder = decoder;
                 downloadInitializedFuture.complete(null);
 
@@ -546,12 +561,17 @@ public class StreamAudioPlayer {
                 playedBytes = 0;
                 forceSyncInternal = true;
                 localRetryCount++;
+                boolean hasBackup = resourceUrlIndex + 1 < resourceUrls.size();
+                if (hasBackup) {
+                    resourceUrlIndex++;
+                } else {
+                    resourceUrlIndex = 0;
+                    refreshResource = !directPlayback;
+                }
                 setStatus(Status.RETRYING);
 
                 try {
-                    // 等待重试延迟
-                    int retryDelayAdditionalMs = 1000;
-                    int delay = localRetryCount * retryDelayAdditionalMs;
+                    int delay = hasBackup ? 100 : Math.min(3000, localRetryCount * 500);
                     LOGGER.debug("Waiting {} ms before retry", delay);
                     Thread.sleep(delay);
                 } catch (InterruptedException ie) {

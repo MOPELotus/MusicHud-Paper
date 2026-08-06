@@ -243,7 +243,7 @@ public final class TuneWeaveMusicApiService implements IMusicApiService {
                 musicDetail.getId(), url, integer(stream, "bitrate", 0), longValue(stream, "size", 0L),
                 FormatType.fromSerializedName(string(stream, "format", string(stream, "codec", ""))),
                 "", Fee.UNSET, integer(stream, "duration_ms", musicDetail.getDurationMillis()),
-                stringMap(stream.get("headers")));
+                stringMap(stream.get("headers")), stringList(stream.get("backup_urls")));
     }
 
     @Override
@@ -675,6 +675,15 @@ public final class TuneWeaveMusicApiService implements IMusicApiService {
             }
         });
         return result;
+    }
+
+    private static List<String> stringList(JsonElement element) {
+        if (element == null || !element.isJsonArray()) return List.of();
+        return elements(element).stream()
+                .filter(value -> value != null && !value.isJsonNull() && value.isJsonPrimitive())
+                .map(JsonElement::getAsString)
+                .filter(value -> value != null && !value.isBlank())
+                .toList();
     }
 
     private static String qualityName(Quality quality) {

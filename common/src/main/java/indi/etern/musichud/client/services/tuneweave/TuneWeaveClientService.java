@@ -1302,7 +1302,8 @@ public final class TuneWeaveClientService {
         return new MusicResourceInfo(musicDetail.getId(), url, integer(stream, "bitrate", 0),
                 longValue(stream, "size", 0L), FormatType.fromSerializedName(
                 string(stream, "format", string(stream, "codec", ""))), "", Fee.UNSET,
-                integer(stream, "duration_ms", musicDetail.getDurationMillis()), stringMap(stream.get("headers")));
+                integer(stream, "duration_ms", musicDetail.getDurationMillis()), stringMap(stream.get("headers")),
+                stringList(stream.get("backup_urls")));
     }
 
     private MusicResourceInfo loadRadioResource(MusicDetail musicDetail, TuneWeavePlatform platform) {
@@ -2039,6 +2040,15 @@ public final class TuneWeaveClientService {
             if (!entry.getValue().isJsonNull()) result.put(entry.getKey(), entry.getValue().getAsString());
         });
         return result;
+    }
+
+    private static List<String> stringList(JsonElement element) {
+        if (element == null || !element.isJsonArray()) return List.of();
+        return elements(element).stream()
+                .filter(value -> value != null && !value.isJsonNull() && value.isJsonPrimitive())
+                .map(JsonElement::getAsString)
+                .filter(value -> value != null && !value.isBlank())
+                .toList();
     }
 
     private static String qualityName(indi.etern.musichud.beans.music.Quality quality) {
