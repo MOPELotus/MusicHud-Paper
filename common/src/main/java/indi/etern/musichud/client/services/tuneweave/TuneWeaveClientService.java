@@ -8,11 +8,13 @@ import indi.etern.musichud.beans.music.Artist;
 import indi.etern.musichud.beans.music.LyricInfo;
 import indi.etern.musichud.beans.music.MusicDetail;
 import indi.etern.musichud.beans.music.MusicResourceInfo;
+import indi.etern.musichud.beans.music.Quality;
 import indi.etern.musichud.beans.music.UserCategoryPlaylists;
 import indi.etern.musichud.server.api.tuneweave.TuneWeavePlatform;
 
 import java.nio.file.Path;
 import java.util.List;
+import java.util.LinkedHashSet;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
 
@@ -118,19 +120,19 @@ public final class TuneWeaveClientService {
         return account.loadPlaylists(platform);
     }
 
-    public java.util.LinkedHashSet<Album> loadAccountAlbums() {
+    public LinkedHashSet<Album> loadAccountAlbums() {
         return account.loadAlbums();
     }
 
-    public java.util.LinkedHashSet<Album> loadAccountAlbums(TuneWeavePlatform platform) {
+    public LinkedHashSet<Album> loadAccountAlbums(TuneWeavePlatform platform) {
         return account.loadAlbums(platform);
     }
 
-    public java.util.LinkedHashSet<Artist> loadAccountArtists() {
+    public LinkedHashSet<Artist> loadAccountArtists() {
         return account.loadArtists();
     }
 
-    public java.util.LinkedHashSet<Artist> loadAccountArtists(TuneWeavePlatform platform) {
+    public LinkedHashSet<Artist> loadAccountArtists(TuneWeavePlatform platform) {
         return account.loadArtists(platform);
     }
 
@@ -389,8 +391,7 @@ public final class TuneWeaveClientService {
         return uniPlaylists.importDocument(document);
     }
 
-    public MusicResourceInfo getMusicResourceInfo(MusicDetail musicDetail,
-                                                   indi.etern.musichud.beans.music.Quality quality) {
+    public MusicResourceInfo getMusicResourceInfo(MusicDetail musicDetail, Quality quality) {
         return playback.resolve(musicDetail, quality);
     }
 
