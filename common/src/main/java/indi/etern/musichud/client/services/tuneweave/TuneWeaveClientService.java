@@ -47,7 +47,8 @@ public final class TuneWeaveClientService {
     private final TuneWeaveAuthenticationService authentication =
             new TuneWeaveAuthenticationService(gateway, sessionProfiles);
     private final TuneWeaveEntityMapper entities = new TuneWeaveEntityMapper(sessionProfiles::get);
-    private final Map<TuneWeavePlatform, String> favoritePlaylistReferences = new ConcurrentHashMap<>();
+    private final TuneWeaveAccountService account =
+            new TuneWeaveAccountService(gateway, authentication, entities);
     private final LocalUniPlaylistStore localPlaylists = new LocalUniPlaylistStore();
 
     private TuneWeaveClientService() {
@@ -127,108 +128,27 @@ public final class TuneWeaveClientService {
 
     /** Loads the caller's account playlists without routing the private credential through Minecraft. */
     public UserCategoryPlaylists loadAccountPlaylists() {
-        return loadAccountPlaylists(defaultPlatform());
+        return account.loadPlaylists();
     }
 
     public UserCategoryPlaylists loadAccountPlaylists(TuneWeavePlatform platform) {
-        Objects.requireNonNull(platform, "platform");
-        if (platform == TuneWeavePlatform.BILIBILI) {
-            return loadBilibiliFavoriteFolders();
-        }
-        Playlist liked = entities.toPlaylist(platform, unwrap(requestForPlatform(platform, "GET",
-                "/v1/account/favorites/playlist", Map.of("platform", platform.apiName()), null).data()));
-        if (liked == Playlist.EMPTY) {
-            throw new TuneWeaveApiClient.TuneWeaveException(
-                    "TuneWeave favorite playlist response did not contain a reference", false);
-        }
-        favoritePlaylistReferences.put(platform, liked.getSourceRef());
-        JsonElement data = requestForPlatform(platform, "GET", "/v1/account/playlists",
-                Map.of("platform", platform.apiName(), "limit", "100", "offset", "0"), null).data();
-        ObservableSequencedSet<Playlist> created = new ObservableSequencedSet<>();
-        ObservableSequencedSet<Playlist> subscribed = new ObservableSequencedSet<>();
-        for (JsonElement item : elements(data)) {
-            JsonObject raw = unwrap(item);
-            Playlist playlist = entities.toPlaylist(platform, raw);
-            if (playlist == Playlist.EMPTY) {
-                continue;
-            }
-            if (liked.getSourceRef().equals(playlist.getSourceRef())) {
-                continue;
-            }
-            (bool(raw, "subscribed", false) ? subscribed : created).add(playlist);
-        }
-        return new UserCategoryPlaylists(liked, created, subscribed);
-    }
-
-    private UserCategoryPlaylists loadBilibiliFavoriteFolders() {
-        TuneWeaveSession session = sessionProfiles.get(TuneWeavePlatform.BILIBILI);
-        if (session == null) session = loadSession(TuneWeavePlatform.BILIBILI);
-        if (session == null || isBlank(session.userId())) {
-            throw new TuneWeaveApiClient.TuneWeaveException(
-                    "Bilibili session did not provide a user id", false);
-        }
-        String reference = "bilibili:" + session.userId();
-        JsonElement data = requestForPlatform(TuneWeavePlatform.BILIBILI, "GET",
-                "/v1/users/" + TuneWeaveApiClient.encodePathSegment(reference) + "/playlists/created",
-                Map.of("limit", "100", "offset", "0"), null).data();
-        ObservableSequencedSet<Playlist> created = new ObservableSequencedSet<>();
-        ObservableSequencedSet<Playlist> subscribed = new ObservableSequencedSet<>();
-        Playlist defaultFolder = null;
-        for (JsonElement item : elements(data)) {
-            JsonObject raw = unwrap(item);
-            String playlistReference = string(raw, "ref", "");
-            if (!playlistReference.startsWith("bilibili:favorite:")) continue;
-            Playlist playlist = entities.toPlaylist(TuneWeavePlatform.BILIBILI, raw);
-            JsonObject extensions = raw.has("extensions") && raw.get("extensions").isJsonObject()
-                    ? raw.getAsJsonObject("extensions") : new JsonObject();
-            if (bool(extensions, "default", false) && defaultFolder == null) {
-                defaultFolder = playlist;
-            } else {
-                created.add(playlist);
-            }
-        }
-        if (defaultFolder == null && !created.isEmpty()) {
-            defaultFolder = created.removeFirst();
-        }
-        if (defaultFolder == null) {
-            defaultFolder = Playlist.fromTuneWeave(
-                    entities.stableId(TuneWeavePlatform.BILIBILI, "playlist:account:favorites"),
-                    "account:favorites:bilibili", "Bilibili Favorites", MusicHud.ICON_BASE64,
-                    0, 0, session.toMusicHudProfile());
-            entities.cachePlaylist(defaultFolder);
-        }
-        favoritePlaylistReferences.put(TuneWeavePlatform.BILIBILI, defaultFolder.getSourceRef());
-        return new UserCategoryPlaylists(defaultFolder, created, subscribed);
+        return account.loadPlaylists(platform);
     }
 
     public java.util.LinkedHashSet<Album> loadAccountAlbums() {
-        return loadAccountAlbums(defaultPlatform());
+        return account.loadAlbums();
     }
 
     public java.util.LinkedHashSet<Album> loadAccountAlbums(TuneWeavePlatform platform) {
-        JsonElement data = requestForPlatform(platform, "GET", "/v1/account/library/albums",
-                Map.of("platform", platform.apiName(), "limit", "100", "offset", "0"), null).data();
-        java.util.LinkedHashSet<Album> result = new java.util.LinkedHashSet<>();
-        for (JsonElement item : elements(data)) {
-            Album album = entities.toAlbum(platform, unwrap(item));
-            if (album != Album.NONE) result.add(album);
-        }
-        return result;
+        return account.loadAlbums(platform);
     }
 
     public java.util.LinkedHashSet<Artist> loadAccountArtists() {
-        return loadAccountArtists(defaultPlatform());
+        return account.loadArtists();
     }
 
     public java.util.LinkedHashSet<Artist> loadAccountArtists(TuneWeavePlatform platform) {
-        JsonElement data = requestForPlatform(platform, "GET", "/v1/account/following/artists",
-                Map.of("platform", platform.apiName(), "limit", "100", "offset", "0"), null).data();
-        java.util.LinkedHashSet<Artist> result = new java.util.LinkedHashSet<>();
-        for (JsonElement item : elements(data)) {
-            Artist artist = entities.toArtist(platform, unwrap(item));
-            if (!artist.getSourceRef().isBlank()) result.add(artist);
-        }
-        return result;
+        return account.loadArtists(platform);
     }
 
     public CloudLibrary loadCloudLibrary() {
@@ -660,7 +580,7 @@ public final class TuneWeaveClientService {
         }
         TuneWeavePlatform platform = platformFromReference(reference);
         if (platform != TuneWeavePlatform.BILIBILI
-                && reference.equals(favoritePlaylistReferences.get(platform))) {
+                && account.isFavoritePlaylistReference(reference)) {
             Playlist playlist = entities.playlists().stream()
                     .filter(value -> reference.equals(value.getSourceRef()))
                     .findFirst()
@@ -1470,47 +1390,15 @@ public final class TuneWeaveClientService {
     }
 
     public boolean isFavoritePlaylist(Playlist playlist) {
-        if (playlist == null || playlist == Playlist.EMPTY || playlist.getSourceRef().isBlank()) return false;
-        TuneWeavePlatform platform = platformFromReference(playlist.getSourceRef());
-        return playlist.getSourceRef().equals(favoritePlaylistReferences.get(platform));
+        return account.isFavoritePlaylist(playlist);
     }
 
     public boolean supportsFavoriteIntelligence(Playlist playlist) {
-        return isFavoritePlaylist(playlist)
-                && platformFromReference(playlist.getSourceRef()) == TuneWeavePlatform.NETEASE;
+        return account.supportsFavoriteIntelligence(playlist);
     }
 
     public List<MusicDetail> loadFavoriteIntelligence(Playlist playlist, String startReference) {
-        if (!supportsFavoriteIntelligence(playlist)) {
-            throw new IllegalArgumentException("Favorite intelligence is only available for NetEase favorites");
-        }
-        TuneWeavePlatform platform = TuneWeavePlatform.NETEASE;
-        List<JsonElement> favoriteTracks = elements(requestForPlatform(platform, "GET",
-                "/v1/account/favorites/tracks",
-                Map.of("platform", platform.apiName(), "limit", "1", "offset", "0"), null).data());
-        if (favoriteTracks.isEmpty()) return List.of();
-        MusicDetail seed = entities.toTrack(platform, unwrap(favoriteTracks.getFirst()));
-        if (seed == MusicDetail.NONE || seed.getSourceRef().isBlank()) return List.of();
-
-        Map<String, String> query = new LinkedHashMap<>();
-        query.put("platform", platform.apiName());
-        query.put("seed", seed.getSourceRef());
-        query.put("count", "1");
-        if (startReference != null && startReference.startsWith(platform.apiName() + ':')) {
-            query.put("start", startReference);
-        }
-        JsonObject queue = object(requestForPlatform(platform, "GET",
-                "/v1/account/favorites/tracks/intelligence", query, null).data());
-        LinkedHashMap<String, MusicDetail> result = new LinkedHashMap<>();
-        for (JsonElement value : elements(queue.get("items"))) {
-            JsonObject item = unwrap(value);
-            JsonObject trackData = object(item.get("track"));
-            MusicDetail track = entities.toTrack(platform, trackData.isEmpty() ? item : trackData);
-            if (track != MusicDetail.NONE && !track.getSourceRef().isBlank()) {
-                result.putIfAbsent(track.getSourceRef(), track);
-            }
-        }
-        return List.copyOf(result.values());
+        return account.loadFavoriteIntelligence(playlist, startReference);
     }
 
     private static String qualityName(indi.etern.musichud.beans.music.Quality quality) {
