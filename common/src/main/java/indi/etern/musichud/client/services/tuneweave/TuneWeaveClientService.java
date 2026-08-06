@@ -4,7 +4,6 @@ import com.google.gson.JsonElement;
 import com.google.gson.JsonArray;
 import com.google.gson.JsonNull;
 import com.google.gson.JsonObject;
-import indi.etern.musichud.MusicHud;
 import indi.etern.musichud.beans.music.Playlist;
 import indi.etern.musichud.beans.api.SearchType;
 import indi.etern.musichud.beans.music.Album;
@@ -18,12 +17,9 @@ import indi.etern.musichud.beans.music.UserCategoryPlaylists;
 import indi.etern.musichud.interfaces.ClientConfig;
 import indi.etern.musichud.server.api.tuneweave.TuneWeaveApiClient;
 import indi.etern.musichud.server.api.tuneweave.TuneWeavePlatform;
-import indi.etern.musichud.utils.collections.ObservableSequencedSet;
-import net.minecraft.client.resources.language.I18n;
 
 import java.nio.file.Path;
 import java.util.ArrayList;
-import java.util.Collections;
 import java.util.List;
 import java.util.LinkedHashMap;
 import java.util.Locale;
@@ -52,6 +48,8 @@ public final class TuneWeaveClientService {
     private final TuneWeavePlaylistService platformPlaylists =
             new TuneWeavePlaylistService(gateway, entities, catalog);
     private final LocalUniPlaylistStore localPlaylists = new LocalUniPlaylistStore();
+    private final TuneWeaveUniPlaylistService uniPlaylists =
+            new TuneWeaveUniPlaylistService(gateway, entities, localPlaylists);
 
     private TuneWeaveClientService() {
     }
@@ -347,182 +345,71 @@ public final class TuneWeaveClientService {
         }
     }
 
-    public List<UniPlaylistInfo> listUniPlaylists() {
-        List<UniPlaylistInfo> result = new ArrayList<>();
-        for (JsonObject document : localPlaylists.list()) {
-            result.add(localPlaylistInfo(document));
-        }
-        return result;
+    public List<TuneWeaveUniPlaylist> listUniPlaylists() {
+        return uniPlaylists.list();
     }
 
-    public UniPlaylistInfo createUniPlaylist(String name, String description) {
-        return localPlaylistInfo(localPlaylists.create(name, description));
+    public TuneWeaveUniPlaylist createUniPlaylist(String name, String description) {
+        return uniPlaylists.create(name, description);
     }
 
-    public UniPlaylistInfo updateUniPlaylist(String reference, String name, String description) {
-        return localPlaylistInfo(localPlaylists.update(reference, name, description));
+    public TuneWeaveUniPlaylist updateUniPlaylist(String reference, String name, String description) {
+        return uniPlaylists.update(reference, name, description);
     }
 
     public void deleteUniPlaylist(String reference) {
-        localPlaylists.delete(reference);
+        uniPlaylists.delete(reference);
     }
 
-    public List<UniItemInfo> listUniPlaylistItems(String reference) {
-        List<UniItemInfo> result = new ArrayList<>();
-        for (JsonObject object : localPlaylists.items(reference)) {
-            JsonObject snapshot = object.has("snapshot") && object.get("snapshot").isJsonObject()
-                    ? object.getAsJsonObject("snapshot") : new JsonObject();
-            String itemRef = string(object, "source_ref", "");
-            if (itemRef.isBlank()) continue;
-            List<String> artists = new ArrayList<>();
-            JsonElement artistData = snapshot.get("artists");
-            if (artistData != null && artistData.isJsonArray()) {
-                artistData.getAsJsonArray().forEach(value -> artists.add(value.getAsString()));
-            }
-            result.add(new UniItemInfo(string(object, "id", ""), integer(object, "position", result.size()),
-                    string(object, "kind", "track"), itemRef,
-                    string(snapshot, "title", itemRef), artists,
-                    string(snapshot, "album", ""), integer(snapshot, "duration_ms", 0),
-                    string(snapshot, "cover_url", "")));
-        }
-        return result;
+    public List<TuneWeaveUniItem> listUniPlaylistItems(String reference) {
+        return uniPlaylists.items(reference);
     }
 
-    public MusicDetail uniPlaylistItemTrack(UniItemInfo item) {
-        requireReference(item == null ? null : item.sourceRef(), "Uni Playlist item");
-        TuneWeavePlatform platform = platformFromReference(item.sourceRef());
-        List<Artist> artists = item.artists().stream()
-                .map(name -> new Artist(entities.stableId(platform, "uni-artist:" + name), name,
-                        "", 0, 0, "", new ArrayList<>(), 0, ""))
-                .toList();
-        String albumName = item.album().isBlank() ? item.title() : item.album();
-        Album album = new Album(entities.stableId(platform, "uni-album:" + item.sourceRef()), albumName,
-                item.coverUrl().isBlank() ? MusicHud.ICON_BASE64 : item.coverUrl(),
-                I18n.get(MusicHud.MOD_ID + ".text.uniPlaylist.name"), "", 0,
-                new ObservableSequencedSet<>(), new java.util.LinkedHashSet<>(artists),
-                indi.etern.musichud.beans.music.PusherInfo.EMPTY, "");
-        String sourceKind = "mv".equals(item.kind()) ? "video" : item.kind();
-        int duration = item.durationMillis();
-        if (duration <= 0 && "radio_station".equals(sourceKind)) duration = 24 * 60 * 60 * 1000;
-        if (duration <= 0) throw new IllegalArgumentException("Uni Playlist item has no playable duration");
-        MusicDetail track = MusicDetail.fromTuneWeave(entities.stableId(platform,
-                "uni-item:" + item.id() + ':' + item.sourceRef()), item.sourceRef(), sourceKind,
-                item.title(), duration, album, artists);
-        track.setClientHostedUni(true);
-        track.setPusherInfo(indi.etern.musichud.beans.music.PusherInfo.EMPTY);
-        entities.cacheTrack(track);
-        return track;
+    public MusicDetail uniPlaylistItemTrack(TuneWeaveUniItem item) {
+        return uniPlaylists.itemTrack(item);
     }
 
     public void addUniPlaylistItems(String reference, List<String> resourceRefs) {
-        if (resourceRefs == null || resourceRefs.isEmpty()) return;
-        JsonObject body = new JsonObject();
-        JsonArray items = new JsonArray();
-        resourceRefs.stream().filter(value -> value != null && !value.isBlank()).limit(100).forEach(value -> {
-            JsonObject item = new JsonObject();
-            item.addProperty("ref", value);
-            item.addProperty("kind", "track");
-            items.add(item);
-        });
-        body.add("items", items);
-        localPlaylists.append(reference, materializeItems(body));
+        uniPlaylists.addItems(reference, resourceRefs);
     }
 
     public void addUniPlaylistItem(String reference, String resourceRef, String kind) {
-        if (resourceRef == null || resourceRef.isBlank()) return;
-        JsonObject body = new JsonObject();
-        JsonArray items = new JsonArray();
-        JsonObject item = new JsonObject();
-        item.addProperty("ref", resourceRef);
-        item.addProperty("kind", kind == null || kind.isBlank() ? "track" : kind);
-        items.add(item);
-        body.add("items", items);
-        localPlaylists.append(reference, materializeItems(body));
+        uniPlaylists.addItem(reference, resourceRef, kind);
     }
 
     public void deleteUniPlaylistItem(String reference, String itemId) {
-        localPlaylists.removeItem(reference, itemId);
+        uniPlaylists.deleteItem(reference, itemId);
     }
 
     public void reorderUniPlaylistItems(String reference, List<String> itemIds) {
-        localPlaylists.reorder(reference, itemIds);
+        uniPlaylists.reorderItems(reference, itemIds);
     }
 
-    public UniPlaylistInfo importUniPlaylist(String name, List<String> sourceRefs) {
-        return importUniPlaylistSources(name, sourceRefs.stream()
-                .filter(value -> value != null && !value.isBlank()).limit(50)
-                .map(value -> {
-                    int separator = value.indexOf(':');
-                    if (separator <= 0 || separator + 1 >= value.length()) {
-                        throw new IllegalArgumentException("TuneWeave playlist reference is invalid");
-                    }
-                    return new UniImportSource(value.substring(0, separator), "playlist",
-                            value.substring(separator + 1));
-                }).toList());
+    public TuneWeaveUniPlaylist importUniPlaylist(String name, List<String> sourceRefs) {
+        return uniPlaylists.importPlaylists(name, sourceRefs);
     }
 
-    public UniPlaylistInfo importUniPlaylistSources(String name, List<UniImportSource> sources) {
-        return importUniPlaylistSources(name, null, sources);
+    public TuneWeaveUniPlaylist importUniPlaylistSources(
+            String name, List<TuneWeaveUniImportSource> sources) {
+        return uniPlaylists.importSources(name, sources);
     }
 
-    public UniPlaylistInfo importUniPlaylistSources(String name, String description,
-                                                    List<UniImportSource> sources) {
-        MaterializedImport materializedImport = materializeImportSources(sources);
-        String playlistName = name == null || name.isBlank() ? materializedImport.name() : name;
-        String playlistDescription = description == null
-                ? materializedImport.description() : description;
-        UniPlaylistInfo playlist = createUniPlaylist(playlistName, playlistDescription);
-        try {
-            JsonObject document = localPlaylists.append(playlist.reference(), materializedImport.items());
-            return localPlaylistInfo(document);
-        } catch (RuntimeException error) {
-            localPlaylists.delete(playlist.reference());
-            throw error;
-        }
+    public TuneWeaveUniPlaylist importUniPlaylistSources(
+            String name, String description, List<TuneWeaveUniImportSource> sources) {
+        return uniPlaylists.importSources(name, description, sources);
     }
 
-    public UniPlaylistInfo appendUniPlaylistSources(String reference, List<UniImportSource> sources) {
-        requireReference(reference, "local Uni Playlist");
-        MaterializedImport materializedImport = materializeImportSources(sources);
-        return localPlaylistInfo(localPlaylists.append(reference, materializedImport.items()));
-    }
-
-    private MaterializedImport materializeImportSources(List<UniImportSource> sources) {
-        JsonObject body = new JsonObject();
-        JsonArray sourceArray = new JsonArray();
-        sources.stream().limit(50).forEach(source -> {
-            JsonObject value = new JsonObject();
-            value.addProperty("platform", source.platform());
-            value.addProperty("type", source.type());
-            value.addProperty("id", source.id());
-            sourceArray.add(value);
-        });
-        body.add("sources", sourceArray);
-        List<JsonObject> materialized = new ArrayList<>();
-        String materializedName = "";
-        String materializedDescription = "";
-        int offset = 0;
-        int total;
-        do {
-            JsonObject data = object(requestWithAllCredentials("POST", "/v1/uni/materialize/imports",
-                    Map.of("limit", "500", "offset", Integer.toString(offset)), body).data());
-            if (materializedName.isBlank()) materializedName = string(data, "name", "");
-            if (materializedDescription.isBlank()) materializedDescription = string(data, "description", "");
-            List<JsonElement> page = elements(data);
-            for (JsonElement value : page) materialized.add(unwrap(value).deepCopy());
-            total = integer(data, "item_count", materialized.size());
-            offset += page.size();
-            if (page.isEmpty()) break;
-        } while (offset < total);
-        return new MaterializedImport(materializedName, materializedDescription, materialized);
+    public TuneWeaveUniPlaylist appendUniPlaylistSources(
+            String reference, List<TuneWeaveUniImportSource> sources) {
+        return uniPlaylists.appendSources(reference, sources);
     }
 
     public JsonObject exportUniPlaylist(String reference) {
-        return localPlaylists.exportDocument(reference);
+        return uniPlaylists.exportDocument(reference);
     }
 
-    public UniPlaylistInfo importUniPlaylistDocument(JsonObject document) {
-        return localPlaylistInfo(localPlaylists.importDocument(Objects.requireNonNull(document)));
+    public TuneWeaveUniPlaylist importUniPlaylistDocument(JsonObject document) {
+        return uniPlaylists.importDocument(document);
     }
 
     public MusicResourceInfo getMusicResourceInfo(MusicDetail musicDetail,
@@ -661,21 +548,6 @@ public final class TuneWeaveClientService {
                 : defaultPlatform();
     }
 
-    private List<JsonObject> materializeItems(JsonObject body) {
-        JsonObject data = object(requestWithAllCredentials(
-                "POST", "/v1/uni/materialize/items", Map.of(), body).data());
-        List<JsonObject> result = new ArrayList<>();
-        for (JsonElement value : elements(data)) result.add(unwrap(value).deepCopy());
-        if (result.isEmpty()) throw new IllegalArgumentException("TuneWeave did not materialize any playlist items");
-        return result;
-    }
-
-    private static UniPlaylistInfo localPlaylistInfo(JsonObject document) {
-        String reference = LocalUniPlaylistStore.reference(document);
-        return new UniPlaylistInfo(reference, string(document, "name", reference),
-                string(document, "description", ""), integer(document, "item_count", 0));
-    }
-
     public void logout(TuneWeavePlatform platform) {
         authentication.logout(platform);
     }
@@ -723,23 +595,6 @@ public final class TuneWeaveClientService {
             case JY_MASTER -> "master";
             case NONE -> "auto";
         };
-    }
-
-    public record UniPlaylistInfo(String reference, String name, String description, int itemCount) {
-    }
-
-    public record UniImportSource(String platform, String type, String id) {
-    }
-
-    private record MaterializedImport(String name, String description, List<JsonObject> items) {
-    }
-
-    public record UniItemInfo(String id, int position, String kind, String sourceRef,
-                              String title, List<String> artists, String album,
-                              int durationMillis, String coverUrl) {
-        public UniItemInfo {
-            artists = artists == null ? List.of() : Collections.unmodifiableList(new ArrayList<>(artists));
-        }
     }
 
 }

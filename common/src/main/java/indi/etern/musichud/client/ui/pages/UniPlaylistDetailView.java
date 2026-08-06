@@ -19,6 +19,8 @@ import icyllis.modernui.widget.Toast;
 import indi.etern.musichud.MusicHud;
 import indi.etern.musichud.client.services.music.MusicService;
 import indi.etern.musichud.client.services.tuneweave.TuneWeaveClientService;
+import indi.etern.musichud.client.services.tuneweave.TuneWeaveUniItem;
+import indi.etern.musichud.client.services.tuneweave.TuneWeaveUniPlaylist;
 import indi.etern.musichud.client.ui.Theme;
 import indi.etern.musichud.client.ui.ToastUtil;
 import indi.etern.musichud.client.ui.components.Modal;
@@ -38,13 +40,13 @@ import static icyllis.modernui.view.ViewGroup.LayoutParams.WRAP_CONTENT;
 
 public final class UniPlaylistDetailView extends LinearLayout {
     private final TuneWeaveClientService tuneWeave = TuneWeaveClientService.getInstance();
-    private TuneWeaveClientService.UniPlaylistInfo playlist;
+    private TuneWeaveUniPlaylist playlist;
     private final TextView titleView;
     private final TextView descriptionView;
     private final LinearLayout itemsLayout;
-    private List<TuneWeaveClientService.UniItemInfo> items = List.of();
+    private List<TuneWeaveUniItem> items = List.of();
 
-    public UniPlaylistDetailView(Context context, TuneWeaveClientService.UniPlaylistInfo playlist) {
+    public UniPlaylistDetailView(Context context, TuneWeaveUniPlaylist playlist) {
         super(context);
         this.playlist = playlist;
         setOrientation(VERTICAL);
@@ -107,7 +109,7 @@ public final class UniPlaylistDetailView extends LinearLayout {
         }
         for (int index = 0; index < items.size(); index++) {
             final int itemIndex = index;
-            TuneWeaveClientService.UniItemInfo item = items.get(index);
+            TuneWeaveUniItem item = items.get(index);
             LinearLayout row = new LinearLayout(getContext());
             row.setGravity(Gravity.CENTER_VERTICAL);
             TextView number = new TextView(getContext());
@@ -175,7 +177,7 @@ public final class UniPlaylistDetailView extends LinearLayout {
                 playlist.name(), playlist.description(), (name, description) ->
                         MusicHud.EXECUTOR.execute(() -> {
                             try {
-                                TuneWeaveClientService.UniPlaylistInfo updated = tuneWeave.updateUniPlaylist(
+                                TuneWeaveUniPlaylist updated = tuneWeave.updateUniPlaylist(
                                         playlist.reference(), name, description);
                                 MuiModApi.postToUiThread(() -> {
                                     playlist = updated;
@@ -233,7 +235,7 @@ public final class UniPlaylistDetailView extends LinearLayout {
         catch (RuntimeException error) { MuiModApi.postToUiThread(() -> showMessage(error.getMessage())); } });
     }
 
-    private void play(TuneWeaveClientService.UniItemInfo item) {
+    private void play(TuneWeaveUniItem item) {
         try {
             MusicService.getInstance().sendPushMusicToQueue(tuneWeave.uniPlaylistItemTrack(item));
         } catch (RuntimeException error) {
@@ -244,16 +246,16 @@ public final class UniPlaylistDetailView extends LinearLayout {
     }
 
     private void playAll() {
-        for (TuneWeaveClientService.UniItemInfo item : items) play(item);
+        for (TuneWeaveUniItem item : items) play(item);
     }
 
-    private void remove(TuneWeaveClientService.UniItemInfo item) {
+    private void remove(TuneWeaveUniItem item) {
         MusicHud.EXECUTOR.execute(() -> { try { tuneWeave.deleteUniPlaylistItem(playlist.reference(), item.id()); refresh(); }
         catch (RuntimeException error) { MuiModApi.postToUiThread(() -> showMessage(error.getMessage())); } });
     }
 
     private void move(int from, int to) {
-        List<String> ids = new ArrayList<>(items.stream().map(TuneWeaveClientService.UniItemInfo::id).toList());
+        List<String> ids = new ArrayList<>(items.stream().map(TuneWeaveUniItem::id).toList());
         String id = ids.remove(from);
         ids.add(to, id);
         MusicHud.EXECUTOR.execute(() -> { try { tuneWeave.reorderUniPlaylistItems(playlist.reference(), ids); refresh(); }

@@ -21,6 +21,8 @@ import indi.etern.musichud.MusicHud;
 import indi.etern.musichud.beans.api.SearchType;
 import indi.etern.musichud.beans.music.Playlist;
 import indi.etern.musichud.client.services.tuneweave.TuneWeaveClientService;
+import indi.etern.musichud.client.services.tuneweave.TuneWeaveUniImportSource;
+import indi.etern.musichud.client.services.tuneweave.TuneWeaveUniPlaylist;
 import indi.etern.musichud.client.ui.Theme;
 import indi.etern.musichud.client.ui.components.Modal;
 import indi.etern.musichud.client.ui.components.PlatformSelector;
@@ -106,7 +108,7 @@ public final class UniPlaylistView extends LinearLayout {
         showProgress(I18n.get(MusicHud.MOD_ID + ".text.uniPlaylist.loading"));
         MusicHud.EXECUTOR.execute(() -> {
             try {
-                List<TuneWeaveClientService.UniPlaylistInfo> playlists = tuneWeave.listUniPlaylists();
+                List<TuneWeaveUniPlaylist> playlists = tuneWeave.listUniPlaylists();
                 MuiModApi.postToUiThread(() -> render(playlists));
             } catch (RuntimeException error) {
                 MuiModApi.postToUiThread(() -> showProgress(error.getMessage()));
@@ -114,14 +116,14 @@ public final class UniPlaylistView extends LinearLayout {
         });
     }
 
-    private void render(List<TuneWeaveClientService.UniPlaylistInfo> playlists) {
+    private void render(List<TuneWeaveUniPlaylist> playlists) {
         list.removeAllViews();
         if (playlists.isEmpty()) {
             showProgress(I18n.get(MusicHud.MOD_ID + ".text.uniPlaylist.empty"));
             return;
         }
         progress.setVisibility(View.GONE);
-        for (TuneWeaveClientService.UniPlaylistInfo playlist : playlists) {
+        for (TuneWeaveUniPlaylist playlist : playlists) {
             LinearLayout row = new LinearLayout(getContext());
             row.setOrientation(VERTICAL);
             row.setPadding(dp(12), dp(10), dp(12), dp(10));
@@ -354,7 +356,7 @@ public final class UniPlaylistView extends LinearLayout {
                             String sourceType = mode == 0 ? importSourceType(selectedPlaylist, selected)
                                     : sourceTypes[type.getSelectedItemPosition()];
                             tuneWeave.importUniPlaylistSources(playlistName, List.of(
-                                    new TuneWeaveClientService.UniImportSource(
+                                    new TuneWeaveUniImportSource(
                                             selected.apiName(), sourceType, sourceId)));
                             refreshOnUi();
                         } catch (RuntimeException error) {
@@ -385,7 +387,7 @@ public final class UniPlaylistView extends LinearLayout {
                         try {
                             tuneWeave.importUniPlaylistSources(
                                     requestedName.isBlank() ? selected.getName() : requestedName,
-                                    List.of(new TuneWeaveClientService.UniImportSource(
+                                    List.of(new TuneWeaveUniImportSource(
                                             platform.apiName(), importSourceType(selected, platform),
                                             importSourceId(selected, platform))));
                             refreshOnUi();
@@ -448,7 +450,7 @@ public final class UniPlaylistView extends LinearLayout {
         });
     }
 
-    private void export(TuneWeaveClientService.UniPlaylistInfo playlist) {
+    private void export(TuneWeaveUniPlaylist playlist) {
         String safeName = playlist.name().replaceAll("[^a-zA-Z0-9._-]+", "_");
         String path = TinyFileDialogs.tinyfd_saveFileDialog(
                 I18n.get(MusicHud.MOD_ID + ".text.uniPlaylist.exportDocument"),
@@ -465,14 +467,14 @@ public final class UniPlaylistView extends LinearLayout {
         });
     }
 
-    private void update(TuneWeaveClientService.UniPlaylistInfo playlist, String name, String description) {
+    private void update(TuneWeaveUniPlaylist playlist, String name, String description) {
         MusicHud.EXECUTOR.execute(() -> {
             try { tuneWeave.updateUniPlaylist(playlist.reference(), name, description); refreshOnUi(); }
             catch (RuntimeException error) { MuiModApi.postToUiThread(() -> showProgress(error.getMessage())); }
         });
     }
 
-    private void confirmDelete(TuneWeaveClientService.UniPlaylistInfo playlist) {
+    private void confirmDelete(TuneWeaveUniPlaylist playlist) {
         TextView text = new TextView(getContext());
         text.setText(I18n.get(MusicHud.MOD_ID + ".text.uniPlaylist.deleteWarning"));
         TextView title = new TextView(getContext());

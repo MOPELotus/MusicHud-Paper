@@ -20,6 +20,8 @@ import indi.etern.musichud.MusicHud;
 import indi.etern.musichud.beans.api.SearchType;
 import indi.etern.musichud.beans.music.Playlist;
 import indi.etern.musichud.client.services.tuneweave.TuneWeaveClientService;
+import indi.etern.musichud.client.services.tuneweave.TuneWeaveUniImportSource;
+import indi.etern.musichud.client.services.tuneweave.TuneWeaveUniPlaylist;
 import indi.etern.musichud.client.ui.Theme;
 import indi.etern.musichud.client.ui.components.Modal;
 import indi.etern.musichud.client.ui.components.PlatformSelector;
@@ -49,7 +51,7 @@ final class UniPlaylistImportDialog {
     private UniPlaylistImportDialog() {
     }
 
-    static void show(Context context, TuneWeaveClientService.UniPlaylistInfo target,
+    static void show(Context context, TuneWeaveUniPlaylist target,
                      Runnable onImported, Consumer<String> onError) {
         new Picker(context, target, onImported, onError).show();
     }
@@ -60,7 +62,7 @@ final class UniPlaylistImportDialog {
 
     private static final class Picker {
         private final Context context;
-        private final TuneWeaveClientService.UniPlaylistInfo target;
+        private final TuneWeaveUniPlaylist target;
         private final Runnable onImported;
         private final Consumer<String> onError;
         private final LinkedHashMap<String, SelectedSource> selectedSources = new LinkedHashMap<>();
@@ -79,7 +81,7 @@ final class UniPlaylistImportDialog {
         private final TextView status;
         private final TextView selectedStatus;
 
-        private Picker(Context context, TuneWeaveClientService.UniPlaylistInfo target,
+        private Picker(Context context, TuneWeaveUniPlaylist target,
                        Runnable onImported, Consumer<String> onError) {
             this.context = context;
             this.target = target;
@@ -283,7 +285,7 @@ final class UniPlaylistImportDialog {
             }
             status.setText(text(".text.uniPlaylist.selectMultiple"));
             for (Playlist playlist : playlists) {
-                TuneWeaveClientService.UniImportSource source = source(playlist, selectedPlatform);
+                TuneWeaveUniImportSource source = source(playlist, selectedPlatform);
                 String key = key(source);
                 String label = playlist.getName() + " (" + playlist.getMusicTrackCount() + ")";
                 CheckBox choice = choice(label, selectedSources.containsKey(key));
@@ -300,7 +302,7 @@ final class UniPlaylistImportDialog {
             String value = input.getText().toString().trim();
             if (value.isBlank()) return;
             TuneWeavePlatform selectedPlatform = platform.getSelectedPlatform();
-            TuneWeaveClientService.UniImportSource source = new TuneWeaveClientService.UniImportSource(
+            TuneWeaveUniImportSource source = new TuneWeaveUniImportSource(
                     selectedPlatform.apiName(), SOURCE_TYPES[type.getSelectedItemPosition()], value);
             selectedSources.put(key(source), new SelectedSource(source,
                     text(".platform." + selectedPlatform.apiName()) + " · " + value));
@@ -347,7 +349,7 @@ final class UniPlaylistImportDialog {
                 else status.setText(text(".text.uniPlaylist.selectMultiple"));
                 return;
             }
-            List<TuneWeaveClientService.UniImportSource> sources = selectedSources.values().stream()
+            List<TuneWeaveUniImportSource> sources = selectedSources.values().stream()
                     .map(SelectedSource::source).limit(50).toList();
             String requestedName = target == null ? name.getText().toString().trim() : "";
             String requestedDescription = target == null ? description.getText().toString().trim() : "";
@@ -418,8 +420,8 @@ final class UniPlaylistImportDialog {
         }
     }
 
-    private static TuneWeaveClientService.UniImportSource source(Playlist playlist,
-                                                                  TuneWeavePlatform platform) {
+    private static TuneWeaveUniImportSource source(Playlist playlist,
+                                                   TuneWeavePlatform platform) {
         String id = referenceId(playlist.getSourceRef(), platform);
         String type = "playlist";
         if (platform == TuneWeavePlatform.BILIBILI && id != null) {
@@ -428,7 +430,7 @@ final class UniPlaylistImportDialog {
             int separator = id.indexOf(':');
             if (separator >= 0 && separator + 1 < id.length()) id = id.substring(separator + 1);
         }
-        return new TuneWeaveClientService.UniImportSource(platform.apiName(), type, id);
+        return new TuneWeaveUniImportSource(platform.apiName(), type, id);
     }
 
     private static String referenceId(String reference, TuneWeavePlatform platform) {
@@ -437,7 +439,7 @@ final class UniPlaylistImportDialog {
                 ? reference.substring(prefix.length()) : reference;
     }
 
-    private static String key(TuneWeaveClientService.UniImportSource source) {
+    private static String key(TuneWeaveUniImportSource source) {
         return source.platform() + '\n' + source.type() + '\n' + source.id();
     }
 
@@ -450,6 +452,6 @@ final class UniPlaylistImportDialog {
         return I18n.get(MusicHud.MOD_ID + suffix);
     }
 
-    private record SelectedSource(TuneWeaveClientService.UniImportSource source, String label) {
+    private record SelectedSource(TuneWeaveUniImportSource source, String label) {
     }
 }
