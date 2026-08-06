@@ -22,6 +22,7 @@ import indi.etern.musichud.interfaces.ClientConfig;
 import indi.etern.musichud.server.api.tuneweave.TuneWeaveApiClient;
 import indi.etern.musichud.server.api.tuneweave.TuneWeavePlatform;
 import indi.etern.musichud.utils.collections.ObservableSequencedSet;
+import net.minecraft.client.resources.language.I18n;
 
 import java.nio.ByteBuffer;
 import java.nio.charset.StandardCharsets;
@@ -1140,7 +1141,8 @@ public final class TuneWeaveClientService {
                 .toList();
         String albumName = item.album().isBlank() ? item.title() : item.album();
         Album album = new Album(stableId(platform, "uni-album:" + item.sourceRef()), albumName,
-                item.coverUrl().isBlank() ? MusicHud.ICON_BASE64 : item.coverUrl(), "Uni Playlist", "", 0,
+                item.coverUrl().isBlank() ? MusicHud.ICON_BASE64 : item.coverUrl(),
+                I18n.get(MusicHud.MOD_ID + ".text.uniPlaylist.name"), "", 0,
                 new ObservableSequencedSet<>(), new java.util.LinkedHashSet<>(artists),
                 indi.etern.musichud.beans.music.PusherInfo.EMPTY, "");
         String sourceKind = "mv".equals(item.kind()) ? "video" : item.kind();

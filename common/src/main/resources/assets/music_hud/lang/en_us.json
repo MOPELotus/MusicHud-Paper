@@ -4,6 +4,7 @@
   "music_hud.platform.qq": "QQ Music",
   "music_hud.platform.bilibili": "Bilibili",
   "music_hud.text.page.uniPlaylists": "Uni Playlists",
+  "music_hud.text.uniPlaylist.name": "Uni Playlist",
   "music_hud.button.create": "Create",
   "music_hud.button.import": "Import",
   "music_hud.button.open": "Open",
