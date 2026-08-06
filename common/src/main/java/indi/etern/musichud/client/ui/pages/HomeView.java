@@ -530,14 +530,6 @@ public class HomeView extends LinearLayout {
     protected void onAttachedToWindow() {
         super.onAttachedToWindow();
         instance = this;
-        MuiModApi.postToUiThread(() -> {
-            if (instance != this || !isAttachedToWindow() || staggeredLyricScrollView == null) return;
-            NowPlayingInfo nowPlayingInfo = NowPlayingInfo.getInstance();
-            MusicDetail current = nowPlayingInfo.getCurrentlyPlayingMusicDetail();
-            Queue<LyricLine> currentLyrics = nowPlayingInfo.getLyricLines();
-            updatePlaybackContent(current, currentLyrics);
-            staggeredLyricScrollView.switchLyrics(current, currentLyrics);
-        });
     }
 
     @Override
