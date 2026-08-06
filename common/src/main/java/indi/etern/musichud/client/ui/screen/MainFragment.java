@@ -24,7 +24,6 @@ import indi.etern.musichud.client.services.ConnectionManager;
 import indi.etern.musichud.client.services.music.MusicService;
 import indi.etern.musichud.client.ui.Theme;
 import indi.etern.musichud.client.ui.components.*;
-import indi.etern.musichud.client.ui.dto.LyricLine;
 import indi.etern.musichud.client.ui.pages.ConfigView;
 import indi.etern.musichud.client.ui.pages.HomeView;
 import indi.etern.musichud.client.ui.pages.account.AccountBaseView;
@@ -33,6 +32,7 @@ import indi.etern.musichud.client.utils.PlayerInfoUtil;
 import indi.etern.musichud.client.utils.image.PlatformIconUtils;
 import indi.etern.musichud.client.utils.ui.ButtonInsetBackgroundFactory;
 import indi.etern.musichud.interfaces.ClientConfig;
+import indi.etern.musichud.interfaces.Unregister;
 import lombok.NonNull;
 import lombok.Setter;
 import net.minecraft.client.Minecraft;
@@ -44,7 +44,6 @@ import java.time.LocalTime;
 import java.time.format.DateTimeFormatter;
 import java.time.temporal.ChronoUnit;
 import java.util.List;
-import java.util.Queue;
 import java.util.concurrent.atomic.AtomicLong;
 import java.util.function.Consumer;
 
@@ -89,12 +88,19 @@ public class MainFragment extends Fragment {
     private ToggleTrackLikeStateButton likeButton;
     private ModifyPlaylistTrackModalButton addToPlaylistButton;
     private final AtomicLong progressUpdateGeneration = new AtomicLong();
+    private final Consumer<NowPlayingInfo.PlaybackSnapshot> playbackStateListener = snapshot ->
+            MuiModApi.postToUiThread(() -> {
+                if (instance == this) {
+                    renderPlayback(snapshot);
+                }
+            });
+    private Unregister playbackStateRegister;
 
     public MainFragment() {
     }
 
     public static void refresh() {
-        switchMusic(null, null, null);
+        renderPlayback(NowPlayingInfo.getInstance().snapshot());
         HomeView homeView = HomeView.getInstance();
         if (homeView != null) {
             homeView.refresh();
@@ -113,7 +119,8 @@ public class MainFragment extends Fragment {
         }
     }
 
-    public static void switchMusic(MusicDetail musicDetail, MusicDetail nextToPlay, Queue<LyricLine> lyricLines) {
+    private static void renderPlayback(NowPlayingInfo.PlaybackSnapshot snapshot) {
+        MusicDetail musicDetail = snapshot.musicDetail();
         MainFragment target = instance;
         if (target != null) {
             long progressGeneration = target.progressUpdateGeneration.incrementAndGet();
@@ -225,10 +232,6 @@ public class MainFragment extends Fragment {
                 if (!program) instance.addToPlaylistButton.bindMusicDetail(musicDetail);
                 instance.buttonsLayout.setVisibility(View.VISIBLE);
                 startProgressUpdater(target, musicDetail, progressGeneration);
-            }
-            HomeView homeView = HomeView.getInstance();
-            if (homeView != null) {
-                homeView.switchMusic(musicDetail, nextToPlay, lyricLines);
             }
         }
     }
@@ -458,8 +461,6 @@ public class MainFragment extends Fragment {
                 }
 
                 NowPlayingInfo nowPlayingInfo = NowPlayingInfo.getInstance();
-                MusicDetail currentlyPlayingMusicDetail = nowPlayingInfo.getCurrentlyPlayingMusicDetail();
-                MusicDetail nextToPlayMusicDetail = nowPlayingInfo.getNextToPlayIdleMusicDetail();
 
                 LinearLayout.LayoutParams buttonsParams = new LinearLayout.LayoutParams(MATCH_PARENT, buttonsLayout.dp(40));
                 buttonsParams.setMargins(0, sideContent.dp(2), 0, 0);
@@ -524,7 +525,11 @@ public class MainFragment extends Fragment {
                 transition3.enableTransitionType(LayoutTransition.CHANGING);
                 serverConnectPanel.setLayoutTransition(transition3);
 
-                switchMusic(currentlyPlayingMusicDetail, nextToPlayMusicDetail, playingInfo.getLyricLines());
+                if (playbackStateRegister != null) {
+                    playbackStateRegister.unregister();
+                }
+                playbackStateRegister = playingInfo.addPlaybackStateListener(playbackStateListener);
+                renderPlayback(playingInfo.snapshot());
             }
             var params = new LinearLayout.LayoutParams(MATCH_PARENT, MATCH_PARENT, 0);
             params.setMargins(routerContainer.dp(80), 0, routerContainer.dp(48), 0);
@@ -584,6 +589,10 @@ public class MainFragment extends Fragment {
     public void onDestroyView() {
         super.onDestroyView();
         progressUpdateGeneration.incrementAndGet();
+        if (playbackStateRegister != null) {
+            playbackStateRegister.unregister();
+            playbackStateRegister = null;
+        }
         if (instance == this) {
             instance = null;
         }

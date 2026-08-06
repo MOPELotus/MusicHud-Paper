@@ -36,6 +36,7 @@ import net.minecraft.client.player.LocalPlayer;
 import net.minecraft.client.resources.language.I18n;
 import org.apache.logging.log4j.Logger;
 
+import java.util.Collection;
 import java.util.Map;
 import java.util.Queue;
 import java.util.Set;
@@ -105,6 +106,13 @@ public class HomeView extends LinearLayout {
     private Unregister localRemoveRegister;
     private Unregister serverAddRegister;
     private Unregister serverRemoveRegister;
+    private Unregister playbackStateRegister;
+    private final Consumer<NowPlayingInfo.PlaybackSnapshot> playbackStateListener = snapshot ->
+            MuiModApi.postToUiThread(() -> {
+                if (instance == this) {
+                    applyPlaybackSnapshot(snapshot);
+                }
+            });
     private LocalPlayer localPlayer = Minecraft.getInstance().player;
     private final Consumer<MusicCollection> serverAddListener = collection -> {
         MuiModApi.postToUiThread(() -> {
@@ -123,12 +131,7 @@ public class HomeView extends LinearLayout {
 
     public void refresh() {
         instance = this;
-        if (musicQueuePushListener != null) {
-            musicService.getMusicQueuePushListeners().remove(musicQueuePushListener);
-        }
-        if (musicQueueRemoveListener != null) {
-            musicService.getMusicQueueRemoveListeners().remove(musicQueueRemoveListener);
-        }
+        releaseSubscriptions();
         Context context = getContext();
         removeAllViews();
         idlePlaySourceCardMap.clear();
@@ -199,8 +202,6 @@ public class HomeView extends LinearLayout {
 
             playbackContent.addView(videoPreview,
                     new FrameLayout.LayoutParams(MATCH_PARENT, MATCH_PARENT));
-            NowPlayingInfo nowPlayingInfo = NowPlayingInfo.getInstance();
-            updatePlaybackContent(nowPlayingInfo.getCurrentlyPlayingMusicDetail(), nowPlayingInfo.getLyricLines());
         }
         {
             LinearLayout queueView = new LinearLayout(context);
@@ -351,23 +352,46 @@ public class HomeView extends LinearLayout {
             };
             musicService.getMusicQueuePushListeners().add(musicQueuePushListener);
             musicService.getMusicQueueRemoveListeners().add(musicQueueRemoveListener);
+        }
+        subscribePlaybackState();
+        applyPlaybackSnapshot(NowPlayingInfo.getInstance().snapshot());
+    }
 
-            addOnAttachStateChangeListener(new OnAttachStateChangeListener() {
-                @Override
-                public void onViewAttachedToWindow(View v) {
-                }
+    private void subscribePlaybackState() {
+        if (playbackStateRegister == null) {
+            playbackStateRegister = NowPlayingInfo.getInstance()
+                    .addPlaybackStateListener(playbackStateListener);
+        }
+    }
 
-                @Override
-                public void onViewDetachedFromWindow(View v) {
-                    if (localAddRegister != null) localAddRegister.unregister();
-                    if (localRemoveRegister != null) localRemoveRegister.unregister();
-                    if (serverAddRegister != null) serverAddRegister.unregister();
-                    if (serverRemoveRegister != null) serverRemoveRegister.unregister();
-                    musicService.getMusicQueuePushListeners().remove(musicQueuePushListener);
-                    musicService.getMusicQueueRemoveListeners().remove(musicQueueRemoveListener);
-                    instance = null;
-                }
-            });
+    private void releaseSubscriptions() {
+        if (localAddRegister != null) {
+            localAddRegister.unregister();
+            localAddRegister = null;
+        }
+        if (localRemoveRegister != null) {
+            localRemoveRegister.unregister();
+            localRemoveRegister = null;
+        }
+        if (serverAddRegister != null) {
+            serverAddRegister.unregister();
+            serverAddRegister = null;
+        }
+        if (serverRemoveRegister != null) {
+            serverRemoveRegister.unregister();
+            serverRemoveRegister = null;
+        }
+        if (musicQueuePushListener != null) {
+            musicService.getMusicQueuePushListeners().remove(musicQueuePushListener);
+            musicQueuePushListener = null;
+        }
+        if (musicQueueRemoveListener != null) {
+            musicService.getMusicQueueRemoveListeners().remove(musicQueueRemoveListener);
+            musicQueueRemoveListener = null;
+        }
+        if (playbackStateRegister != null) {
+            playbackStateRegister.unregister();
+            playbackStateRegister = null;
         }
     }
 
@@ -440,17 +464,16 @@ public class HomeView extends LinearLayout {
         playQueueView.addView(musicListItem, layoutParams);
     }
 
-    public void switchMusic(MusicDetail musicDetail, MusicDetail next, Queue<LyricLine> lyricLines) {
-        MuiModApi.postToUiThread(() -> {
-            if (staggeredLyricScrollView != null) {
-                updatePlaybackContent(musicDetail, lyricLines);
-                staggeredLyricScrollView.switchLyrics(musicDetail, lyricLines);
-                checkNextToPlay(next);
-            }
-        });
+    private void applyPlaybackSnapshot(NowPlayingInfo.PlaybackSnapshot snapshot) {
+        if (staggeredLyricScrollView == null) {
+            return;
+        }
+        updatePlaybackContent(snapshot.musicDetail(), snapshot.lyrics());
+        staggeredLyricScrollView.switchLyrics(snapshot.musicDetail(), snapshot.lyrics());
+        checkNextToPlay(snapshot.nextToPlay());
     }
 
-    private void updatePlaybackContent(MusicDetail musicDetail, Queue<LyricLine> lyricLines) {
+    private void updatePlaybackContent(MusicDetail musicDetail, Collection<LyricLine> lyricLines) {
         if (staggeredLyricScrollView == null || videoPreview == null) return;
         boolean video = musicDetail != null && musicDetail != MusicDetail.NONE
                 && "video".equals(musicDetail.getSourceKind());
@@ -532,12 +555,14 @@ public class HomeView extends LinearLayout {
     protected void onAttachedToWindow() {
         super.onAttachedToWindow();
         instance = this;
+        subscribePlaybackState();
+        applyPlaybackSnapshot(NowPlayingInfo.getInstance().snapshot());
     }
 
     @Override
     protected void onDetachedFromWindow() {
         super.onDetachedFromWindow();
-        // 组件内部已处理资源清理，只需将 instance 置空
+        releaseSubscriptions();
         instance = null;
     }
 }

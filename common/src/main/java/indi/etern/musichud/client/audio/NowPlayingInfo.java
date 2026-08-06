@@ -1,6 +1,5 @@
 package indi.etern.musichud.client.audio;
 
-import icyllis.modernui.mc.MuiModApi;
 import indi.etern.musichud.MusicHud;
 import indi.etern.musichud.beans.music.Artist;
 import indi.etern.musichud.beans.music.LyricInfo;
@@ -9,12 +8,12 @@ import indi.etern.musichud.beans.music.MusicDetail;
 import indi.etern.musichud.client.services.music.MusicService;
 import indi.etern.musichud.client.services.tuneweave.TuneWeaveClientService;
 import indi.etern.musichud.client.ui.hud.HudRendererManager;
-import indi.etern.musichud.client.ui.screen.MainFragment;
 import indi.etern.musichud.client.utils.PlayerInfoUtil;
 import indi.etern.musichud.client.utils.image.ImageUtils;
 import indi.etern.musichud.client.utils.lyrics.FullLineLyricParser;
 import indi.etern.musichud.client.utils.lyrics.WordByWordLyricParser;
 import indi.etern.musichud.interfaces.ClientConfig;
+import indi.etern.musichud.interfaces.Unregister;
 import io.github.selemba1000.*;
 import lombok.Getter;
 import lombok.Setter;
@@ -31,6 +30,7 @@ import java.time.Duration;
 import java.time.ZonedDateTime;
 import java.time.temporal.ChronoUnit;
 import java.util.*;
+import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.atomic.AtomicReference;
 import java.util.function.BiConsumer;
 import java.util.function.Consumer;
@@ -39,9 +39,10 @@ public class NowPlayingInfo {
     private static volatile NowPlayingInfo instance = null;
     private final Logger logger = MusicHud.getLogger(NowPlayingInfo.class);
     @Getter
-    private final Set<Consumer<LyricLine>> lyricLineUpdateListener = new HashSet<>();
+    private final Set<Consumer<LyricLine>> lyricLineUpdateListener = ConcurrentHashMap.newKeySet();
     @Getter
-    private final Set<BiConsumer<MusicDetail, MusicDetail>> musicSwitchListener = new HashSet<>();
+    private final Set<BiConsumer<MusicDetail, MusicDetail>> musicSwitchListener = ConcurrentHashMap.newKeySet();
+    private final Set<Consumer<PlaybackSnapshot>> playbackStateListeners = ConcurrentHashMap.newKeySet();
     private final AtomicReference<ArrayDeque<LyricLine>> atomicLyricLines = new AtomicReference<>();
     private final ClientConfig clientConfig = ClientConfig.getInstance();
     private final TuneWeaveClientService tuneWeave = TuneWeaveClientService.getInstance();
@@ -57,8 +58,7 @@ public class NowPlayingInfo {
     private volatile Duration musicDuration = null;
     @Getter
     private volatile ZonedDateTime musicStartTime = null;
-    @Getter
-    private ArrayDeque<LyricLine> lyricLines;
+    private volatile ArrayDeque<LyricLine> lyricLines;
     @Getter
     private LyricLine currentLyricLine;
     private Thread lyricUpdaterVThread;
@@ -259,6 +259,18 @@ public class NowPlayingInfo {
         return Math.max(0.0f, Math.min(1.0f, progress));
     }
 
+    public PlaybackSnapshot snapshot() {
+        ArrayDeque<LyricLine> currentLyrics = lyricLines;
+        return new PlaybackSnapshot(currentlyPlayingMusicDetail, nextToPlayIdleMusicDetail,
+                currentLyrics == null ? List.of() : List.copyOf(currentLyrics),
+                musicDuration, musicStartTime);
+    }
+
+    public Unregister addPlaybackStateListener(Consumer<PlaybackSnapshot> listener) {
+        playbackStateListeners.add(Objects.requireNonNull(listener));
+        return () -> playbackStateListeners.remove(listener);
+    }
+
     public void switchMusicInfo(MusicDetail musicDetail, MusicDetail idleNextToPlay) {
         MusicDetail previous = currentlyPlayingMusicDetail;
         currentlyPlayingMusicDetail = musicDetail;
@@ -284,22 +296,19 @@ public class NowPlayingInfo {
                     }
                     musicDetail.setLyricInfo(fetched);
                     parseLyrics(musicDetail);
-                    MuiModApi.postToUiThread(() -> MainFragment.switchMusic(
-                            musicDetail, nextToPlayIdleMusicDetail, this.lyricLines));
+                    notifyPlaybackStateListeners();
+                    callLyricsUpdateListeners(null);
                 } catch (RuntimeException error) {
                     logger.debug("TuneWeave lyrics unavailable for {}: {}", musicDetail.getSourceRef(), error.getMessage());
                 }
             });
-        }
-        try {
-            MuiModApi.postToUiThread(() -> MainFragment.switchMusic(musicDetail, idleNextToPlay, this.lyricLines));
-        } catch (IllegalStateException ignored) {
         }
         HudRendererManager.getInstance().switchMusic(musicDetail);
         List.copyOf(musicSwitchListener).forEach(consumer -> {
             consumer.accept(previous, musicDetail);
         });
         callLyricsUpdateListeners(null);
+        notifyPlaybackStateListeners();
     }
 
     private void parseLyrics(MusicDetail musicDetail) {
@@ -341,6 +350,17 @@ public class NowPlayingInfo {
                 c.accept(line);
             } catch (Exception e) {
                 logger.warn(e);
+            }
+        });
+    }
+
+    private void notifyPlaybackStateListeners() {
+        PlaybackSnapshot snapshot = snapshot();
+        Set.copyOf(playbackStateListeners).forEach(listener -> {
+            try {
+                listener.accept(snapshot);
+            } catch (RuntimeException error) {
+                logger.warn("Playback state listener failed", error);
             }
         });
     }
@@ -397,6 +417,7 @@ public class NowPlayingInfo {
     }
 
     public void stop() {
+        MusicDetail previous = currentlyPlayingMusicDetail;
         if (lyricUpdaterVThread != null) {
             lyricUpdaterVThread.interrupt();
         }
@@ -408,5 +429,17 @@ public class NowPlayingInfo {
         lyricLines = null;
         atomicLyricLines.set(null);
         currentLyricLine = null;
+        List.copyOf(musicSwitchListener).forEach(listener ->
+                listener.accept(previous, MusicDetail.NONE));
+        callLyricsUpdateListeners(null);
+        notifyPlaybackStateListeners();
+    }
+
+    public record PlaybackSnapshot(MusicDetail musicDetail, MusicDetail nextToPlay,
+                                   List<LyricLine> lyrics, Duration duration,
+                                   ZonedDateTime startedAt) {
+        public PlaybackSnapshot {
+            lyrics = lyrics == null ? List.of() : List.copyOf(lyrics);
+        }
     }
 }
