@@ -49,6 +49,8 @@ public final class TuneWeaveClientService {
     private final TuneWeaveProgramService programs = new TuneWeaveProgramService(gateway, entities);
     private final TuneWeaveCatalogService catalog =
             new TuneWeaveCatalogService(gateway, entities, account);
+    private final TuneWeavePlaylistService platformPlaylists =
+            new TuneWeavePlaylistService(gateway, entities, catalog);
     private final LocalUniPlaylistStore localPlaylists = new LocalUniPlaylistStore();
 
     private TuneWeaveClientService() {
@@ -300,120 +302,43 @@ public final class TuneWeaveClientService {
     }
 
     public void setTrackFavorite(MusicDetail musicDetail, boolean favorite) {
-        requireReference(musicDetail == null ? null : musicDetail.getSourceRef(), "track");
-        TuneWeavePlatform platform = platformFromReference(musicDetail.getSourceRef());
-        String libraryPath = "video".equals(musicDetail.getSourceKind())
-                ? "/v1/account/library/videos/" : "/v1/account/favorites/tracks/";
-        requestForPlatform(platform, favorite ? "PUT" : "DELETE", libraryPath
-                + TuneWeaveApiClient.encodePathSegment(musicDetail.getSourceRef()), Map.of(), null);
+        platformPlaylists.setTrackFavorite(musicDetail, favorite);
     }
 
     public void setPlaylistSubscribed(Playlist playlist, boolean subscribed) {
-        requireReference(playlist == null ? null : playlist.getSourceRef(), "playlist");
-        TuneWeavePlatform platform = platformFromReference(playlist.getSourceRef());
-        requestForPlatform(platform, subscribed ? "PUT" : "DELETE", "/v1/account/favorites/playlists/"
-                + TuneWeaveApiClient.encodePathSegment(playlist.getSourceRef()), Map.of(), null);
+        platformPlaylists.setPlaylistSubscribed(playlist, subscribed);
     }
 
     public void setAlbumSubscribed(Album album, boolean subscribed) {
-        requireReference(album == null ? null : album.getSourceRef(), "album");
-        TuneWeavePlatform platform = platformFromReference(album.getSourceRef());
-        requestForPlatform(platform, subscribed ? "PUT" : "DELETE", "/v1/account/library/albums/"
-                + TuneWeaveApiClient.encodePathSegment(album.getSourceRef()), Map.of(), null);
+        platformPlaylists.setAlbumSubscribed(album, subscribed);
     }
 
     public void setArtistSubscribed(Artist artist, boolean subscribed) {
-        requireReference(artist == null ? null : artist.getSourceRef(), "artist");
-        TuneWeavePlatform platform = platformFromReference(artist.getSourceRef());
-        requestForPlatform(platform, subscribed ? "PUT" : "DELETE", "/v1/account/following/artists/"
-                + TuneWeaveApiClient.encodePathSegment(artist.getSourceRef()), Map.of(), null);
+        platformPlaylists.setArtistSubscribed(artist, subscribed);
     }
 
     public void modifyPlaylistTracks(Playlist playlist, MusicDetail musicDetail, boolean add) {
-        requireReference(playlist == null ? null : playlist.getSourceRef(), "playlist");
-        requireReference(musicDetail == null ? null : musicDetail.getSourceRef(), "track");
-        if (playlist.getSourceRef().startsWith("account:favorite_tracks:")) {
-            setTrackFavorite(musicDetail, add);
-            return;
-        }
-        JsonObject body = new JsonObject();
-        JsonArray refs = new JsonArray();
-        refs.add(musicDetail.getSourceRef());
-        body.add("refs", refs);
-        TuneWeavePlatform platform = platformFromReference(playlist.getSourceRef());
-        String itemPath = "video".equals(musicDetail.getSourceKind()) ? "/videos" : "/tracks";
-        requestForPlatform(platform, add ? "POST" : "DELETE", "/v1/playlists/"
-                + TuneWeaveApiClient.encodePathSegment(playlist.getSourceRef()) + itemPath, Map.of(), body);
+        platformPlaylists.modifyTracks(playlist, musicDetail, add);
     }
 
     public Playlist createPlatformPlaylist(String name, boolean privatePlaylist) {
-        TuneWeavePlatform platform = defaultPlatform();
-        JsonObject body = new JsonObject();
-        body.addProperty("platform", platform.apiName());
-        body.addProperty("name", name == null ? "" : name.trim());
-        body.addProperty("visibility", privatePlaylist ? "private" : "public");
-        body.addProperty("kind", "normal");
-        JsonObject result = object(requestForPlatform(platform, "POST", "/v1/playlists", Map.of(), body).data());
-        JsonElement playlistData = result.get("playlist");
-        if (playlistData != null && playlistData.isJsonObject()) {
-            return entities.toPlaylist(platform, playlistData.getAsJsonObject());
-        }
-        String reference = string(result, "playlist_ref", "");
-        if (reference.isBlank()) {
-            throw new TuneWeaveApiClient.TuneWeaveException(
-                    "TuneWeave did not return the created playlist reference", false);
-        }
-        return loadPlaylistDetail(reference);
+        return platformPlaylists.create(name, privatePlaylist);
     }
 
     public void updatePlatformPlaylist(Playlist playlist, String name, String description) {
-        requireReference(playlist == null ? null : playlist.getSourceRef(), "playlist");
-        JsonObject body = new JsonObject();
-        if (name != null) body.addProperty("name", name.trim());
-        if (description != null) body.addProperty("description", description.trim());
-        if (body.isEmpty()) return;
-        TuneWeavePlatform platform = platformFromReference(playlist.getSourceRef());
-        requestForPlatform(platform, "PATCH", "/v1/playlists/"
-                + TuneWeaveApiClient.encodePathSegment(playlist.getSourceRef()), Map.of(), body);
+        platformPlaylists.update(playlist, name, description);
     }
 
     public void deletePlatformPlaylist(Playlist playlist) {
-        requireReference(playlist == null ? null : playlist.getSourceRef(), "playlist");
-        TuneWeavePlatform platform = platformFromReference(playlist.getSourceRef());
-        requestForPlatform(platform, "DELETE", "/v1/playlists/"
-                + TuneWeaveApiClient.encodePathSegment(playlist.getSourceRef()), Map.of(), null);
-        entities.removePlaylist(playlist.getId());
+        platformPlaylists.delete(playlist);
     }
 
     public void reorderPlatformPlaylists(List<Playlist> playlists) {
-        if (playlists == null || playlists.isEmpty()) return;
-        TuneWeavePlatform platform = platformFromReference(playlists.getFirst().getSourceRef());
-        JsonObject body = new JsonObject();
-        JsonArray refs = new JsonArray();
-        for (Playlist playlist : playlists) {
-            requireReference(playlist.getSourceRef(), "playlist");
-            if (platformFromReference(playlist.getSourceRef()) != platform) {
-                throw new IllegalArgumentException("Platform playlist order cannot mix providers");
-            }
-            refs.add(playlist.getSourceRef());
-        }
-        body.add("refs", refs);
-        body.addProperty("platform", platform.apiName());
-        requestForPlatform(platform, "PUT", "/v1/account/playlists/order", Map.of(), body);
+        platformPlaylists.reorder(playlists);
     }
 
     public void reorderPlaylistTracks(Playlist playlist, List<MusicDetail> tracks) {
-        requireReference(playlist == null ? null : playlist.getSourceRef(), "playlist");
-        TuneWeavePlatform platform = platformFromReference(playlist.getSourceRef());
-        JsonObject body = new JsonObject();
-        JsonArray refs = new JsonArray();
-        for (MusicDetail track : tracks) {
-            requireReference(track == null ? null : track.getSourceRef(), "track");
-            refs.add(track.getSourceRef());
-        }
-        body.add("refs", refs);
-        requestForPlatform(platform, "PUT", "/v1/playlists/"
-                + TuneWeaveApiClient.encodePathSegment(playlist.getSourceRef()) + "/tracks/order", Map.of(), body);
+        platformPlaylists.reorderTracks(playlist, tracks);
     }
 
     private static void requireReference(String reference, String kind) {
