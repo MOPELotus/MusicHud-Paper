@@ -1,20 +1,15 @@
 package indi.etern.musichud.client.services.tuneweave;
 
 import com.google.gson.JsonElement;
-import com.google.gson.JsonArray;
-import com.google.gson.JsonNull;
 import com.google.gson.JsonObject;
 import indi.etern.musichud.beans.music.Playlist;
 import indi.etern.musichud.beans.api.SearchType;
 import indi.etern.musichud.beans.music.Album;
 import indi.etern.musichud.beans.music.Artist;
-import indi.etern.musichud.beans.music.Fee;
-import indi.etern.musichud.beans.music.FormatType;
 import indi.etern.musichud.beans.music.LyricInfo;
 import indi.etern.musichud.beans.music.MusicDetail;
 import indi.etern.musichud.beans.music.MusicResourceInfo;
 import indi.etern.musichud.beans.music.UserCategoryPlaylists;
-import indi.etern.musichud.interfaces.ClientConfig;
 import indi.etern.musichud.server.api.tuneweave.TuneWeaveApiClient;
 import indi.etern.musichud.server.api.tuneweave.TuneWeavePlatform;
 
@@ -22,7 +17,6 @@ import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.LinkedHashMap;
-import java.util.Locale;
 import java.util.Map;
 import java.util.Objects;
 import java.util.concurrent.ConcurrentHashMap;
@@ -32,7 +26,6 @@ import static indi.etern.musichud.client.services.tuneweave.TuneWeaveJson.*;
 /** Client-owned TuneWeave authentication and credential-scoped requests. */
 public final class TuneWeaveClientService {
     private static final TuneWeaveClientService INSTANCE = new TuneWeaveClientService();
-    private final ClientConfig config = ClientConfig.getInstance();
     private final TuneWeaveGateway gateway = new TuneWeaveGateway();
     private final Map<TuneWeavePlatform, TuneWeaveSession> sessionProfiles = new ConcurrentHashMap<>();
     private final TuneWeaveAuthenticationService authentication =
@@ -50,6 +43,7 @@ public final class TuneWeaveClientService {
     private final LocalUniPlaylistStore localPlaylists = new LocalUniPlaylistStore();
     private final TuneWeaveUniPlaylistService uniPlaylists =
             new TuneWeaveUniPlaylistService(gateway, entities, localPlaylists);
+    private final TuneWeavePlaybackService playback = new TuneWeavePlaybackService(gateway);
 
     private TuneWeaveClientService() {
     }
@@ -414,123 +408,7 @@ public final class TuneWeaveClientService {
 
     public MusicResourceInfo getMusicResourceInfo(MusicDetail musicDetail,
                                                    indi.etern.musichud.beans.music.Quality quality) {
-        if (musicDetail == null || musicDetail.getSourceRef().isBlank()) {
-            return MusicResourceInfo.NONE;
-        }
-        String reference = musicDetail.getSourceRef();
-        TuneWeavePlatform platform = TuneWeavePlatform.fromApiName(reference.contains(":")
-                ? reference.substring(0, reference.indexOf(':')) : config.getDefaultMusicPlatform());
-        if (musicDetail.isClientHostedUni()) {
-            return loadUniClientItemResource(musicDetail, quality);
-        }
-        if ("radio_station".equals(musicDetail.getSourceKind())) {
-            return loadRadioResource(musicDetail, platform);
-        }
-        String path = switch (musicDetail.getSourceKind()) {
-            case "video" -> "/v1/videos/" + TuneWeaveApiClient.encodePathSegment(reference) + "/audio-stream";
-            case "podcast_episode" -> "/v1/episodes/" + TuneWeaveApiClient.encodePathSegment(reference) + "/stream";
-            default -> "/v1/tracks/" + TuneWeaveApiClient.encodePathSegment(reference) + "/stream";
-        };
-        Map<String, String> query = new LinkedHashMap<>();
-        query.put("quality", qualityName(quality));
-        if ("video".equals(musicDetail.getSourceKind())) {
-            query.put("type", "video");
-            if (!musicDetail.getSourcePartRef().isBlank()) query.put("part", musicDetail.getSourcePartRef());
-        }
-        JsonObject response = unwrap(requestForPlatform(platform, "GET", path, query, null).data());
-        JsonObject stream = "podcast_episode".equals(musicDetail.getSourceKind())
-                ? object(response.get("stream")) : response;
-        String url = string(stream, "url", "");
-        if (url.isBlank()) {
-            return MusicResourceInfo.NONE;
-        }
-        return new MusicResourceInfo(musicDetail.getId(), url, integer(stream, "bitrate", 0),
-                longValue(stream, "size", 0L), FormatType.fromSerializedName(
-                string(stream, "format", string(stream, "codec", ""))), "", Fee.UNSET,
-                integer(stream, "duration_ms", musicDetail.getDurationMillis()), stringMap(stream.get("headers")),
-                stringList(stream.get("backup_urls")));
-    }
-
-    private MusicResourceInfo loadRadioResource(MusicDetail musicDetail, TuneWeavePlatform platform) {
-        if (!isStyledRadioReference(musicDetail.getSourceRef())) {
-            JsonObject station = unwrap(requestForPlatform(platform, "GET", "/v1/radio/stations/"
-                    + TuneWeaveApiClient.encodePathSegment(musicDetail.getSourceRef()), Map.of(), null).data());
-            String url = string(station, "stream_url", "");
-            if (url.isBlank()) return MusicResourceInfo.NONE;
-            return new MusicResourceInfo(musicDetail.getId(), url, 0, 0L,
-                    FormatType.AUTO, "", Fee.UNSET, musicDetail.getDurationMillis(),
-                    stringMap(station.get("headers")));
-        }
-        JsonObject queue = object(requestForPlatform(platform, "GET", "/v1/radio/stations/"
-                + TuneWeaveApiClient.encodePathSegment(musicDetail.getSourceRef()) + "/tracks",
-                Map.of("limit", musicDetail.getSourcePartRef().isBlank() ? "1" : "100"), null).data());
-        List<JsonElement> items = elements(queue.get("items"));
-        JsonObject item = items.stream().map(TuneWeaveJson::unwrap)
-                .filter(value -> musicDetail.getSourcePartRef().equals(string(value, "ref", "")))
-                .findFirst()
-                .or(() -> items.stream().findFirst().map(TuneWeaveJson::unwrap))
-                .orElseGet(JsonObject::new);
-        String url = string(item, "stream_url", "");
-        int duration = integer(item, "duration_ms", musicDetail.getDurationMillis());
-        Map<String, String> headers = stringMap(item.get("headers"));
-        if (url.isBlank()) return MusicResourceInfo.NONE;
-        return new MusicResourceInfo(musicDetail.getId(), url, 0, 0L,
-                FormatType.AUTO, "", Fee.UNSET, duration, headers);
-    }
-
-    private MusicResourceInfo loadUniClientItemResource(MusicDetail musicDetail,
-                                                         indi.etern.musichud.beans.music.Quality quality) {
-        JsonObject item = new JsonObject();
-        item.addProperty("id", String.format(Locale.ROOT, "item_%016x", musicDetail.getId()));
-        item.addProperty("position", 0);
-        item.addProperty("kind", musicDetail.getSourceKind());
-        item.addProperty("source_ref", musicDetail.getSourceRef());
-        JsonObject snapshot = new JsonObject();
-        snapshot.addProperty("title", musicDetail.getName());
-        JsonArray artists = new JsonArray();
-        musicDetail.getArtists().stream().map(Artist::getName).forEach(artists::add);
-        snapshot.add("artists", artists);
-        String albumName = musicDetail.getAlbum().getName();
-        if (albumName.isBlank()) snapshot.add("album", JsonNull.INSTANCE);
-        else snapshot.addProperty("album", albumName);
-        snapshot.addProperty("duration_ms", musicDetail.getDurationMillis());
-        snapshot.add("isrc", JsonNull.INSTANCE);
-        String coverUrl = musicDetail.getAlbum().getPicUrl();
-        if (coverUrl != null && coverUrl.startsWith("https://")) snapshot.addProperty("cover_url", coverUrl);
-        else snapshot.add("cover_url", JsonNull.INSTANCE);
-        snapshot.add("version_tags", new JsonArray());
-        JsonObject snapshotExtensions = new JsonObject();
-        snapshotExtensions.addProperty("canonical_ref", musicDetail.getSourceRef());
-        snapshotExtensions.add("playable", JsonNull.INSTANCE);
-        snapshotExtensions.add("available_qualities", new JsonArray());
-        for (String key : List.of("mv_ref", "video_kind", "published_at", "podcast_ref", "audio_ref",
-                "serial_number", "description", "category", "region", "current_program", "has_direct_stream")) {
-            snapshotExtensions.add(key, JsonNull.INSTANCE);
-        }
-        snapshot.add("extensions", snapshotExtensions);
-        item.add("snapshot", snapshot);
-        item.addProperty("added_at_ms", System.currentTimeMillis());
-        JsonObject itemExtensions = new JsonObject();
-        for (String key : List.of("import_source_index", "import_source_ref", "import_source_type",
-                "imported_from_item_id")) {
-            itemExtensions.add(key, JsonNull.INSTANCE);
-        }
-        item.add("extensions", itemExtensions);
-        JsonObject body = new JsonObject();
-        body.add("item", item);
-        body.addProperty("quality", qualityName(quality));
-        JsonObject data = object(requestWithAllCredentials("POST", "/v1/uni/items/stream", Map.of(), body).data());
-        JsonObject stream = object(data.get("stream"));
-        String url = string(stream, "url", "");
-        if (url.isBlank()) return MusicResourceInfo.NONE;
-        return new MusicResourceInfo(musicDetail.getId(), url, integer(stream, "bitrate", 0),
-                longValue(stream, "size", 0L), FormatType.fromSerializedName(
-                string(stream, "format", string(stream, "codec", ""))), "", Fee.UNSET,
-                integer(stream, "duration_ms", musicDetail.getDurationMillis()), stringMap(stream.get("headers")));
-    }
-
-    private static boolean isStyledRadioReference(String reference) {
-        return TuneWeaveReference.isStyledRadio(reference);
+        return playback.resolve(musicDetail, quality);
     }
 
     public List<?> search(String keywords, SearchType searchType, int offset, TuneWeavePlatform platform) {
@@ -580,21 +458,6 @@ public final class TuneWeaveClientService {
 
     public List<MusicDetail> loadFavoriteIntelligence(Playlist playlist, String startReference) {
         return account.loadFavoriteIntelligence(playlist, startReference);
-    }
-
-    private static String qualityName(indi.etern.musichud.beans.music.Quality quality) {
-        if (quality == null) return "auto";
-        return switch (quality) {
-            case STANDARD -> "standard";
-            case HIGHER -> "higher";
-            case EX_HIGH -> "high";
-            case LOSSLESS -> "lossless";
-            case HIRES -> "hires";
-            case JY_EFFECT, SKY -> "spatial";
-            case DOLBY -> "dolby";
-            case JY_MASTER -> "master";
-            case NONE -> "auto";
-        };
     }
 
 }
