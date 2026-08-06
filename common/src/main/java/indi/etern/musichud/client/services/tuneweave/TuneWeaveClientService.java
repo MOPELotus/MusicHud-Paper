@@ -22,13 +22,9 @@ import indi.etern.musichud.server.api.tuneweave.TuneWeavePlatform;
 import indi.etern.musichud.utils.collections.ObservableSequencedSet;
 import net.minecraft.client.resources.language.I18n;
 
-import java.nio.file.Files;
 import java.nio.file.Path;
-import java.security.MessageDigest;
-import java.security.NoSuchAlgorithmException;
 import java.util.ArrayList;
 import java.util.Collections;
-import java.util.HexFormat;
 import java.util.List;
 import java.util.LinkedHashMap;
 import java.util.Locale;
@@ -49,6 +45,8 @@ public final class TuneWeaveClientService {
     private final TuneWeaveEntityMapper entities = new TuneWeaveEntityMapper(sessionProfiles::get);
     private final TuneWeaveAccountService account =
             new TuneWeaveAccountService(gateway, authentication, entities);
+    private final TuneWeaveCloudService cloud =
+            new TuneWeaveCloudService(gateway, authentication, entities);
     private final LocalUniPlaylistStore localPlaylists = new LocalUniPlaylistStore();
 
     private TuneWeaveClientService() {
@@ -151,141 +149,34 @@ public final class TuneWeaveClientService {
         return account.loadArtists(platform);
     }
 
-    public CloudLibrary loadCloudLibrary() {
-        TuneWeavePlatform platform = cloudPlatform();
-        List<CloudTrackInfo> result = new ArrayList<>();
-        int offset = 0;
-        long total = -1;
-        long storageSize = -1;
-        long storageMaxSize = -1;
-        while (true) {
-            TuneWeaveApiClient.TuneWeaveResponse response = requestForPlatform(
-                    platform, "GET", "/v1/account/cloud/tracks",
-                    Map.of("platform", platform.apiName(), "limit", "100", "offset", Integer.toString(offset)), null);
-            List<JsonElement> page = elements(response.data());
-            for (JsonElement value : page) result.add(entities.toCloudTrack(platform, unwrap(value)));
-            JsonObject pagination = object(response.meta().get("pagination"));
-            JsonObject extensions = object(pagination.get("extensions"));
-            if (total < 0) total = longValue(pagination, "total", -1);
-            if (storageSize < 0) storageSize = longValue(extensions, "storage_size", -1);
-            if (storageMaxSize < 0) storageMaxSize = longValue(extensions, "storage_max_size", -1);
-            boolean hasMore = bool(pagination, "has_more", page.size() == 100);
-            int nextOffset = integer(pagination, "next_offset", offset + page.size());
-            if (!hasMore || page.isEmpty() || nextOffset <= offset) break;
-            offset = nextOffset;
-        }
-        return new CloudLibrary(result, total < 0 ? result.size() : total, storageSize, storageMaxSize);
+    public TuneWeaveCloudLibrary loadCloudLibrary() {
+        return cloud.loadLibrary();
     }
 
-    public void deleteCloudTrack(CloudTrackInfo cloudTrack) {
-        requireReference(cloudTrack == null ? null : cloudTrack.reference(), "cloud track");
-        TuneWeavePlatform platform = platformFromReference(cloudTrack.reference());
-        JsonObject body = new JsonObject();
-        JsonArray refs = new JsonArray();
-        refs.add(cloudTrack.reference());
-        body.add("refs", refs);
-        requestForPlatform(platform, "DELETE", "/v1/account/cloud/tracks", Map.of(), body);
+    public void deleteCloudTrack(TuneWeaveCloudTrack cloudTrack) {
+        cloud.deleteTrack(cloudTrack);
     }
 
     public String uploadCloudTrack(Path file, String songName, String artist, String album) {
-        Objects.requireNonNull(file, "file");
-        TuneWeavePlatform platform = cloudPlatform();
-        try {
-            if (!Files.isRegularFile(file)) throw new IllegalArgumentException("Cloud upload must be a file");
-            long size = Files.size(file);
-            if (size <= 0 || size > 500L * 1024 * 1024) {
-                throw new IllegalArgumentException("Cloud upload file must be between 1 byte and 500 MiB");
-            }
-            String filename = file.getFileName().toString();
-            String contentType = cloudContentType(file);
-            String md5 = digestFile(file, "MD5");
-            long bitrate = 999_000L;
-            JsonObject ticketBody = new JsonObject();
-            ticketBody.addProperty("md5", md5);
-            ticketBody.addProperty("file_size", size);
-            ticketBody.addProperty("filename", filename);
-            ticketBody.addProperty("bitrate", bitrate);
-            ticketBody.addProperty("content_type", contentType);
-            JsonObject ticket = object(requestForPlatform(platform, "POST", "/v1/account/cloud/uploads/ticket",
-                    Map.of("platform", platform.apiName()), ticketBody).data());
-            boolean uploadRequired = bool(ticket, "upload_required", true);
-            String provisionalTrackId = requiredString(ticket, "provisional_track_id");
-            String resourceId = requiredString(ticket, "resource_id");
-            if (uploadRequired) {
-                TuneWeaveApiClient.uploadTicketFile(requiredString(ticket, "upload_url"),
-                        requiredString(ticket, "upload_method"), stringMap(ticket.get("upload_headers")), file);
-            }
-            JsonObject completion = new JsonObject();
-            completion.addProperty("provisional_track_id", provisionalTrackId);
-            completion.addProperty("resource_id", resourceId);
-            completion.addProperty("md5", md5);
-            completion.addProperty("filename", filename);
-            completion.addProperty("bitrate", bitrate);
-            if (songName != null && !songName.isBlank()) completion.addProperty("song_name", songName.trim());
-            if (artist != null && !artist.isBlank()) completion.addProperty("artist", artist.trim());
-            if (album != null && !album.isBlank()) completion.addProperty("album", album.trim());
-            JsonObject data = object(requestForPlatform(platform, "POST", "/v1/account/cloud/uploads/complete",
-                    Map.of("platform", platform.apiName()), completion).data());
-            return string(data, "track_ref", "");
-        } catch (java.io.IOException error) {
-            throw new IllegalArgumentException("Failed to read the selected cloud upload file", error);
-        }
+        return cloud.uploadTrack(file, songName, artist, album);
     }
 
     public String importCloudTrack(String md5, String sourceTrackId, long bitrate, long fileSize,
                                    String fileType, String songName, String artist, String album) {
-        TuneWeavePlatform platform = cloudPlatform();
-        JsonObject body = new JsonObject();
-        body.addProperty("md5", md5 == null ? "" : md5.trim());
-        if (sourceTrackId != null && !sourceTrackId.isBlank()) body.addProperty("source_track_id", sourceTrackId.trim());
-        body.addProperty("bitrate", bitrate);
-        body.addProperty("file_size", fileSize);
-        body.addProperty("file_type", fileType == null ? "" : fileType.trim());
-        body.addProperty("song_name", songName == null ? "" : songName.trim());
-        body.addProperty("artist", artist == null ? "" : artist.trim());
-        body.addProperty("album", album == null ? "" : album.trim());
-        JsonObject data = object(requestForPlatform(platform, "POST", "/v1/account/cloud/imports",
-                Map.of("platform", platform.apiName()), body).data());
-        return string(data, "track_ref", "");
+        return cloud.importTrack(md5, sourceTrackId, bitrate, fileSize,
+                fileType, songName, artist, album);
     }
 
-    public boolean matchCloudTrack(CloudTrackInfo cloudTrack, String targetTrackId) {
-        requireReference(cloudTrack == null ? null : cloudTrack.reference(), "cloud track");
-        TuneWeavePlatform platform = platformFromReference(cloudTrack.reference());
-        JsonObject body = new JsonObject();
-        body.addProperty("user_id", cloudUserId(platform));
-        body.addProperty("cloud_track_id", idFromReference(cloudTrack.reference()));
-        body.addProperty("target_track_id", targetTrackId == null || targetTrackId.isBlank()
-                ? "0" : idFromReference(targetTrackId.trim()));
-        JsonObject data = object(requestForPlatform(platform, "POST", "/v1/account/cloud/matches",
-                Map.of("platform", platform.apiName()), body).data());
-        return bool(data, "matched", false);
+    public boolean matchCloudTrack(TuneWeaveCloudTrack cloudTrack, String targetTrackId) {
+        return cloud.matchTrack(cloudTrack, targetTrackId);
     }
 
-    public LyricInfo loadCloudLyrics(CloudTrackInfo cloudTrack) {
-        requireReference(cloudTrack == null ? null : cloudTrack.reference(), "cloud track");
-        TuneWeavePlatform platform = platformFromReference(cloudTrack.reference());
-        JsonObject data = object(requestForPlatform(platform, "GET", "/v1/account/cloud/lyrics", Map.of(
-                "platform", platform.apiName(), "user_id", cloudUserId(platform),
-                "sid", idFromReference(cloudTrack.reference())), null).data());
-        return new LyricInfo(new Lyric(string(data, "plain", "")),
-                new Lyric(string(data, "translated", "")),
-                new Lyric(string(data, "word_synced", "")),
-                new Lyric(string(data, "romanized", "")));
+    public LyricInfo loadCloudLyrics(TuneWeaveCloudTrack cloudTrack) {
+        return cloud.loadLyrics(cloudTrack);
     }
 
-    public void downloadCloudTrack(CloudTrackInfo cloudTrack, Path target) {
-        requireReference(cloudTrack == null ? null : cloudTrack.reference(), "cloud track");
-        Objects.requireNonNull(target, "target");
-        TuneWeavePlatform platform = platformFromReference(cloudTrack.reference());
-        JsonObject data = object(requestForPlatform(platform, "GET", "/v1/account/cloud/tracks/"
-                + TuneWeaveApiClient.encodePathSegment(cloudTrack.reference()) + "/download",
-                Map.of(), null).data());
-        if (!bool(data, "available", !string(data, "url", "").isBlank())) {
-            throw new IllegalArgumentException("Cloud source file is not available for download");
-        }
-        TuneWeaveApiClient.downloadMediaFile(requiredString(data, "url"),
-                stringMap(data.get("headers")), target);
+    public void downloadCloudTrack(TuneWeaveCloudTrack cloudTrack, Path target) {
+        cloud.downloadTrack(cloudTrack, target);
     }
 
     public List<PodcastCategoryInfo> loadPodcastCategories(TuneWeavePlatform platform) {
@@ -1303,55 +1194,6 @@ public final class TuneWeaveClientService {
                 : defaultPlatform();
     }
 
-    private TuneWeavePlatform cloudPlatform() {
-        TuneWeavePlatform platform = defaultPlatform();
-        if (platform != TuneWeavePlatform.NETEASE) {
-            throw new IllegalArgumentException("Cloud library is only available for NetEase Music accounts");
-        }
-        return platform;
-    }
-
-    private String cloudUserId(TuneWeavePlatform platform) {
-        TuneWeaveSession profile = loadSession(platform);
-        if (profile.userId() == null || profile.userId().isBlank()) {
-            throw new IllegalArgumentException("TuneWeave session did not return a cloud user ID");
-        }
-        return profile.userId();
-    }
-
-    private static String cloudContentType(Path file) throws java.io.IOException {
-        String detected = Files.probeContentType(file);
-        if (detected != null && !detected.isBlank()) return detected;
-        String filename = file.getFileName().toString().toLowerCase(java.util.Locale.ROOT);
-        if (filename.endsWith(".flac")) return "audio/flac";
-        if (filename.endsWith(".mp3")) return "audio/mpeg";
-        if (filename.endsWith(".m4a") || filename.endsWith(".mp4")) return "audio/mp4";
-        if (filename.endsWith(".ogg") || filename.endsWith(".opus")) return "audio/ogg";
-        if (filename.endsWith(".wav")) return "audio/wav";
-        return "application/octet-stream";
-    }
-
-    private static String digestFile(Path file, String algorithm) throws java.io.IOException {
-        try {
-            MessageDigest digest = MessageDigest.getInstance(algorithm);
-            try (java.io.InputStream input = Files.newInputStream(file)) {
-                byte[] buffer = new byte[64 * 1024];
-                for (int read; (read = input.read(buffer)) >= 0; ) {
-                    if (read > 0) digest.update(buffer, 0, read);
-                }
-            }
-            return HexFormat.of().formatHex(digest.digest());
-        } catch (NoSuchAlgorithmException impossible) {
-            throw new IllegalStateException(impossible);
-        }
-    }
-
-    private static String idFromReference(String reference) {
-        int separator = reference == null ? -1 : reference.indexOf(':');
-        return separator >= 0 && separator + 1 < reference.length()
-                ? reference.substring(separator + 1) : Objects.requireNonNullElse(reference, "");
-    }
-
     private List<JsonObject> materializeItems(JsonObject body) {
         JsonObject data = object(requestWithAllCredentials(
                 "POST", "/v1/uni/materialize/items", Map.of(), body).data());
@@ -1451,18 +1293,6 @@ public final class TuneWeaveClientService {
 
     public record VideoPartInfo(String reference, int page, String title, int durationMillis,
                                 int width, int height) {
-    }
-
-    public record CloudTrackInfo(String reference, MusicDetail track, String filename,
-                                 long fileSize, String fileType, long bitrate, String md5,
-                                 String addedAt, String matchedTrackReference) {
-    }
-
-    public record CloudLibrary(List<CloudTrackInfo> tracks, long total,
-                               long storageSize, long storageMaxSize) {
-        public CloudLibrary {
-            tracks = tracks == null ? List.of() : List.copyOf(tracks);
-        }
     }
 
     public record PodcastCategoryInfo(String id, String name, String iconUrl) {

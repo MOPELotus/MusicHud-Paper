@@ -16,6 +16,8 @@ import indi.etern.musichud.beans.music.LyricInfo;
 import indi.etern.musichud.beans.music.MusicDetail;
 import indi.etern.musichud.client.services.music.MusicService;
 import indi.etern.musichud.client.services.tuneweave.TuneWeaveClientService;
+import indi.etern.musichud.client.services.tuneweave.TuneWeaveCloudLibrary;
+import indi.etern.musichud.client.services.tuneweave.TuneWeaveCloudTrack;
 import indi.etern.musichud.client.ui.Theme;
 import indi.etern.musichud.client.ui.components.FlexWrapLayout;
 import indi.etern.musichud.client.ui.components.Modal;
@@ -81,7 +83,7 @@ public final class CloudView extends LinearLayout {
         showStatus(I18n.get(MusicHud.MOD_ID + ".text.cloud.loading"));
         MusicHud.EXECUTOR.execute(() -> {
             try {
-                TuneWeaveClientService.CloudLibrary library = tuneWeave.loadCloudLibrary();
+                TuneWeaveCloudLibrary library = tuneWeave.loadCloudLibrary();
                 MuiModApi.postToUiThread(() -> render(library));
             } catch (RuntimeException error) {
                 MuiModApi.postToUiThread(() -> showStatus(message(error)));
@@ -89,7 +91,7 @@ public final class CloudView extends LinearLayout {
         });
     }
 
-    private void render(TuneWeaveClientService.CloudLibrary library) {
+    private void render(TuneWeaveCloudLibrary library) {
         rows.removeAllViews();
         String capacity = I18n.get(MusicHud.MOD_ID + ".text.cloud.capacity")
                 .replace("{used}", formatBytes(library.storageSize()))
@@ -100,12 +102,12 @@ public final class CloudView extends LinearLayout {
         }
         showStatus(I18n.get(MusicHud.MOD_ID + ".text.cloud.count")
                 .replace("{}", Long.toString(library.total())) + "  " + capacity);
-        for (TuneWeaveClientService.CloudTrackInfo track : library.tracks()) {
+        for (TuneWeaveCloudTrack track : library.tracks()) {
             rows.addView(createRow(track), rowParams());
         }
     }
 
-    private View createRow(TuneWeaveClientService.CloudTrackInfo cloudTrack) {
+    private View createRow(TuneWeaveCloudTrack cloudTrack) {
         LinearLayout row = new LinearLayout(getContext());
         row.setOrientation(VERTICAL);
         row.setPadding(dp(10), dp(8), dp(10), dp(8));
@@ -175,7 +177,7 @@ public final class CloudView extends LinearLayout {
                 }), cancel()).show();
     }
 
-    private void selectDownload(TuneWeaveClientService.CloudTrackInfo cloudTrack) {
+    private void selectDownload(TuneWeaveCloudTrack cloudTrack) {
         String fallback = cloudTrack.filename().isBlank() ? cloudTrack.track().getName() + ".audio"
                 : cloudTrack.filename();
         String path = TinyFileDialogs.tinyfd_saveFileDialog(
@@ -214,7 +216,7 @@ public final class CloudView extends LinearLayout {
                 }), cancel()).show();
     }
 
-    private void showMatch(TuneWeaveClientService.CloudTrackInfo cloudTrack) {
+    private void showMatch(TuneWeaveCloudTrack cloudTrack) {
         EditText target = input(".text.cloud.targetHint");
         new Modal(getContext(), title(".text.cloud.match"), target,
                 new Modal.ActionButton(I18n.get(MusicHud.MOD_ID + ".button.confirm"), (button, modal) -> {
@@ -223,7 +225,7 @@ public final class CloudView extends LinearLayout {
                 }), cancel()).show();
     }
 
-    private void showLyrics(TuneWeaveClientService.CloudTrackInfo cloudTrack) {
+    private void showLyrics(TuneWeaveCloudTrack cloudTrack) {
         showStatus(I18n.get(MusicHud.MOD_ID + ".text.cloud.loadingLyrics"));
         MusicHud.EXECUTOR.execute(() -> {
             try {
@@ -237,7 +239,7 @@ public final class CloudView extends LinearLayout {
         });
     }
 
-    private void confirmDelete(TuneWeaveClientService.CloudTrackInfo cloudTrack) {
+    private void confirmDelete(TuneWeaveCloudTrack cloudTrack) {
         TextView warning = new TextView(getContext());
         warning.setText(I18n.get(MusicHud.MOD_ID + ".text.cloud.deleteWarning"));
         new Modal(getContext(), title(cloudTrack.track().getName()), warning,
@@ -322,7 +324,7 @@ public final class CloudView extends LinearLayout {
                 ? error.getClass().getSimpleName() : error.getMessage();
     }
 
-    private static String cloudMetadata(TuneWeaveClientService.CloudTrackInfo cloudTrack) {
+    private static String cloudMetadata(TuneWeaveCloudTrack cloudTrack) {
         StringBuilder result = new StringBuilder();
         if (!cloudTrack.filename().isBlank()) result.append(cloudTrack.filename());
         if (cloudTrack.fileSize() > 0) append(result, formatBytes(cloudTrack.fileSize()));

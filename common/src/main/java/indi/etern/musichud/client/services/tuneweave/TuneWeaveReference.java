@@ -23,7 +23,7 @@ final class TuneWeaveReference {
 
     static String id(String reference) {
         require(reference, "resource");
-        int separator = reference.lastIndexOf(':');
+        int separator = reference.indexOf(':');
         return separator >= 0 ? reference.substring(separator + 1) : reference;
     }
 }

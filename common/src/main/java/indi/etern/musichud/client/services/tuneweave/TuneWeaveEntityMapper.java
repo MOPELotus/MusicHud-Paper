@@ -185,14 +185,13 @@ final class TuneWeaveEntityMapper {
         return result;
     }
 
-    TuneWeaveClientService.CloudTrackInfo toCloudTrack(
-            TuneWeavePlatform platform, JsonObject object) {
+    TuneWeaveCloudTrack toCloudTrack(TuneWeavePlatform platform, JsonObject object) {
         String reference = string(object, "ref", "");
         JsonObject trackData = object.has("track") && object.get("track").isJsonObject()
                 ? object.getAsJsonObject("track") : object;
         MusicDetail track = toTrack(platform, trackData);
         track.setExtraInfo(new MusicDetail.ExtraInfo(true, 0, false));
-        return new TuneWeaveClientService.CloudTrackInfo(reference, track,
+        return new TuneWeaveCloudTrack(reference, track,
                 string(object, "filename", ""), longValue(object, "file_size", 0L),
                 string(object, "file_type", ""), longValue(object, "bitrate", 0L),
                 string(object, "md5", ""), string(object, "added_at", ""),
