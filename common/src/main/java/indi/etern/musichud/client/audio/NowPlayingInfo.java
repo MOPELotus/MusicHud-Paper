@@ -43,6 +43,9 @@ public class NowPlayingInfo {
     @Getter
     private final Set<BiConsumer<MusicDetail, MusicDetail>> musicSwitchListener = ConcurrentHashMap.newKeySet();
     private final Set<Consumer<PlaybackSnapshot>> playbackStateListeners = ConcurrentHashMap.newKeySet();
+    private final Object playbackStateLock = new Object();
+    private volatile PlaybackSnapshot playbackSnapshot =
+            new PlaybackSnapshot(null, null, List.of(), null, null);
     private final AtomicReference<ArrayDeque<LyricLine>> atomicLyricLines = new AtomicReference<>();
     private final ClientConfig clientConfig = ClientConfig.getInstance();
     private final TuneWeaveClientService tuneWeave = TuneWeaveClientService.getInstance();
@@ -260,10 +263,7 @@ public class NowPlayingInfo {
     }
 
     public PlaybackSnapshot snapshot() {
-        ArrayDeque<LyricLine> currentLyrics = lyricLines;
-        return new PlaybackSnapshot(currentlyPlayingMusicDetail, nextToPlayIdleMusicDetail,
-                currentLyrics == null ? List.of() : List.copyOf(currentLyrics),
-                musicDuration, musicStartTime);
+        return playbackSnapshot;
     }
 
     public Unregister addPlaybackStateListener(Consumer<PlaybackSnapshot> listener) {
@@ -272,18 +272,20 @@ public class NowPlayingInfo {
     }
 
     public void switchMusicInfo(MusicDetail musicDetail, MusicDetail idleNextToPlay) {
-        MusicDetail previous = currentlyPlayingMusicDetail;
-        currentlyPlayingMusicDetail = musicDetail;
-        currentLyricLine = null;
-        nextToPlayIdleMusicDetail = idleNextToPlay;
-        if (!musicDetail.equals(MusicDetail.NONE)) {
-            musicDuration = Duration.ofMillis(musicDetail.getDurationMillis());
-        } else {
-            musicDuration = null;
+        MusicDetail previous;
+        boolean missingLyrics;
+        synchronized (playbackStateLock) {
+            previous = currentlyPlayingMusicDetail;
+            currentlyPlayingMusicDetail = musicDetail;
+            currentLyricLine = null;
+            nextToPlayIdleMusicDetail = idleNextToPlay;
+            musicDuration = musicDetail.equals(MusicDetail.NONE)
+                    ? null : Duration.ofMillis(musicDetail.getDurationMillis());
+            musicStartTime = null;
+            missingLyrics = musicDetail.getLyricInfo().equals(LyricInfo.NONE);
+            parseLyrics(musicDetail);
+            publishPlaybackStateLocked();
         }
-        musicStartTime = null;
-        boolean missingLyrics = musicDetail.getLyricInfo().equals(LyricInfo.NONE);
-        parseLyrics(musicDetail);
         if (missingLyrics && !musicDetail.equals(MusicDetail.NONE)
                 && !musicDetail.getSourceRef().isBlank() && tuneWeave.isAvailable()) {
             MusicHud.EXECUTOR.execute(() -> {
@@ -291,24 +293,30 @@ public class NowPlayingInfo {
                     LyricInfo fetched = "video".equals(musicDetail.getSourceKind())
                             ? tuneWeave.loadVideoLyrics(musicDetail)
                             : tuneWeave.loadLyrics(musicDetail);
-                    if (fetched.equals(LyricInfo.NONE) || currentlyPlayingMusicDetail != musicDetail) {
+                    if (fetched.equals(LyricInfo.NONE)) {
                         return;
                     }
-                    musicDetail.setLyricInfo(fetched);
-                    parseLyrics(musicDetail);
-                    notifyPlaybackStateListeners();
+                    synchronized (playbackStateLock) {
+                        if (currentlyPlayingMusicDetail != musicDetail) {
+                            return;
+                        }
+                        musicDetail.setLyricInfo(fetched);
+                        parseLyrics(musicDetail);
+                        publishPlaybackStateLocked();
+                    }
                     callLyricsUpdateListeners(null);
                 } catch (RuntimeException error) {
                     logger.debug("TuneWeave lyrics unavailable for {}: {}", musicDetail.getSourceRef(), error.getMessage());
                 }
             });
         }
-        HudRendererManager.getInstance().switchMusic(musicDetail);
-        List.copyOf(musicSwitchListener).forEach(consumer -> {
-            consumer.accept(previous, musicDetail);
-        });
+        try {
+            HudRendererManager.getInstance().switchMusic(musicDetail);
+        } catch (RuntimeException error) {
+            logger.warn("HUD renderer failed to switch music", error);
+        }
+        callMusicSwitchListeners(previous, musicDetail);
         callLyricsUpdateListeners(null);
-        notifyPlaybackStateListeners();
     }
 
     private void parseLyrics(MusicDetail musicDetail) {
@@ -332,8 +340,15 @@ public class NowPlayingInfo {
         }
     }
 
-    public void startAt(ZonedDateTime zonedDateTime) {
-        musicStartTime = Objects.requireNonNullElseGet(zonedDateTime, ZonedDateTime::now);
+    public void startAt(MusicDetail expectedMusic, ZonedDateTime zonedDateTime) {
+        synchronized (playbackStateLock) {
+            if (expectedMusic == null || expectedMusic == MusicDetail.NONE
+                    || currentlyPlayingMusicDetail != expectedMusic) {
+                return;
+            }
+            musicStartTime = Objects.requireNonNullElseGet(zonedDateTime, ZonedDateTime::now);
+            publishPlaybackStateLocked();
+        }
         // SMTC state change picked up by jmtcLoop polling
         if (lyricLines != null && !lyricLines.isEmpty()) {
             if (lyricUpdaterVThread == null) {
@@ -344,25 +359,28 @@ public class NowPlayingInfo {
         }
     }
 
-    private void callLyricsUpdateListeners(LyricLine line) {
-        Set.copyOf(lyricLineUpdateListener).forEach(c -> {
-            try {
-                c.accept(line);
-            } catch (Exception e) {
-                logger.warn(e);
-            }
-        });
+    private void callMusicSwitchListeners(MusicDetail previous, MusicDetail current) {
+        ListenerDispatcher.dispatch(musicSwitchListener,
+                listener -> listener.accept(previous, current),
+                error -> logger.warn("Music switch listener failed", error));
     }
 
-    private void notifyPlaybackStateListeners() {
-        PlaybackSnapshot snapshot = snapshot();
-        Set.copyOf(playbackStateListeners).forEach(listener -> {
-            try {
-                listener.accept(snapshot);
-            } catch (RuntimeException error) {
-                logger.warn("Playback state listener failed", error);
-            }
-        });
+    private void callLyricsUpdateListeners(LyricLine line) {
+        ListenerDispatcher.dispatch(lyricLineUpdateListener,
+                listener -> listener.accept(line),
+                error -> logger.warn("Lyrics listener failed", error));
+    }
+
+    private void publishPlaybackStateLocked() {
+        ArrayDeque<LyricLine> currentLyrics = lyricLines;
+        PlaybackSnapshot published = new PlaybackSnapshot(
+                currentlyPlayingMusicDetail, nextToPlayIdleMusicDetail,
+                currentLyrics == null ? List.of() : List.copyOf(currentLyrics),
+                musicDuration, musicStartTime);
+        playbackSnapshot = published;
+        ListenerDispatcher.dispatch(playbackStateListeners,
+                listener -> listener.accept(published),
+                error -> logger.warn("Playback state listener failed", error));
     }
 
     private boolean sleepUntil(ZonedDateTime musicStartTime, Duration startTime) {
@@ -417,24 +435,27 @@ public class NowPlayingInfo {
     }
 
     public void stop() {
-        MusicDetail previous = currentlyPlayingMusicDetail;
         if (lyricUpdaterVThread != null) {
             lyricUpdaterVThread.interrupt();
         }
         lyricUpdaterVThread = null;
-        currentlyPlayingMusicDetail = MusicDetail.NONE;
-        nextToPlayIdleMusicDetail = MusicDetail.NONE;
-        musicDuration = null;
-        musicStartTime = null;
-        lyricLines = null;
-        atomicLyricLines.set(null);
-        currentLyricLine = null;
-        List.copyOf(musicSwitchListener).forEach(listener ->
-                listener.accept(previous, MusicDetail.NONE));
+        MusicDetail previous;
+        synchronized (playbackStateLock) {
+            previous = currentlyPlayingMusicDetail;
+            currentlyPlayingMusicDetail = MusicDetail.NONE;
+            nextToPlayIdleMusicDetail = MusicDetail.NONE;
+            musicDuration = null;
+            musicStartTime = null;
+            lyricLines = null;
+            atomicLyricLines.set(null);
+            currentLyricLine = null;
+            publishPlaybackStateLocked();
+        }
+        callMusicSwitchListeners(previous, MusicDetail.NONE);
         callLyricsUpdateListeners(null);
-        notifyPlaybackStateListeners();
     }
 
+    /** Atomically published playback state with an immutable lyrics list. */
     public record PlaybackSnapshot(MusicDetail musicDetail, MusicDetail nextToPlay,
                                    List<LyricLine> lyrics, Duration duration,
                                    ZonedDateTime startedAt) {

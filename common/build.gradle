@@ -131,8 +131,11 @@ tasks.withType(JavaCompile).configureEach {
 }
 
 test {
-    useJUnitPlatform()
-    enabled = false
+    useJUnitPlatform {
+        if (!project.hasProperty('integrationTests')) {
+            excludeTags 'integration'
+        }
+    }
 }
 
 shadowJar {

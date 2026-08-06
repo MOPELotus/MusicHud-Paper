@@ -19,7 +19,7 @@ Multi-loader Minecraft mod (Fabric + NeoForge + Paper) for 1.21.8 (Java 21). A G
 
 ## Critical Quirks
 
-- **Tests are DISABLED by default** (`enabled = false` in `common/build.gradle:46`). To run: edit the file and change `enabled` to `true` — there is no Gradle property to override this at runtime.
+- **Unit tests run by default.** Network/download integration tests are tagged `integration` and require `-PintegrationTests`.
 - **No CI, no linter, no formatter, no typechecker** configured. Do not look for or run these.
 - **Paper module is separate** — uses `paperweight.userdev` directly, NOT Architectury Loom. Paper is NOT in `settings.gradle` on this branch.
 - **Build scripts are Groovy DSL** (`.gradle`), not Kotlin (`.gradle.kts`).
@@ -95,9 +95,9 @@ Get-ChildItem -Recurse "{gradleHome}\caches","{projectRoot}\.gradle\loom-cache" 
 ## Testing
 
 - JUnit Jupiter 6.0.0.
-- Single test class: `common/src/test/java/indi/etern/musichud/MainTest.java`.
-- Tests call live NCM API (network-dependent, may fail offline).
-- **Must enable manually** before running tests.
+- Run unit tests with `./gradlew common:test`.
+- Run TuneWeave network/download integration tests with `./gradlew common:test -PintegrationTests`.
+- Integration tests are excluded by default so normal builds remain deterministic and offline-safe.
 
 ## Misc
 

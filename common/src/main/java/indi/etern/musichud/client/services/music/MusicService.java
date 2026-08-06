@@ -401,11 +401,10 @@ public class MusicService implements IClientMusicService {
                 StreamAudioPlayer streamAudioPlayer = StreamAudioPlayer.getInstance();
                 nowPlayingInfo.switchMusicInfo(musicDetail, nextIdleMusicDetail);
                 streamAudioPlayer.playAsync(musicDetail, serverStartTime)
-                        .thenAccept(nowPlayingInfo::startAt)
+                        .thenAccept(startedAt -> nowPlayingInfo.startAt(musicDetail, startedAt))
                         .exceptionally(e -> null);
             } else {//TODO optional account sync
                 nowPlayingInfo.switchMusicInfo(musicDetail, nextIdleMusicDetail);
-                nowPlayingInfo.startAt(null);
 //                nowPlayingInfo.switchMusic(MusicDetail.NONE,MusicDetail.NONE,null);
                 StreamAudioPlayer streamAudioPlayer = StreamAudioPlayer.getInstance();
                 streamAudioPlayer.stop();

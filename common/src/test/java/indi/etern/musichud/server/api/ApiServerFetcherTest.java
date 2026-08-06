@@ -3,6 +3,7 @@ package indi.etern.musichud.server.api;
 import indi.etern.musichud.MusicHud;
 import lombok.SneakyThrows;
 import org.apache.logging.log4j.Logger;
+import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
 
 import java.io.IOException;
@@ -15,6 +16,7 @@ import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
+@Tag("integration")
 public class ApiServerFetcherTest {
     private static final Logger LOG = MusicHud.getLogger(ApiServerFetcherTest.class);
 
