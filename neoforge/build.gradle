@@ -136,8 +136,8 @@ dependencies {
         exclude group: "org.commonmark"
     }
 
-    implementation "com.sedmelluq:lavaplayer:$rootProject.lavaplayer_version"
-    shadowBundle "com.sedmelluq:lavaplayer:$rootProject.lavaplayer_version"
+    implementation "dev.arbjerg:lavaplayer:$rootProject.lavaplayer_version"
+    shadowBundle "dev.arbjerg:lavaplayer:$rootProject.lavaplayer_version"
 
     compileOnly "org.projectlombok:lombok:$rootProject.lombok_version"
     compileOnly project(':processor')

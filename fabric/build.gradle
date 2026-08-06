@@ -102,8 +102,8 @@ dependencies {
         exclude group: "it.unimi.dsi", module: "fastutil"
         exclude group: "org.commonmark"
     }
-    implementation "com.sedmelluq:lavaplayer:$rootProject.lavaplayer_version"
-    shadowBundle "com.sedmelluq:lavaplayer:$rootProject.lavaplayer_version"
+    implementation "dev.arbjerg:lavaplayer:$rootProject.lavaplayer_version"
+    shadowBundle "dev.arbjerg:lavaplayer:$rootProject.lavaplayer_version"
 
 //    implementation "io.github.selemba1000:JavaMediaTransportControls:$rootProject.jmtc_version"
 //    shadowBundle "io.github.selemba1000:JavaMediaTransportControls:$rootProject.jmtc_version"
