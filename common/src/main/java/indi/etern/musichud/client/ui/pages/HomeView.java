@@ -55,6 +55,7 @@ public class HomeView extends LinearLayout {
     private final Map<MusicCollection, MusicCollectionCard> idlePlaySourceCardMap = new ConcurrentHashMap<>();
     @Getter
     private StaggeredLyricScrollView staggeredLyricScrollView;
+    private LinearLayout queuePane;
     private LinearLayout videoPreview;
     private UrlImageView videoPreviewImage;
     private TextView videoPreviewTitle;
@@ -161,7 +162,7 @@ public class HomeView extends LinearLayout {
             videoPreviewImage.setSquareCrop(false);
             videoPreviewImage.setAspectRatio(16f / 9f);
             videoPreviewImage.setCornerRadius(dp(8));
-            LinearLayout.LayoutParams previewImageParams = new LinearLayout.LayoutParams(MATCH_PARENT, WRAP_CONTENT);
+            LinearLayout.LayoutParams previewImageParams = new LinearLayout.LayoutParams(dp(400), WRAP_CONTENT);
             previewImageParams.setMargins(dp(32), dp(32), dp(32), dp(16));
             videoPreview.addView(videoPreviewImage, previewImageParams);
 
@@ -171,7 +172,7 @@ public class HomeView extends LinearLayout {
             videoPreviewTitle.setGravity(Gravity.CENTER);
             videoPreviewTitle.setTextAlignment(TEXT_ALIGNMENT_CENTER);
             videoPreviewTitle.setMaxLines(2);
-            LinearLayout.LayoutParams previewTitleParams = new LinearLayout.LayoutParams(MATCH_PARENT, WRAP_CONTENT);
+            LinearLayout.LayoutParams previewTitleParams = new LinearLayout.LayoutParams(dp(400), WRAP_CONTENT);
             previewTitleParams.setMargins(dp(32), 0, dp(32), dp(4));
             videoPreview.addView(videoPreviewTitle, previewTitleParams);
 
@@ -180,7 +181,7 @@ public class HomeView extends LinearLayout {
             videoPreviewMeta.setTextSize(Theme.TEXT_SIZE_NORMAL);
             videoPreviewMeta.setGravity(Gravity.CENTER);
             videoPreviewMeta.setTextAlignment(TEXT_ALIGNMENT_CENTER);
-            LinearLayout.LayoutParams previewMetaParams = new LinearLayout.LayoutParams(MATCH_PARENT, WRAP_CONTENT);
+            LinearLayout.LayoutParams previewMetaParams = new LinearLayout.LayoutParams(dp(400), WRAP_CONTENT);
             previewMetaParams.setMargins(dp(32), 0, dp(32), dp(8));
             videoPreview.addView(videoPreviewMeta, previewMetaParams);
 
@@ -190,7 +191,7 @@ public class HomeView extends LinearLayout {
             videoPreviewDescription.setGravity(Gravity.CENTER);
             videoPreviewDescription.setTextAlignment(TEXT_ALIGNMENT_CENTER);
             videoPreviewDescription.setMaxLines(8);
-            LinearLayout.LayoutParams previewDescriptionParams = new LinearLayout.LayoutParams(MATCH_PARENT, WRAP_CONTENT);
+            LinearLayout.LayoutParams previewDescriptionParams = new LinearLayout.LayoutParams(dp(400), WRAP_CONTENT);
             previewDescriptionParams.setMargins(dp(32), 0, dp(32), dp(32));
             videoPreview.addView(videoPreviewDescription, previewDescriptionParams);
 
@@ -201,7 +202,9 @@ public class HomeView extends LinearLayout {
         }
         {
             LinearLayout queueView = new LinearLayout(context);
+            queuePane = queueView;
             queueView.setOrientation(VERTICAL);
+            queueView.setVisibility(videoPreview != null && videoPreview.getVisibility() == VISIBLE ? GONE : VISIBLE);
             LayoutParams queueViewParams = new LayoutParams(0, MATCH_PARENT, 2);
             addView(queueView, queueViewParams);
 
@@ -453,6 +456,7 @@ public class HomeView extends LinearLayout {
         boolean showVideoPreview = video && !hasVideoLyrics;
         staggeredLyricScrollView.setVisibility(showVideoPreview ? GONE : VISIBLE);
         videoPreview.setVisibility(showVideoPreview ? VISIBLE : GONE);
+        if (queuePane != null) queuePane.setVisibility(showVideoPreview ? GONE : VISIBLE);
         long requestGeneration = ++videoPreviewRequestGeneration;
         if (!showVideoPreview) {
             videoPreviewKey = "";
