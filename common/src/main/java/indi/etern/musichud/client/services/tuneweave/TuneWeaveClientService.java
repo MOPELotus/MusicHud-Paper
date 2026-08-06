@@ -16,16 +16,12 @@ import indi.etern.musichud.beans.music.LyricInfo;
 import indi.etern.musichud.beans.music.MusicDetail;
 import indi.etern.musichud.beans.music.MusicResourceInfo;
 import indi.etern.musichud.beans.music.UserCategoryPlaylists;
-import indi.etern.musichud.beans.user.Profile;
-import indi.etern.musichud.beans.user.VipType;
 import indi.etern.musichud.interfaces.ClientConfig;
 import indi.etern.musichud.server.api.tuneweave.TuneWeaveApiClient;
 import indi.etern.musichud.server.api.tuneweave.TuneWeavePlatform;
 import indi.etern.musichud.utils.collections.ObservableSequencedSet;
 import net.minecraft.client.resources.language.I18n;
 
-import java.nio.ByteBuffer;
-import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.security.MessageDigest;
@@ -47,7 +43,9 @@ public final class TuneWeaveClientService {
     private static final TuneWeaveClientService INSTANCE = new TuneWeaveClientService();
     private final ClientConfig config = ClientConfig.getInstance();
     private final TuneWeaveGateway gateway = new TuneWeaveGateway();
-    private final Map<TuneWeavePlatform, SessionProfile> sessionProfiles = new ConcurrentHashMap<>();
+    private final Map<TuneWeavePlatform, TuneWeaveSession> sessionProfiles = new ConcurrentHashMap<>();
+    private final TuneWeaveAuthenticationService authentication =
+            new TuneWeaveAuthenticationService(gateway, sessionProfiles);
     private final TuneWeaveEntityMapper entities = new TuneWeaveEntityMapper(sessionProfiles::get);
     private final Map<TuneWeavePlatform, String> favoritePlaylistReferences = new ConcurrentHashMap<>();
     private final LocalUniPlaylistStore localPlaylists = new LocalUniPlaylistStore();
@@ -75,8 +73,8 @@ public final class TuneWeaveClientService {
         return gateway.hasCredential(platform);
     }
 
-    public SessionProfile cachedSession(TuneWeavePlatform platform) {
-        return sessionProfiles.get(platform);
+    public TuneWeaveSession cachedSession(TuneWeavePlatform platform) {
+        return authentication.cachedSession(platform);
     }
 
     public boolean hasPlaylist(long id) {
@@ -95,87 +93,36 @@ public final class TuneWeaveClientService {
         return gateway.credential(platform);
     }
 
-    public QrSession startQrLogin(TuneWeavePlatform platform, String loginType) {
-        JsonObject body = clientModeBody(platform);
-        if (loginType != null && !loginType.isBlank()) {
-            body.addProperty("login_type", loginType.trim());
-        }
-        JsonObject data = object(requestWithoutCredential("POST", "/v1/auth/qr", Map.of(), body).data());
-        return new QrSession(
-                platform,
-                requiredString(data, "transaction_id"),
-                string(data, "url"),
-                string(data, "image_data_url"),
-                string(data, "expires_at")
-        );
+    public TuneWeaveQrSession startQrLogin(TuneWeavePlatform platform, String loginType) {
+        return authentication.startQrLogin(platform, loginType);
     }
 
-    public QrPoll pollQrLogin(QrSession session) {
-        JsonObject data = object(requestWithoutCredential(
-                "GET",
-                "/v1/auth/qr/" + TuneWeaveApiClient.encodePathSegment(session.transactionId()),
-                Map.of(), null).data());
-        String state = requiredString(data, "state");
-        if ("confirmed".equals(state)) {
-            saveCredential(session.platform(), data.get("caller_credential"));
-            return new QrPoll(state, string(data, "message"), loadSession(session.platform()));
-        }
-        return new QrPoll(state, string(data, "message"), profile(data.get("profile")));
+    public TuneWeaveQrPoll pollQrLogin(TuneWeaveQrSession session) {
+        return authentication.pollQrLogin(session);
     }
 
-    public SessionProfile loginWithPassword(TuneWeavePlatform platform, String principalType,
-                                            String principal, String password, String passwordFormat,
-                                            String countryCode) {
-        JsonObject body = clientModeBody(platform);
-        body.addProperty("principal_type", principalType);
-        body.addProperty("principal", principal);
-        body.addProperty("password", password);
-        if (passwordFormat != null && !passwordFormat.isBlank()) {
-            body.addProperty("password_format", passwordFormat);
-        }
-        if (countryCode != null && !countryCode.isBlank()) {
-            body.addProperty("country_code", countryCode);
-        }
-        JsonObject data = object(requestWithoutCredential("POST", "/v1/auth/password", Map.of(), body).data());
-        saveCredential(platform, data.get("caller_credential"));
-        return loadSession(platform);
+    public TuneWeaveSession loginWithPassword(TuneWeavePlatform platform, String principalType,
+                                              String principal, String password, String passwordFormat,
+                                              String countryCode) {
+        return authentication.loginWithPassword(
+                platform, principalType, principal, password, passwordFormat, countryCode);
     }
 
-    public ChallengeSession startSmsLogin(TuneWeavePlatform platform, String principal, String countryCode) {
-        JsonObject body = clientModeBody(platform);
-        body.addProperty("method", "sms");
-        body.addProperty("principal", principal);
-        body.addProperty("country_code", countryCode == null || countryCode.isBlank() ? "86" : countryCode);
-        JsonObject data = object(requestWithoutCredential(
-                "POST", "/v1/auth/challenges", Map.of(), body).data());
-        return new ChallengeSession(platform, requiredString(data, "transaction_id"));
+    public TuneWeaveChallengeSession startSmsLogin(TuneWeavePlatform platform, String principal,
+                                                   String countryCode) {
+        return authentication.startSmsLogin(platform, principal, countryCode);
     }
 
-    public SessionProfile verifySmsLogin(ChallengeSession session, String code) {
-        JsonObject body = new JsonObject();
-        body.addProperty("code", code);
-        JsonObject data = object(requestWithoutCredential(
-                "POST",
-                "/v1/auth/challenges/" + TuneWeaveApiClient.encodePathSegment(session.transactionId()) + "/verify",
-                Map.of(), body).data());
-        saveCredential(session.platform(), data.get("caller_credential"));
-        return loadSession(session.platform());
+    public TuneWeaveSession verifySmsLogin(TuneWeaveChallengeSession session, String code) {
+        return authentication.verifySmsLogin(session, code);
     }
 
-    public SessionProfile loadSession(TuneWeavePlatform platform) {
-        JsonElement data = requestForPlatform(
-                platform, "GET", "/v1/auth/session", Map.of("platform", platform.apiName()), null).data();
-        SessionProfile result = enrichSessionProfile(profile(data));
-        if (result != null) sessionProfiles.put(platform, result);
-        return result;
+    public TuneWeaveSession loadSession(TuneWeavePlatform platform) {
+        return authentication.loadSession(platform);
     }
 
-    public SessionProfile refreshSession(TuneWeavePlatform platform) {
-        JsonObject body = clientModeBody(platform);
-        JsonObject data = object(requestForPlatform(
-                platform, "POST", "/v1/auth/session/refresh", Map.of(), body).data());
-        saveCredential(platform, data.get("caller_credential"));
-        return loadSession(platform);
+    public TuneWeaveSession refreshSession(TuneWeavePlatform platform) {
+        return authentication.refreshSession(platform);
     }
 
     /** Loads the caller's account playlists without routing the private credential through Minecraft. */
@@ -214,7 +161,7 @@ public final class TuneWeaveClientService {
     }
 
     private UserCategoryPlaylists loadBilibiliFavoriteFolders() {
-        SessionProfile session = sessionProfiles.get(TuneWeavePlatform.BILIBILI);
+        TuneWeaveSession session = sessionProfiles.get(TuneWeavePlatform.BILIBILI);
         if (session == null) session = loadSession(TuneWeavePlatform.BILIBILI);
         if (session == null || isBlank(session.userId())) {
             throw new TuneWeaveApiClient.TuneWeaveException(
@@ -1445,7 +1392,7 @@ public final class TuneWeaveClientService {
     }
 
     private String cloudUserId(TuneWeavePlatform platform) {
-        SessionProfile profile = loadSession(platform);
+        TuneWeaveSession profile = loadSession(platform);
         if (profile.userId() == null || profile.userId().isBlank()) {
             throw new IllegalArgumentException("TuneWeave session did not return a cloud user ID");
         }
@@ -1501,17 +1448,11 @@ public final class TuneWeaveClientService {
     }
 
     public void logout(TuneWeavePlatform platform) {
-        if (!hasCredential(platform)) {
-            return;
-        }
-        requestForPlatform(platform, "DELETE", "/v1/auth/session",
-                Map.of("platform", platform.apiName(), "credential_mode", "client"), null);
-        clearCredential(platform);
+        authentication.logout(platform);
     }
 
     public void clearCredential(TuneWeavePlatform platform) {
-        sessionProfiles.remove(platform);
-        gateway.clearCredential(platform);
+        authentication.clearCredential(platform);
     }
 
     public TuneWeaveApiClient.TuneWeaveResponse requestForPlatform(
@@ -1524,87 +1465,8 @@ public final class TuneWeaveClientService {
         return gateway.requestWithAllCredentials(method, path, query, body);
     }
 
-    private TuneWeaveApiClient.TuneWeaveResponse requestWithoutCredential(
-            String method, String path, Map<String, String> query, JsonElement body) {
-        return gateway.requestWithoutCredential(method, path, query, body);
-    }
-
-    private void saveCredential(TuneWeavePlatform expectedPlatform, JsonElement element) {
-        gateway.saveCredential(expectedPlatform, element);
-    }
-
-    private static JsonObject clientModeBody(TuneWeavePlatform platform) {
-        JsonObject body = new JsonObject();
-        body.addProperty("platform", platform.apiName());
-        body.addProperty("credential_mode", "client");
-        return body;
-    }
-
-    private static SessionProfile profile(JsonElement element) {
-        if (element == null || element.isJsonNull()) {
-            return null;
-        }
-        JsonObject value = object(element);
-        return new SessionProfile(
-                TuneWeavePlatform.fromApiName(requiredString(value, "platform")),
-                string(value, "user_id"),
-                string(value, "nickname"),
-                string(value, "avatar_url"),
-                value.has("authenticated") && value.get("authenticated").getAsBoolean()
-        );
-    }
-
-    private SessionProfile enrichSessionProfile(SessionProfile session) {
-        if (session == null || !session.authenticated()
-                || (!isBlank(session.nickname()) && !isBlank(session.avatarUrl()))) {
-            return session;
-        }
-        try {
-            JsonObject detail = object(requestForPlatform(session.platform(), "GET", "/v1/account/profile",
-                    Map.of("platform", session.platform().apiName()), null).data());
-            JsonObject user = detail.has("user") && detail.get("user").isJsonObject()
-                    ? detail.getAsJsonObject("user") : new JsonObject();
-            return new SessionProfile(
-                    session.platform(),
-                    prefer(session.userId(), string(user, "id")),
-                    prefer(session.nickname(), string(user, "name")),
-                    prefer(session.avatarUrl(), string(user, "avatar_url")),
-                    session.authenticated());
-        } catch (TuneWeaveApiClient.TuneWeaveException error) {
-            if (!"capability_not_supported".equals(error.getCode())) throw error;
-            return session;
-        }
-    }
-
-    private static String prefer(String primary, String fallback) {
-        return isBlank(primary) ? Objects.requireNonNullElse(fallback, "") : primary;
-    }
-
     private static boolean isBlank(String value) {
         return value == null || value.isBlank();
-    }
-
-    private static long stableUserId(TuneWeavePlatform platform, String userId) {
-        try {
-            byte[] digest = MessageDigest.getInstance("SHA-256").digest(
-                    (platform.apiName() + ':' + Objects.requireNonNullElse(userId, ""))
-                            .getBytes(StandardCharsets.UTF_8));
-            return ByteBuffer.wrap(digest).getLong() & Long.MAX_VALUE;
-        } catch (NoSuchAlgorithmException impossible) {
-            throw new IllegalStateException(impossible);
-        }
-    }
-
-    private static String userIdFromReference(TuneWeavePlatform platform, String reference) {
-        String userId = Objects.requireNonNullElse(reference, "");
-        String platformPrefix = platform.apiName() + ':';
-        if (userId.startsWith(platformPrefix)) {
-            userId = userId.substring(platformPrefix.length());
-        }
-        if (userId.startsWith("user:")) {
-            userId = userId.substring("user:".length());
-        }
-        return userId;
     }
 
     public boolean isFavoritePlaylist(Playlist playlist) {
@@ -1664,19 +1526,6 @@ public final class TuneWeaveClientService {
             case JY_MASTER -> "master";
             case NONE -> "auto";
         };
-    }
-
-    public record QrSession(TuneWeavePlatform platform, String transactionId, String url,
-                            String imageDataUrl, String expiresAt) {
-    }
-
-    public record QrPoll(String state, String message, SessionProfile profile) {
-        public boolean terminal() {
-            return "confirmed".equals(state) || "expired".equals(state) || "failed".equals(state);
-        }
-    }
-
-    public record ChallengeSession(TuneWeavePlatform platform, String transactionId) {
     }
 
     public record UniPlaylistInfo(String reference, String name, String description, int itemCount) {
@@ -1758,15 +1607,4 @@ public final class TuneWeaveClientService {
                                    boolean subscribed) {
     }
 
-    public record SessionProfile(TuneWeavePlatform platform, String userId, String nickname,
-                                 String avatarUrl, boolean authenticated) {
-        public Profile toMusicHudProfile() {
-            return new Profile(
-                    nickname == null || nickname.isBlank() ? platform.apiName() : nickname,
-                    avatarUrl == null ? "" : avatarUrl,
-                    stableUserId(platform, userIdFromReference(platform, userId)),
-                    VipType.NORMAL
-            );
-        }
-    }
 }

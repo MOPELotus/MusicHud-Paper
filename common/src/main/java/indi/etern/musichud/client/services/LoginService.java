@@ -12,6 +12,7 @@ import indi.etern.musichud.client.network.vanilla.VanillaPlayerProxy;
 import indi.etern.musichud.client.ui.pages.account.AccountBaseView;
 import indi.etern.musichud.client.ui.pages.account.LoginView;
 import indi.etern.musichud.client.services.tuneweave.TuneWeaveClientService;
+import indi.etern.musichud.client.services.tuneweave.TuneWeaveSession;
 import indi.etern.musichud.client.services.music.MusicService;
 import indi.etern.musichud.interfaces.*;
 import indi.etern.musichud.network.IClientNetworkService;
@@ -202,7 +203,7 @@ public class LoginService implements IClientLoginService {
         });
     }
 
-    public void completeTuneWeaveLogin(TuneWeaveClientService.SessionProfile sessionProfile) {
+    public void completeTuneWeaveLogin(TuneWeaveSession sessionProfile) {
         if (sessionProfile == null || !sessionProfile.authenticated()) {
             throw new IllegalArgumentException("TuneWeave did not return an authenticated profile");
         }
@@ -230,7 +231,7 @@ public class LoginService implements IClientLoginService {
         }
         MusicHud.EXECUTOR.execute(() -> {
             try {
-                TuneWeaveClientService.SessionProfile profile = tuneWeave.loadSession(platform);
+                TuneWeaveSession profile = tuneWeave.loadSession(platform);
                 if (version != platformSessionVersion.get() || tuneWeave.defaultPlatform() != platform) return;
                 completeTuneWeaveLogin(profile);
             } catch (RuntimeException error) {
@@ -248,7 +249,7 @@ public class LoginService implements IClientLoginService {
         tuneWeave.setDefaultPlatform(platform);
         MusicHud.EXECUTOR.execute(() -> {
             try {
-                TuneWeaveClientService.SessionProfile profile = tuneWeave.loadSession(platform);
+                TuneWeaveSession profile = tuneWeave.loadSession(platform);
                 if (version != platformSessionVersion.get() || tuneWeave.defaultPlatform() != platform) return;
                 completeTuneWeaveLogin(profile);
             } catch (RuntimeException error) {

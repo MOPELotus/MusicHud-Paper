@@ -13,10 +13,6 @@ import indi.etern.musichud.beans.user.VipType;
 import indi.etern.musichud.server.api.tuneweave.TuneWeavePlatform;
 import indi.etern.musichud.utils.collections.ObservableSequencedSet;
 
-import java.nio.ByteBuffer;
-import java.nio.charset.StandardCharsets;
-import java.security.MessageDigest;
-import java.security.NoSuchAlgorithmException;
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.LinkedHashMap;
@@ -35,10 +31,9 @@ final class TuneWeaveEntityMapper {
     private final Map<Long, Playlist> playlists = new ConcurrentHashMap<>();
     private final Map<Long, Album> albums = new ConcurrentHashMap<>();
     private final Map<Long, Artist> artists = new ConcurrentHashMap<>();
-    private final Function<TuneWeavePlatform, TuneWeaveClientService.SessionProfile> sessionLookup;
+    private final Function<TuneWeavePlatform, TuneWeaveSession> sessionLookup;
 
-    TuneWeaveEntityMapper(
-            Function<TuneWeavePlatform, TuneWeaveClientService.SessionProfile> sessionLookup) {
+    TuneWeaveEntityMapper(Function<TuneWeavePlatform, TuneWeaveSession> sessionLookup) {
         this.sessionLookup = Objects.requireNonNull(sessionLookup);
     }
 
@@ -90,10 +85,10 @@ final class TuneWeaveEntityMapper {
         JsonObject creatorObject = object.has("creator") && object.get("creator").isJsonObject()
                 ? object.getAsJsonObject("creator") : new JsonObject();
         String creatorRef = string(creatorObject, "ref");
-        TuneWeaveClientService.SessionProfile session = sessionLookup.apply(platform);
-        String creatorUserId = userIdFromReference(platform, creatorRef);
+        TuneWeaveSession session = sessionLookup.apply(platform);
+        String creatorUserId = TuneWeaveIdentity.userIdFromReference(platform, creatorRef);
         boolean currentUser = session != null && (creatorObject.isEmpty()
-                || creatorUserId.equals(userIdFromReference(platform, session.userId())));
+                || creatorUserId.equals(TuneWeaveIdentity.userIdFromReference(platform, session.userId())));
         Profile creator = currentUser
                 ? session.toMusicHudProfile()
                 : new Profile(string(creatorObject, "name", ""), "",
@@ -336,22 +331,7 @@ final class TuneWeaveEntityMapper {
     }
 
     long stableId(TuneWeavePlatform platform, String value) {
-        try {
-            byte[] digest = MessageDigest.getInstance("SHA-256").digest(
-                    (platform.apiName() + ':' + Objects.requireNonNullElse(value, ""))
-                            .getBytes(StandardCharsets.UTF_8));
-            return ByteBuffer.wrap(digest).getLong() & Long.MAX_VALUE;
-        } catch (NoSuchAlgorithmException impossible) {
-            throw new IllegalStateException(impossible);
-        }
-    }
-
-    private static String userIdFromReference(TuneWeavePlatform platform, String reference) {
-        String userId = Objects.requireNonNullElse(reference, "");
-        String platformPrefix = platform.apiName() + ':';
-        if (userId.startsWith(platformPrefix)) userId = userId.substring(platformPrefix.length());
-        if (userId.startsWith("user:")) userId = userId.substring("user:".length());
-        return userId;
+        return TuneWeaveIdentity.stableId(platform, value);
     }
 
     private static void addVideoCreator(

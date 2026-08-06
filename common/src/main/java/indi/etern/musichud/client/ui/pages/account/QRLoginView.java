@@ -13,6 +13,8 @@ import icyllis.modernui.widget.TextView;
 import indi.etern.musichud.MusicHud;
 import indi.etern.musichud.client.services.LoginService;
 import indi.etern.musichud.client.services.tuneweave.TuneWeaveClientService;
+import indi.etern.musichud.client.services.tuneweave.TuneWeaveQrPoll;
+import indi.etern.musichud.client.services.tuneweave.TuneWeaveQrSession;
 import indi.etern.musichud.client.ui.Theme;
 import indi.etern.musichud.client.ui.components.UrlImageView;
 import indi.etern.musichud.client.ui.components.PlatformSelector;
@@ -35,7 +37,7 @@ public class QRLoginView extends LinearLayout implements ILoginView {
     private final Spinner qqLoginTypeSpinner;
     private final UrlImageView qrImageView;
     private final TextView messageTextView;
-    private volatile TuneWeaveClientService.QrSession activeSession;
+    private volatile TuneWeaveQrSession activeSession;
     private MusicHud.ScheduledTask pollingTask;
 
     public QRLoginView(Context context) {
@@ -133,7 +135,7 @@ public class QRLoginView extends LinearLayout implements ILoginView {
                 : null;
         MusicHud.EXECUTOR.execute(() -> {
             try {
-                TuneWeaveClientService.QrSession session = tuneWeave.startQrLogin(platform, loginType);
+                TuneWeaveQrSession session = tuneWeave.startQrLogin(platform, loginType);
                 activeSession = session;
                 String image = QrImageUtils.prepare(session.imageDataUrl(), session.url());
                 MuiModApi.postToUiThread(() -> {
@@ -152,12 +154,12 @@ public class QRLoginView extends LinearLayout implements ILoginView {
     }
 
     private void pollLogin() {
-        TuneWeaveClientService.QrSession session = activeSession;
+        TuneWeaveQrSession session = activeSession;
         if (session == null) {
             return;
         }
         try {
-            TuneWeaveClientService.QrPoll poll = tuneWeave.pollQrLogin(session);
+            TuneWeaveQrPoll poll = tuneWeave.pollQrLogin(session);
             String localizedMessage = localizedPollMessage(poll.state(), poll.message());
             MuiModApi.postToUiThread(() -> {
                 if ("scanned".equals(poll.state())) {

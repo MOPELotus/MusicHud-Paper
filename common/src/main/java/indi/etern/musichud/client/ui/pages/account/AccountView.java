@@ -17,6 +17,7 @@ import indi.etern.musichud.beans.music.UserCategoryPlaylists;
 import indi.etern.musichud.client.services.LoginService;
 import indi.etern.musichud.client.services.music.MusicService;
 import indi.etern.musichud.client.services.tuneweave.TuneWeaveClientService;
+import indi.etern.musichud.client.services.tuneweave.TuneWeaveSession;
 import indi.etern.musichud.client.ui.Theme;
 import indi.etern.musichud.client.ui.components.ArtistCard;
 import indi.etern.musichud.client.ui.components.FlexWrapLayout;
@@ -213,7 +214,7 @@ public class AccountView extends LinearLayout {
             return;
         }
 
-        TuneWeaveClientService.SessionProfile sessionProfile = tuneWeave.cachedSession(selectedPlatform);
+        TuneWeaveSession sessionProfile = tuneWeave.cachedSession(selectedPlatform);
         String avatarUrl = sessionProfile != null && sessionProfile.avatarUrl() != null
                 && !sessionProfile.avatarUrl().isBlank()
                 ? sessionProfile.avatarUrl() : MusicHud.ICON_BASE64;

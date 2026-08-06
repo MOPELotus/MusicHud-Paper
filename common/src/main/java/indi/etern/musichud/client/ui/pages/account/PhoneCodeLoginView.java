@@ -10,6 +10,7 @@ import indi.etern.musichud.MusicHud;
 import indi.etern.musichud.client.ui.Theme;
 import indi.etern.musichud.client.services.LoginService;
 import indi.etern.musichud.client.services.tuneweave.TuneWeaveClientService;
+import indi.etern.musichud.client.services.tuneweave.TuneWeaveChallengeSession;
 import indi.etern.musichud.client.ui.components.PlatformSelector;
 import indi.etern.musichud.client.utils.ui.ButtonInsetBackgroundFactory;
 import indi.etern.musichud.server.api.tuneweave.TuneWeavePlatform;
@@ -31,7 +32,7 @@ public class PhoneCodeLoginView extends LinearLayout implements ILoginView {
     private final TuneWeaveClientService tuneWeave = TuneWeaveClientService.getInstance();
     private ZonedDateTime lastSentCodeTime;
     MusicHud.ScheduledTask scheduledRefreshTask = null;
-    private volatile TuneWeaveClientService.ChallengeSession challengeSession;
+    private volatile TuneWeaveChallengeSession challengeSession;
 
     public PhoneCodeLoginView(Context context) {
         super(context);
@@ -199,7 +200,7 @@ public class PhoneCodeLoginView extends LinearLayout implements ILoginView {
                 return;
             }
 
-            TuneWeaveClientService.ChallengeSession session = challengeSession;
+            TuneWeaveChallengeSession session = challengeSession;
             if (session == null) {
                 errorText(I18n.get(MusicHud.MOD_ID + ".text.sendCodeFirst"));
                 return;
