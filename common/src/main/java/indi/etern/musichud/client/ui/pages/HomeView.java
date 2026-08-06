@@ -16,6 +16,8 @@ import indi.etern.musichud.beans.music.QueueItem;
 import indi.etern.musichud.client.audio.NowPlayingInfo;
 import indi.etern.musichud.client.services.music.MusicService;
 import indi.etern.musichud.client.services.tuneweave.TuneWeaveClientService;
+import indi.etern.musichud.client.services.tuneweave.TuneWeaveVideo;
+import indi.etern.musichud.client.services.tuneweave.TuneWeaveVideoCreator;
 import indi.etern.musichud.client.ui.Theme;
 import indi.etern.musichud.client.ui.components.FlexWrapLayout;
 import indi.etern.musichud.client.ui.components.MusicCollectionCard;
@@ -477,7 +479,7 @@ public class HomeView extends LinearLayout {
         videoPreviewDescription.setText(I18n.get(MusicHud.MOD_ID + ".text.video.loading"));
         MusicHud.EXECUTOR.execute(() -> {
             try {
-                TuneWeaveClientService.VideoInfo videoInfo = TuneWeaveClientService.getInstance()
+                TuneWeaveVideo videoInfo = TuneWeaveClientService.getInstance()
                         .loadVideoDetail(musicDetail);
                 MuiModApi.postToUiThread(() -> applyVideoPreviewInfo(
                         previewKey, requestGeneration, musicDetail, videoInfo));
@@ -489,7 +491,7 @@ public class HomeView extends LinearLayout {
     }
 
     private void applyVideoPreviewInfo(String expectedKey, long requestGeneration,
-                                       MusicDetail expectedMusic, TuneWeaveClientService.VideoInfo videoInfo) {
+                                       MusicDetail expectedMusic, TuneWeaveVideo videoInfo) {
         if (!isCurrentVideoPreview(expectedKey, requestGeneration)) return;
         videoPreviewTitle.setText(videoInfo.title());
         String creators = videoInfo.creators().isEmpty()
@@ -497,7 +499,7 @@ public class HomeView extends LinearLayout {
                 .filter(name -> name != null && !name.isBlank())
                 .reduce((left, right) -> left + " / " + right).orElse("Bilibili")
                 : videoInfo.creators().stream()
-                .map(TuneWeaveClientService.VideoCreatorInfo::name)
+                .map(TuneWeaveVideoCreator::name)
                 .reduce((left, right) -> left + " / " + right).orElse("Bilibili");
         String publishedAt = formatPublishedAt(videoInfo.publishedAt());
         videoPreviewMeta.setText(publishedAt.isBlank() ? creators : creators + "  ·  " + publishedAt);

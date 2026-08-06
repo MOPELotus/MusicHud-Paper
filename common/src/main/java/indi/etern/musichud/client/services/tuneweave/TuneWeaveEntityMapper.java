@@ -263,21 +263,21 @@ final class TuneWeaveEntityMapper {
         return result;
     }
 
-    TuneWeaveClientService.VideoInfo toVideoInfo(JsonObject object) {
+    TuneWeaveVideo toVideoInfo(JsonObject object) {
         String reference = string(object, "ref", "");
-        List<TuneWeaveClientService.VideoCreatorInfo> creators =
+        List<TuneWeaveVideoCreator> creators =
                 videoCreatorInfos(object, new JsonObject());
         JsonObject extensions = object.has("extensions") && object.get("extensions").isJsonObject()
                 ? object.getAsJsonObject("extensions") : new JsonObject();
-        return new TuneWeaveClientService.VideoInfo(reference, string(object, "title", reference),
+        return new TuneWeaveVideo(reference, string(object, "title", reference),
                 string(object, "description", ""), string(object, "cover_url", ""),
                 integer(object, "duration_ms", 0), string(object, "published_at", ""),
                 longValue(object, "play_count", 0), creators, integer(extensions, "part_count", 1));
     }
 
-    List<TuneWeaveClientService.VideoCreatorInfo> videoCreatorInfos(
+    List<TuneWeaveVideoCreator> videoCreatorInfos(
             JsonObject object, JsonObject snapshot) {
-        LinkedHashMap<String, TuneWeaveClientService.VideoCreatorInfo> creators = new LinkedHashMap<>();
+        LinkedHashMap<String, TuneWeaveVideoCreator> creators = new LinkedHashMap<>();
         JsonElement creatorData = object.get("creators");
         if (creatorData != null && creatorData.isJsonArray()) {
             creatorData.getAsJsonArray().forEach(value -> {
@@ -313,7 +313,7 @@ final class TuneWeaveEntityMapper {
     }
 
     Artist videoCreatorArtist(
-            TuneWeavePlatform platform, TuneWeaveClientService.VideoCreatorInfo creator) {
+            TuneWeavePlatform platform, TuneWeaveVideoCreator creator) {
         String identity = creator.reference().isBlank() ? creator.name() : creator.reference();
         return new Artist(stableId(platform, "video-creator:" + identity), creator.name(),
                 creator.avatarUrl(), 0, 0, "", new ArrayList<>(), 0, creator.reference());
@@ -332,11 +332,11 @@ final class TuneWeaveEntityMapper {
     }
 
     private static void addVideoCreator(
-            Map<String, TuneWeaveClientService.VideoCreatorInfo> creators,
+            Map<String, TuneWeaveVideoCreator> creators,
             String reference, String name, String avatarUrl) {
         if (name == null || name.isBlank()) return;
         String identity = reference == null || reference.isBlank() ? "name:" + name : reference;
-        creators.putIfAbsent(identity, new TuneWeaveClientService.VideoCreatorInfo(
+        creators.putIfAbsent(identity, new TuneWeaveVideoCreator(
                 Objects.requireNonNullElse(reference, ""), name,
                 Objects.requireNonNullElse(avatarUrl, "")));
     }

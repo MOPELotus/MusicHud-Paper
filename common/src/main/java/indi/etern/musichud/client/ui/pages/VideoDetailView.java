@@ -15,6 +15,9 @@ import indi.etern.musichud.MusicHud;
 import indi.etern.musichud.beans.music.MusicDetail;
 import indi.etern.musichud.client.services.music.MusicService;
 import indi.etern.musichud.client.services.tuneweave.TuneWeaveClientService;
+import indi.etern.musichud.client.services.tuneweave.TuneWeaveVideo;
+import indi.etern.musichud.client.services.tuneweave.TuneWeaveVideoCreator;
+import indi.etern.musichud.client.services.tuneweave.TuneWeaveVideoPart;
 import indi.etern.musichud.client.ui.Theme;
 import indi.etern.musichud.client.ui.components.Modal;
 import indi.etern.musichud.client.ui.components.RouterContainer;
@@ -35,8 +38,8 @@ public final class VideoDetailView extends LinearLayout {
     private final MusicDetail source;
     private final LinearLayout partsLayout;
     private final TextView status;
-    private TuneWeaveClientService.VideoInfo video;
-    private List<TuneWeaveClientService.VideoPartInfo> parts = List.of();
+    private TuneWeaveVideo video;
+    private List<TuneWeaveVideoPart> parts = List.of();
 
     public VideoDetailView(Context context, MusicDetail source) {
         super(context);
@@ -99,8 +102,8 @@ public final class VideoDetailView extends LinearLayout {
         showStatus(I18n.get(MusicHud.MOD_ID + ".text.video.loading"));
         MusicHud.EXECUTOR.execute(() -> {
             try {
-                TuneWeaveClientService.VideoInfo loadedVideo = tuneWeave.loadVideoDetail(source);
-                List<TuneWeaveClientService.VideoPartInfo> loadedParts = tuneWeave.loadVideoParts(source.getSourceRef());
+                TuneWeaveVideo loadedVideo = tuneWeave.loadVideoDetail(source);
+                List<TuneWeaveVideoPart> loadedParts = tuneWeave.loadVideoParts(source.getSourceRef());
                 MuiModApi.postToUiThread(() -> render(loadedVideo, loadedParts));
             } catch (RuntimeException error) {
                 MuiModApi.postToUiThread(() -> showStatus(message(error)));
@@ -108,18 +111,18 @@ public final class VideoDetailView extends LinearLayout {
         });
     }
 
-    private void render(TuneWeaveClientService.VideoInfo loadedVideo,
-                        List<TuneWeaveClientService.VideoPartInfo> loadedParts) {
+    private void render(TuneWeaveVideo loadedVideo,
+                        List<TuneWeaveVideoPart> loadedParts) {
         video = loadedVideo;
         parts = loadedParts;
         String creators = loadedVideo.creators().stream()
-                .map(TuneWeaveClientService.VideoCreatorInfo::name)
+                .map(TuneWeaveVideoCreator::name)
                 .reduce((left, right) -> left + " / " + right).orElse("");
         status.setText((creators.isEmpty() ? "" : creators + "\n")
                 + (loadedVideo.description().isBlank() ? "" : loadedVideo.description() + "\n")
                 + I18n.get(MusicHud.MOD_ID + ".text.video.parts").replace("{}", Integer.toString(loadedParts.size())));
         partsLayout.removeAllViews();
-        for (TuneWeaveClientService.VideoPartInfo part : loadedParts) {
+        for (TuneWeaveVideoPart part : loadedParts) {
             LinearLayout row = new LinearLayout(getContext());
             row.setGravity(Gravity.CENTER_VERTICAL);
             row.setPadding(dp(10), dp(8), dp(10), dp(8));
@@ -148,10 +151,10 @@ public final class VideoDetailView extends LinearLayout {
 
     private void playAll() {
         if (video == null) return;
-        for (TuneWeaveClientService.VideoPartInfo part : parts) play(part);
+        for (TuneWeaveVideoPart part : parts) play(part);
     }
 
-    private void play(TuneWeaveClientService.VideoPartInfo part) {
+    private void play(TuneWeaveVideoPart part) {
         if (video == null) return;
         MusicService.getInstance().sendPushMusicToQueue(tuneWeave.videoPartTrack(video, part));
     }
