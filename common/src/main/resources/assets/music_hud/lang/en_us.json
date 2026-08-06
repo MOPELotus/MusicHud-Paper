@@ -52,6 +52,8 @@
   "music_hud.text.cloud.deleteWarning": "Delete this source file from the cloud library? This cannot be undone.",
   "music_hud.text.cloud.noLyrics": "No cloud lyrics are available",
   "music_hud.text.video.loading": "Loading video details...",
+  "music_hud.text.video.noDescription": "No description",
+  "music_hud.text.video.detailsUnavailable": "Video details are temporarily unavailable",
   "music_hud.text.video.parts": "{} parts",
   "music_hud.text.programs.title": "Podcasts & radio",
   "music_hud.text.programs.description": "Browse podcasts and radio stations from your music account",

@@ -68,8 +68,11 @@ public final class VideoDetailView extends LinearLayout {
         status = new TextView(context);
         status.setTextColor(Theme.SECONDARY_TEXT_COLOR);
         status.setTextSize(Theme.TEXT_SIZE_NORMAL);
+        status.setGravity(Gravity.CENTER);
+        status.setTextAlignment(TEXT_ALIGNMENT_CENTER);
+        status.setMinimumHeight(dp(80));
         LayoutParams statusParams = new LayoutParams(0, WRAP_CONTENT, 1);
-        statusParams.setMargins(dp(16), 0, 0, 0);
+        statusParams.setMargins(dp(16), 0, dp(16), 0);
         summary.addView(status, statusParams);
         LayoutParams summaryParams = new LayoutParams(MATCH_PARENT, WRAP_CONTENT);
         summaryParams.setMargins(0, dp(16), 0, dp(16));

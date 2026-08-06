@@ -52,6 +52,8 @@
   "music_hud.text.cloud.deleteWarning": "从音乐云盘删除这个源文件？此操作无法撤销。",
   "music_hud.text.cloud.noLyrics": "没有可用的云盘歌词",
   "music_hud.text.video.loading": "正在加载视频详情...",
+  "music_hud.text.video.noDescription": "暂无简介",
+  "music_hud.text.video.detailsUnavailable": "视频详情暂时无法加载",
   "music_hud.text.video.parts": "{} 个分 P",
   "music_hud.text.programs.title": "播客和电台",
   "music_hud.text.programs.description": "浏览音乐账户中的播客和电台",

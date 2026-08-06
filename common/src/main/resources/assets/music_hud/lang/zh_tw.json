@@ -52,6 +52,8 @@
   "music_hud.text.cloud.deleteWarning": "從音樂雲端硬碟刪除這個來源檔案？此操作無法復原。",
   "music_hud.text.cloud.noLyrics": "沒有可用的雲端歌詞",
   "music_hud.text.video.loading": "正在載入影片詳情...",
+  "music_hud.text.video.noDescription": "暫無簡介",
+  "music_hud.text.video.detailsUnavailable": "影片詳情暫時無法載入",
   "music_hud.text.video.parts": "{} 個分 P",
   "music_hud.text.programs.title": "播客與電台",
   "music_hud.text.programs.description": "瀏覽音樂帳戶中的播客與電台",

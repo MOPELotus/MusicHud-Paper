@@ -32,6 +32,7 @@ import lombok.Getter;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.player.LocalPlayer;
 import net.minecraft.client.resources.language.I18n;
+import org.apache.logging.log4j.Logger;
 
 import java.util.Map;
 import java.util.Queue;
@@ -44,6 +45,7 @@ import static icyllis.modernui.view.ViewGroup.LayoutParams.MATCH_PARENT;
 import static icyllis.modernui.view.ViewGroup.LayoutParams.WRAP_CONTENT;
 
 public class HomeView extends LinearLayout {
+    private static final Logger LOGGER = MusicHud.getLogger(HomeView.class);
     private static final MusicService musicService = MusicService.getInstance();
     private static final ClientConfig clientConfig = ClientConfig.getInstance();
     @Getter
@@ -58,7 +60,8 @@ public class HomeView extends LinearLayout {
     private TextView videoPreviewTitle;
     private TextView videoPreviewMeta;
     private TextView videoPreviewDescription;
-    private volatile MusicDetail videoPreviewMusic;
+    private volatile String videoPreviewKey = "";
+    private long videoPreviewRequestGeneration;
     private MusicListItem nextToPlayItem;
     private TextView nextToPlayTitle;
     private TextView queueTitle;
@@ -166,6 +169,7 @@ public class HomeView extends LinearLayout {
             videoPreviewTitle.setTextColor(Theme.EMPHASIZE_TEXT_COLOR);
             videoPreviewTitle.setTextSize(Theme.TEXT_SIZE_LARGE);
             videoPreviewTitle.setGravity(Gravity.CENTER);
+            videoPreviewTitle.setTextAlignment(TEXT_ALIGNMENT_CENTER);
             videoPreviewTitle.setMaxLines(2);
             LinearLayout.LayoutParams previewTitleParams = new LinearLayout.LayoutParams(MATCH_PARENT, WRAP_CONTENT);
             previewTitleParams.setMargins(dp(32), 0, dp(32), dp(4));
@@ -175,6 +179,7 @@ public class HomeView extends LinearLayout {
             videoPreviewMeta.setTextColor(Theme.SECONDARY_TEXT_COLOR);
             videoPreviewMeta.setTextSize(Theme.TEXT_SIZE_NORMAL);
             videoPreviewMeta.setGravity(Gravity.CENTER);
+            videoPreviewMeta.setTextAlignment(TEXT_ALIGNMENT_CENTER);
             LinearLayout.LayoutParams previewMetaParams = new LinearLayout.LayoutParams(MATCH_PARENT, WRAP_CONTENT);
             previewMetaParams.setMargins(dp(32), 0, dp(32), dp(8));
             videoPreview.addView(videoPreviewMeta, previewMetaParams);
@@ -182,7 +187,8 @@ public class HomeView extends LinearLayout {
             videoPreviewDescription = new TextView(context);
             videoPreviewDescription.setTextColor(Theme.SECONDARY_TEXT_COLOR);
             videoPreviewDescription.setTextSize(Theme.TEXT_SIZE_NORMAL);
-            videoPreviewDescription.setGravity(Gravity.LEFT);
+            videoPreviewDescription.setGravity(Gravity.CENTER);
+            videoPreviewDescription.setTextAlignment(TEXT_ALIGNMENT_CENTER);
             videoPreviewDescription.setMaxLines(8);
             LinearLayout.LayoutParams previewDescriptionParams = new LinearLayout.LayoutParams(MATCH_PARENT, WRAP_CONTENT);
             previewDescriptionParams.setMargins(dp(32), 0, dp(32), dp(32));
@@ -447,8 +453,14 @@ public class HomeView extends LinearLayout {
         boolean showVideoPreview = video && !hasVideoLyrics;
         staggeredLyricScrollView.setVisibility(showVideoPreview ? GONE : VISIBLE);
         videoPreview.setVisibility(showVideoPreview ? VISIBLE : GONE);
-        videoPreviewMusic = showVideoPreview ? musicDetail : null;
-        if (!showVideoPreview) return;
+        long requestGeneration = ++videoPreviewRequestGeneration;
+        if (!showVideoPreview) {
+            videoPreviewKey = "";
+            return;
+        }
+
+        String previewKey = videoPreviewKey(musicDetail);
+        videoPreviewKey = previewKey;
 
         videoPreviewImage.loadUrl(musicDetail.getAlbum().getPicUrl());
         videoPreviewTitle.setText(musicDetail.getName());
@@ -458,19 +470,23 @@ public class HomeView extends LinearLayout {
                 .reduce((left, right) -> left + " / " + right)
                 .orElse("Bilibili");
         videoPreviewMeta.setText(artists);
-        videoPreviewDescription.setText("");
+        videoPreviewDescription.setText(I18n.get(MusicHud.MOD_ID + ".text.video.loading"));
         MusicHud.EXECUTOR.execute(() -> {
             try {
                 TuneWeaveClientService.VideoInfo videoInfo = TuneWeaveClientService.getInstance()
                         .loadVideoDetail(musicDetail);
-                MuiModApi.postToUiThread(() -> applyVideoPreviewInfo(musicDetail, videoInfo));
-            } catch (RuntimeException ignored) {
+                MuiModApi.postToUiThread(() -> applyVideoPreviewInfo(
+                        previewKey, requestGeneration, musicDetail, videoInfo));
+            } catch (RuntimeException error) {
+                LOGGER.warn("Failed to load Bilibili video preview details for {}", previewKey, error);
+                MuiModApi.postToUiThread(() -> applyVideoPreviewError(previewKey, requestGeneration));
             }
         });
     }
 
-    private void applyVideoPreviewInfo(MusicDetail expectedMusic, TuneWeaveClientService.VideoInfo videoInfo) {
-        if (instance != this || videoPreviewMusic != expectedMusic || videoPreview.getVisibility() != VISIBLE) return;
+    private void applyVideoPreviewInfo(String expectedKey, long requestGeneration,
+                                       MusicDetail expectedMusic, TuneWeaveClientService.VideoInfo videoInfo) {
+        if (!isCurrentVideoPreview(expectedKey, requestGeneration)) return;
         videoPreviewTitle.setText(videoInfo.title());
         String creators = videoInfo.creators().isEmpty()
                 ? expectedMusic.getArtists().stream().map(artist -> artist.getName())
@@ -481,13 +497,35 @@ public class HomeView extends LinearLayout {
                 .reduce((left, right) -> left + " / " + right).orElse("Bilibili");
         String publishedAt = formatPublishedAt(videoInfo.publishedAt());
         videoPreviewMeta.setText(publishedAt.isBlank() ? creators : creators + "  ·  " + publishedAt);
-        videoPreviewDescription.setText(videoInfo.description());
+        videoPreviewDescription.setText(videoInfo.description().isBlank()
+                ? I18n.get(MusicHud.MOD_ID + ".text.video.noDescription") : videoInfo.description());
+    }
+
+    private void applyVideoPreviewError(String expectedKey, long requestGeneration) {
+        if (!isCurrentVideoPreview(expectedKey, requestGeneration)) return;
+        videoPreviewDescription.setText(I18n.get(MusicHud.MOD_ID + ".text.video.detailsUnavailable"));
+    }
+
+    private boolean isCurrentVideoPreview(String expectedKey, long requestGeneration) {
+        return videoPreviewRequestGeneration == requestGeneration
+                && videoPreviewKey.equals(expectedKey)
+                && videoPreview.getVisibility() == VISIBLE;
+    }
+
+    private static String videoPreviewKey(MusicDetail musicDetail) {
+        return musicDetail.getSourceRef() + "|" + musicDetail.getSourcePartRef();
     }
 
     private static String formatPublishedAt(String publishedAt) {
         if (publishedAt == null || publishedAt.isBlank()) return "";
         int timeSeparator = publishedAt.indexOf('T');
         return timeSeparator > 0 ? publishedAt.substring(0, timeSeparator) : publishedAt;
+    }
+
+    @Override
+    protected void onAttachedToWindow() {
+        super.onAttachedToWindow();
+        instance = this;
     }
 
     @Override
