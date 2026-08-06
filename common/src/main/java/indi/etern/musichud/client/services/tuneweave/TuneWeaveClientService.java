@@ -40,10 +40,13 @@ import java.util.Map;
 import java.util.Objects;
 import java.util.concurrent.ConcurrentHashMap;
 
+import static indi.etern.musichud.client.services.tuneweave.TuneWeaveJson.*;
+
 /** Client-owned TuneWeave authentication and credential-scoped requests. */
 public final class TuneWeaveClientService {
     private static final TuneWeaveClientService INSTANCE = new TuneWeaveClientService();
     private final ClientConfig config = ClientConfig.getInstance();
+    private final TuneWeaveGateway gateway = new TuneWeaveGateway();
     private final Map<Long, MusicDetail> tracksById = new ConcurrentHashMap<>();
     private final Map<Long, Playlist> playlistsById = new ConcurrentHashMap<>();
     private final Map<Long, Album> albumsById = new ConcurrentHashMap<>();
@@ -60,20 +63,19 @@ public final class TuneWeaveClientService {
     }
 
     public TuneWeavePlatform defaultPlatform() {
-        return TuneWeavePlatform.fromApiName(config.getDefaultMusicPlatform());
+        return gateway.defaultPlatform();
     }
 
     public void setDefaultPlatform(TuneWeavePlatform platform) {
-        config.setDefaultMusicPlatform(Objects.requireNonNull(platform).apiName());
-        config.save();
+        gateway.setDefaultPlatform(platform);
     }
 
     public boolean isAvailable() {
-        return TuneWeaveApiClient.isAvailableAt(config.getTuneWeaveBaseUrl());
+        return gateway.isAvailable();
     }
 
     public boolean hasCredential(TuneWeavePlatform platform) {
-        return !credential(platform).isBlank();
+        return gateway.hasCredential(platform);
     }
 
     public SessionProfile cachedSession(TuneWeavePlatform platform) {
@@ -93,7 +95,7 @@ public final class TuneWeaveClientService {
     }
 
     public String credential(TuneWeavePlatform platform) {
-        return config.getTuneWeaveCredential(Objects.requireNonNull(platform).apiName());
+        return gateway.credential(platform);
     }
 
     public QrSession startQrLogin(TuneWeavePlatform platform, String loginType) {
@@ -1322,10 +1324,10 @@ public final class TuneWeaveClientService {
                 + TuneWeaveApiClient.encodePathSegment(musicDetail.getSourceRef()) + "/tracks",
                 Map.of("limit", musicDetail.getSourcePartRef().isBlank() ? "1" : "100"), null).data());
         List<JsonElement> items = elements(queue.get("items"));
-        JsonObject item = items.stream().map(TuneWeaveClientService::unwrap)
+        JsonObject item = items.stream().map(TuneWeaveJson::unwrap)
                 .filter(value -> musicDetail.getSourcePartRef().equals(string(value, "ref", "")))
                 .findFirst()
-                .or(() -> items.stream().findFirst().map(TuneWeaveClientService::unwrap))
+                .or(() -> items.stream().findFirst().map(TuneWeaveJson::unwrap))
                 .orElseGet(JsonObject::new);
         String url = string(item, "stream_url", "");
         int duration = integer(item, "duration_ms", musicDetail.getDurationMillis());
@@ -1511,53 +1513,26 @@ public final class TuneWeaveClientService {
 
     public void clearCredential(TuneWeavePlatform platform) {
         sessionProfiles.remove(platform);
-        config.clearTuneWeaveCredential(platform.apiName());
-        config.save();
+        gateway.clearCredential(platform);
     }
 
     public TuneWeaveApiClient.TuneWeaveResponse requestForPlatform(
             TuneWeavePlatform platform, String method, String path, Map<String, String> query, JsonElement body) {
-        String value = credential(platform);
-        List<String> credentials = value.isBlank() ? List.of() : List.of(value);
-        return request(method, path, query, body, credentials);
+        return gateway.requestForPlatform(platform, method, path, query, body);
     }
 
     public TuneWeaveApiClient.TuneWeaveResponse requestWithAllCredentials(
             String method, String path, Map<String, String> query, JsonElement body) {
-        List<String> credentials = new ArrayList<>(TuneWeavePlatform.values().length);
-        for (TuneWeavePlatform platform : TuneWeavePlatform.values()) {
-            String value = credential(platform);
-            if (!value.isBlank()) {
-                credentials.add(value);
-            }
-        }
-        return request(method, path, query, body, credentials);
+        return gateway.requestWithAllCredentials(method, path, query, body);
     }
 
     private TuneWeaveApiClient.TuneWeaveResponse requestWithoutCredential(
             String method, String path, Map<String, String> query, JsonElement body) {
-        return request(method, path, query, body, List.of());
-    }
-
-    private TuneWeaveApiClient.TuneWeaveResponse request(
-            String method, String path, Map<String, String> query, JsonElement body, List<String> credentials) {
-        return TuneWeaveApiClient.requestAt(
-                config.getTuneWeaveBaseUrl(), method, path, query, body, credentials);
+        return gateway.requestWithoutCredential(method, path, query, body);
     }
 
     private void saveCredential(TuneWeavePlatform expectedPlatform, JsonElement element) {
-        JsonObject credential = object(element);
-        String format = requiredString(credential, "format");
-        String platform = requiredString(credential, "platform");
-        String value = requiredString(credential, "value");
-        if (!"tuneweave_credential_v1".equals(format)
-                || TuneWeavePlatform.fromApiName(platform) != expectedPlatform
-                || !value.startsWith("twc1_")) {
-            throw new TuneWeaveApiClient.TuneWeaveException("TuneWeave returned an invalid caller credential", false);
-        }
-        config.setTuneWeaveCredential(expectedPlatform.apiName(), value);
-        config.setDefaultMusicPlatform(expectedPlatform.apiName());
-        config.save();
+        gateway.saveCredential(expectedPlatform, element);
     }
 
     private static JsonObject clientModeBody(TuneWeavePlatform platform) {
@@ -1609,37 +1584,6 @@ public final class TuneWeaveClientService {
 
     private static boolean isBlank(String value) {
         return value == null || value.isBlank();
-    }
-
-    private static JsonObject object(JsonElement element) {
-        if (element == null || element.isJsonNull() || !element.isJsonObject()) {
-            throw new TuneWeaveApiClient.TuneWeaveException("TuneWeave response is missing an object", false);
-        }
-        return element.getAsJsonObject();
-    }
-
-    private static String requiredString(JsonObject object, String key) {
-        String value = string(object, key);
-        if (value == null || value.isBlank()) {
-            throw new TuneWeaveApiClient.TuneWeaveException("TuneWeave response is missing " + key, false);
-        }
-        return value;
-    }
-
-    private static String string(JsonObject object, String key) {
-        JsonElement value = object.get(key);
-        return value == null || value instanceof JsonNull || value.isJsonNull() ? null : value.getAsString();
-    }
-
-    private static String string(JsonObject object, String key, String fallback) {
-        String value = string(object, key);
-        return value == null ? fallback : value;
-    }
-
-    private static String referenceValue(JsonElement element) {
-        if (element == null || element.isJsonNull()) return "";
-        if (element.isJsonObject()) return string(element.getAsJsonObject(), "ref", "");
-        return element.getAsString();
     }
 
     private static long stableUserId(TuneWeavePlatform platform, String userId) {
@@ -1812,19 +1756,6 @@ public final class TuneWeaveClientService {
         return List.copyOf(result.values());
     }
 
-    private static JsonObject mergeSnapshot(JsonObject object) {
-        JsonElement snapshotData = object.get("snapshot");
-        if (snapshotData == null || !snapshotData.isJsonObject()) return object;
-        JsonObject merged = object.deepCopy();
-        merged.remove("snapshot");
-        snapshotData.getAsJsonObject().entrySet().forEach(entry -> {
-            if (!merged.has(entry.getKey()) || merged.get(entry.getKey()).isJsonNull()) {
-                merged.add(entry.getKey(), entry.getValue().deepCopy());
-            }
-        });
-        return merged;
-    }
-
     private CloudTrackInfo toCloudTrack(TuneWeavePlatform platform, JsonObject object) {
         String reference = string(object, "ref", "");
         JsonObject trackData = object.has("track") && object.get("track").isJsonObject()
@@ -1970,87 +1901,6 @@ public final class TuneWeaveClientService {
 
     private static long stableId(TuneWeavePlatform platform, String value) {
         return stableUserId(platform, value);
-    }
-
-    private static String imageUrl(JsonObject object, String... keys) {
-        for (String key : keys) {
-            String value = string(object, key, "");
-            if (!value.isBlank()) {
-                return normalizeImageUrl(value);
-            }
-        }
-        return "";
-    }
-
-    private static String normalizeImageUrl(String value) {
-        String trimmed = value == null ? "" : value.trim();
-        if (trimmed.startsWith("http://")) return "https://" + trimmed.substring("http://".length());
-        return trimmed;
-    }
-
-    private static List<JsonElement> elements(JsonElement value) {
-        if (value == null || value.isJsonNull()) {
-            return List.of();
-        }
-        if (value.isJsonArray()) {
-            List<JsonElement> result = new ArrayList<>();
-            value.getAsJsonArray().forEach(result::add);
-            return result;
-        }
-        if (value.isJsonObject()) {
-            JsonObject object = value.getAsJsonObject();
-            for (String key : List.of("items", "playlists", "results")) {
-                JsonElement nested = object.get(key);
-                if (nested instanceof JsonArray) {
-                    List<JsonElement> result = new ArrayList<>();
-                    nested.getAsJsonArray().forEach(result::add);
-                    return result;
-                }
-            }
-        }
-        return List.of();
-    }
-
-    private static JsonObject unwrap(JsonElement element) {
-        if (element == null || !element.isJsonObject()) {
-            return new JsonObject();
-        }
-        JsonObject object = element.getAsJsonObject();
-        return object.has("data") && object.get("data").isJsonObject()
-                ? object.getAsJsonObject("data") : object;
-    }
-
-    private static boolean bool(JsonObject object, String key, boolean fallback) {
-        JsonElement value = object.get(key);
-        return value == null || value.isJsonNull() ? fallback : value.getAsBoolean();
-    }
-
-    private static int integer(JsonObject object, String key, int fallback) {
-        JsonElement value = object.get(key);
-        return value == null || value.isJsonNull() ? fallback : value.getAsInt();
-    }
-
-    private static long longValue(JsonObject object, String key, long fallback) {
-        JsonElement value = object.get(key);
-        return value == null || value.isJsonNull() ? fallback : value.getAsLong();
-    }
-
-    private static Map<String, String> stringMap(JsonElement element) {
-        if (element == null || !element.isJsonObject()) return Map.of();
-        Map<String, String> result = new java.util.LinkedHashMap<>();
-        element.getAsJsonObject().entrySet().forEach(entry -> {
-            if (!entry.getValue().isJsonNull()) result.put(entry.getKey(), entry.getValue().getAsString());
-        });
-        return result;
-    }
-
-    private static List<String> stringList(JsonElement element) {
-        if (element == null || !element.isJsonArray()) return List.of();
-        return elements(element).stream()
-                .filter(value -> value != null && !value.isJsonNull() && value.isJsonPrimitive())
-                .map(JsonElement::getAsString)
-                .filter(value -> value != null && !value.isBlank())
-                .toList();
     }
 
     private static String qualityName(indi.etern.musichud.beans.music.Quality quality) {
