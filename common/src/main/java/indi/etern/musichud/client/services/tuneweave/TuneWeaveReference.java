@@ -26,4 +26,8 @@ final class TuneWeaveReference {
         int separator = reference.indexOf(':');
         return separator >= 0 ? reference.substring(separator + 1) : reference;
     }
+
+    static boolean isStyledRadio(String reference) {
+        return reference != null && reference.contains(":difm:");
+    }
 }

@@ -13,6 +13,11 @@ import icyllis.modernui.widget.Spinner;
 import icyllis.modernui.widget.TextView;
 import indi.etern.musichud.MusicHud;
 import indi.etern.musichud.client.services.tuneweave.TuneWeaveClientService;
+import indi.etern.musichud.client.services.tuneweave.TuneWeavePodcast;
+import indi.etern.musichud.client.services.tuneweave.TuneWeavePodcastCategory;
+import indi.etern.musichud.client.services.tuneweave.TuneWeaveRadioOption;
+import indi.etern.musichud.client.services.tuneweave.TuneWeaveRadioStation;
+import indi.etern.musichud.client.services.tuneweave.TuneWeaveRadioTaxonomy;
 import indi.etern.musichud.client.ui.Theme;
 import indi.etern.musichud.client.ui.components.Modal;
 import indi.etern.musichud.client.ui.components.RouterContainer;
@@ -40,9 +45,9 @@ public final class PodcastRadioView extends LinearLayout {
     private final LinearLayout rows;
     private final TextView status;
     private Mode mode = Mode.PODCASTS;
-    private List<TuneWeaveClientService.PodcastCategoryInfo> podcastCategories = List.of();
-    private List<TuneWeaveClientService.RadioOptionInfo> radioCategories = List.of();
-    private List<TuneWeaveClientService.RadioOptionInfo> radioRegions = List.of();
+    private List<TuneWeavePodcastCategory> podcastCategories = List.of();
+    private List<TuneWeaveRadioOption> radioCategories = List.of();
+    private List<TuneWeaveRadioOption> radioRegions = List.of();
     private String podcastCategoryId = "";
     private String radioCategoryId = "";
     private String radioRegionId = "";
@@ -114,15 +119,15 @@ public final class PodcastRadioView extends LinearLayout {
             try {
                 switch (mode) {
                     case PODCASTS -> {
-                        List<TuneWeaveClientService.PodcastCategoryInfo> categories = tuneWeave.loadPodcastCategories(PLATFORM);
-                        List<TuneWeaveClientService.PodcastInfo> podcasts = tuneWeave.loadPodcasts(PLATFORM, podcastCategoryId);
+                        List<TuneWeavePodcastCategory> categories = tuneWeave.loadPodcastCategories(PLATFORM);
+                        List<TuneWeavePodcast> podcasts = tuneWeave.loadPodcasts(PLATFORM, podcastCategoryId);
                         MuiModApi.postToUiThread(() -> renderPodcasts(categories, podcasts));
                     }
                     case RADIO -> {
-                        TuneWeaveClientService.RadioTaxonomyInfo taxonomy = tuneWeave.loadRadioTaxonomy(PLATFORM);
-                        List<TuneWeaveClientService.RadioStationInfo> stations = new ArrayList<>(
+                        TuneWeaveRadioTaxonomy taxonomy = tuneWeave.loadRadioTaxonomy(PLATFORM);
+                        List<TuneWeaveRadioStation> stations = new ArrayList<>(
                                 tuneWeave.loadRadioStations(PLATFORM, radioCategoryId, radioRegionId));
-                        for (TuneWeaveClientService.RadioStationInfo station : tuneWeave.loadStyledRadioStations(PLATFORM)) {
+                        for (TuneWeaveRadioStation station : tuneWeave.loadStyledRadioStations(PLATFORM)) {
                             if (stations.stream().noneMatch(value -> value.reference().equals(station.reference()))) {
                                 stations.add(station);
                             }
@@ -130,8 +135,8 @@ public final class PodcastRadioView extends LinearLayout {
                         MuiModApi.postToUiThread(() -> renderRadio(taxonomy, stations));
                     }
                     case LIBRARY -> {
-                        List<TuneWeaveClientService.PodcastInfo> podcasts = tuneWeave.loadAccountPodcasts(PLATFORM);
-                        List<TuneWeaveClientService.RadioStationInfo> stations = tuneWeave.loadAccountRadioStations(PLATFORM);
+                        List<TuneWeavePodcast> podcasts = tuneWeave.loadAccountPodcasts(PLATFORM);
+                        List<TuneWeaveRadioStation> stations = tuneWeave.loadAccountRadioStations(PLATFORM);
                         MuiModApi.postToUiThread(() -> renderLibrary(podcasts, stations));
                     }
                 }
@@ -141,8 +146,8 @@ public final class PodcastRadioView extends LinearLayout {
         });
     }
 
-    private void renderPodcasts(List<TuneWeaveClientService.PodcastCategoryInfo> categories,
-                                List<TuneWeaveClientService.PodcastInfo> podcasts) {
+    private void renderPodcasts(List<TuneWeavePodcastCategory> categories,
+                                List<TuneWeavePodcast> podcasts) {
         podcastCategories = List.copyOf(categories);
         filters.removeAllViews();
         Spinner category = spinner(categoryLabels(categories, ".text.programs.allCategories"));
@@ -160,8 +165,8 @@ public final class PodcastRadioView extends LinearLayout {
         renderRows(rowsFor(podcasts, this::openPodcast));
     }
 
-    private void renderRadio(TuneWeaveClientService.RadioTaxonomyInfo taxonomy,
-                             List<TuneWeaveClientService.RadioStationInfo> stations) {
+    private void renderRadio(TuneWeaveRadioTaxonomy taxonomy,
+                             List<TuneWeaveRadioStation> stations) {
         radioCategories = List.copyOf(taxonomy.categories());
         radioRegions = List.copyOf(taxonomy.regions());
         filters.removeAllViews();
@@ -184,8 +189,8 @@ public final class PodcastRadioView extends LinearLayout {
         renderRows(rowsFor(stations, this::openRadio));
     }
 
-    private void renderLibrary(List<TuneWeaveClientService.PodcastInfo> podcasts,
-                               List<TuneWeaveClientService.RadioStationInfo> stations) {
+    private void renderLibrary(List<TuneWeavePodcast> podcasts,
+                               List<TuneWeaveRadioStation> stations) {
         filters.removeAllViews();
         filters.addView(label(I18n.get(MusicHud.MOD_ID + ".text.programs.libraryCount")
                 .replace("{podcasts}", Integer.toString(podcasts.size()))
@@ -202,9 +207,9 @@ public final class PodcastRadioView extends LinearLayout {
     private List<View> rowsFor(List<?> values, Consumer<Object> opener) {
         List<View> result = new ArrayList<>();
         for (Object value : values) {
-            if (value instanceof TuneWeaveClientService.PodcastInfo podcast) {
+            if (value instanceof TuneWeavePodcast podcast) {
                 result.add(programRow(podcast, v -> opener.accept(podcast)));
-            } else if (value instanceof TuneWeaveClientService.RadioStationInfo station) {
+            } else if (value instanceof TuneWeaveRadioStation station) {
                 result.add(programRow(station, v -> opener.accept(station)));
             }
         }
@@ -227,14 +232,14 @@ public final class PodcastRadioView extends LinearLayout {
         }
     }
 
-    private View programRow(TuneWeaveClientService.PodcastInfo podcast, View.OnClickListener open) {
+    private View programRow(TuneWeavePodcast podcast, View.OnClickListener open) {
         return programRow(podcast.name(), podcast.description(), podcast.coverUrl(),
                 I18n.get(MusicHud.MOD_ID + ".text.programs.episodes")
                         .replace("{}", Long.toString(podcast.episodeCount())), open,
                 podcast.subscribed(), v -> togglePodcast(podcast));
     }
 
-    private View programRow(TuneWeaveClientService.RadioStationInfo station, View.OnClickListener open) {
+    private View programRow(TuneWeaveRadioStation station, View.OnClickListener open) {
         String detail = station.currentProgram().isBlank() ? station.category() : station.currentProgram();
         return programRow(station.name(), station.description(), station.coverUrl(), detail, open,
                 station.subscribed(), v -> toggleRadio(station));
@@ -276,22 +281,22 @@ public final class PodcastRadioView extends LinearLayout {
     }
 
     private void openPodcast(Object value) {
-        if (value instanceof TuneWeaveClientService.PodcastInfo podcast) {
+        if (value instanceof TuneWeavePodcast podcast) {
             RouterContainer.getInstance().pushNavigate(new PodcastDetailView(getContext(), podcast));
         }
     }
 
     private void openRadio(Object value) {
-        if (value instanceof TuneWeaveClientService.RadioStationInfo station) {
+        if (value instanceof TuneWeaveRadioStation station) {
             RouterContainer.getInstance().pushNavigate(new RadioDetailView(getContext(), station));
         }
     }
 
-    private void togglePodcast(TuneWeaveClientService.PodcastInfo podcast) {
+    private void togglePodcast(TuneWeavePodcast podcast) {
         mutate(() -> tuneWeave.setPodcastSubscribed(podcast, !podcast.subscribed()));
     }
 
-    private void toggleRadio(TuneWeaveClientService.RadioStationInfo station) {
+    private void toggleRadio(TuneWeaveRadioStation station) {
         mutate(() -> tuneWeave.setRadioStationSubscribed(station, !station.subscribed()));
     }
 
@@ -340,14 +345,14 @@ public final class PodcastRadioView extends LinearLayout {
         return value;
     }
 
-    private List<String> categoryLabels(List<TuneWeaveClientService.PodcastCategoryInfo> values, String allKey) {
+    private List<String> categoryLabels(List<TuneWeavePodcastCategory> values, String allKey) {
         List<String> result = new ArrayList<>();
         result.add(I18n.get(MusicHud.MOD_ID + allKey));
         values.forEach(value -> result.add(value.name()));
         return result;
     }
 
-    private List<String> optionLabels(List<TuneWeaveClientService.RadioOptionInfo> values, String allKey) {
+    private List<String> optionLabels(List<TuneWeaveRadioOption> values, String allKey) {
         List<String> result = new ArrayList<>();
         result.add(I18n.get(MusicHud.MOD_ID + allKey));
         values.forEach(value -> result.add(value.name()));
@@ -361,7 +366,7 @@ public final class PodcastRadioView extends LinearLayout {
         return 0;
     }
 
-    private static int indexOfOption(List<TuneWeaveClientService.RadioOptionInfo> values, String id) {
+    private static int indexOfOption(List<TuneWeaveRadioOption> values, String id) {
         for (int i = 0; i < values.size(); i++) if (values.get(i).id().equals(id)) return i + 1;
         return 0;
     }

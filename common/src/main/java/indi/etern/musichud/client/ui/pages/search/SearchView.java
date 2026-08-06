@@ -20,6 +20,7 @@ import indi.etern.musichud.beans.music.Playlist;
 import indi.etern.musichud.client.ui.Theme;
 import indi.etern.musichud.client.ui.components.PlatformSelector;
 import indi.etern.musichud.client.services.tuneweave.TuneWeaveClientService;
+import indi.etern.musichud.client.services.tuneweave.TuneWeavePodcast;
 import indi.etern.musichud.client.utils.ui.ButtonInsetBackgroundFactory;
 import indi.etern.musichud.server.api.tuneweave.TuneWeavePlatform;
 import indi.etern.musichud.interfaces.ClientConfig;
@@ -183,7 +184,7 @@ public class SearchView extends LinearLayout {
             case PLAYLIST -> setSearchPlaylistResult(offset, (List<Playlist>) result);
             case ALBUM -> setSearchAlbumResult(offset, (List<Album>) result);
             case ARTIST -> setSearchArtistResult(offset, (List<Artist>) result);
-            case RADIO -> setSearchRadioResult(offset, (List<TuneWeaveClientService.PodcastInfo>) result);
+            case RADIO -> setSearchRadioResult(offset, (List<TuneWeavePodcast>) result);
             default -> { }
         }
     }
@@ -264,7 +265,7 @@ public class SearchView extends LinearLayout {
         }
     }
 
-    public void setSearchRadioResult(int offset, List<TuneWeaveClientService.PodcastInfo> result) {
+    public void setSearchRadioResult(int offset, List<TuneWeavePodcast> result) {
         SearchType searchType = SearchType.RADIO;
         refreshSearchMeta(offset, result, searchType);
         if (offset == 0) {

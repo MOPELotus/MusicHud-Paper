@@ -198,11 +198,10 @@ final class TuneWeaveEntityMapper {
                 string(object, "matched_track_ref", ""));
     }
 
-    TuneWeaveClientService.PodcastInfo toPodcast(
-            TuneWeavePlatform platform, JsonObject object) {
+    TuneWeavePodcast toPodcast(TuneWeavePlatform platform, JsonObject object) {
         String reference = string(object, "ref", string(object, "reference", ""));
         JsonObject creator = unwrap(object.get("creator"));
-        return new TuneWeaveClientService.PodcastInfo(reference, string(object, "name", reference),
+        return new TuneWeavePodcast(reference, string(object, "name", reference),
                 string(object, "description", ""), string(object, "cover_url", ""),
                 string(creator, "name", ""), string(object, "category", ""),
                 string(object, "secondary_category", ""), longValue(object, "episode_count", 0),
@@ -210,12 +209,11 @@ final class TuneWeaveEntityMapper {
                 bool(object, "subscribed", false));
     }
 
-    TuneWeaveClientService.PodcastEpisodeInfo toPodcastEpisode(
-            TuneWeavePlatform platform, JsonObject object) {
+    TuneWeavePodcastEpisode toPodcastEpisode(TuneWeavePlatform platform, JsonObject object) {
         String reference = string(object, "ref", string(object, "reference", ""));
         JsonObject creator = unwrap(object.get("creator"));
         JsonObject audio = unwrap(object.get("audio"));
-        return new TuneWeaveClientService.PodcastEpisodeInfo(reference,
+        return new TuneWeavePodcastEpisode(reference,
                 referenceValue(object.get("podcast_ref")), string(object, "name", reference),
                 string(object, "description", ""), string(object, "cover_url", ""),
                 string(creator, "name", ""), string(audio, "ref", ""),
@@ -224,22 +222,22 @@ final class TuneWeaveEntityMapper {
                 bool(object, "has_lyrics", false));
     }
 
-    List<TuneWeaveClientService.RadioOptionInfo> toRadioOptions(JsonElement element) {
-        List<TuneWeaveClientService.RadioOptionInfo> result = new ArrayList<>();
+    List<TuneWeaveRadioOption> toRadioOptions(JsonElement element) {
+        List<TuneWeaveRadioOption> result = new ArrayList<>();
         for (JsonElement value : elements(element)) {
             JsonObject option = unwrap(value);
             String id = string(option, "id", "");
             if (!id.isBlank()) {
-                result.add(new TuneWeaveClientService.RadioOptionInfo(id, string(option, "name", id)));
+                result.add(new TuneWeaveRadioOption(id, string(option, "name", id)));
             }
         }
         return result;
     }
 
-    TuneWeaveClientService.RadioStationInfo toRadioStation(
+    TuneWeaveRadioStation toRadioStation(
             TuneWeavePlatform platform, JsonObject object, String fallbackCategory) {
         String reference = string(object, "ref", string(object, "reference", ""));
-        return new TuneWeaveClientService.RadioStationInfo(reference,
+        return new TuneWeaveRadioStation(reference,
                 string(object, "name", reference), string(object, "description", ""),
                 string(object, "cover_url", ""), string(object, "category", fallbackCategory),
                 string(object, "region", ""), string(object, "current_program", ""),

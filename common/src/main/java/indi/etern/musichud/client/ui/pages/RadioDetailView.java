@@ -12,6 +12,7 @@ import indi.etern.musichud.MusicHud;
 import indi.etern.musichud.beans.music.MusicDetail;
 import indi.etern.musichud.client.services.music.MusicService;
 import indi.etern.musichud.client.services.tuneweave.TuneWeaveClientService;
+import indi.etern.musichud.client.services.tuneweave.TuneWeaveRadioStation;
 import indi.etern.musichud.client.ui.Theme;
 import indi.etern.musichud.client.ui.components.RouterContainer;
 import indi.etern.musichud.client.ui.components.UrlImageView;
@@ -26,13 +27,13 @@ import static icyllis.modernui.view.ViewGroup.LayoutParams.WRAP_CONTENT;
 /** Consumer-facing radio station details and its current playback queue. */
 public final class RadioDetailView extends LinearLayout {
     private final TuneWeaveClientService tuneWeave = TuneWeaveClientService.getInstance();
-    private final TuneWeaveClientService.RadioStationInfo source;
+    private final TuneWeaveRadioStation source;
     private final TextView status;
     private final LinearLayout tracks;
     private final Button subscriptionButton;
-    private TuneWeaveClientService.RadioStationInfo station;
+    private TuneWeaveRadioStation station;
 
-    public RadioDetailView(Context context, TuneWeaveClientService.RadioStationInfo source) {
+    public RadioDetailView(Context context, TuneWeaveRadioStation source) {
         super(context);
         this.source = source;
         this.station = source;
@@ -94,7 +95,7 @@ public final class RadioDetailView extends LinearLayout {
         showStatus(I18n.get(MusicHud.MOD_ID + ".text.programs.loading"));
         MusicHud.EXECUTOR.execute(() -> {
             try {
-                TuneWeaveClientService.RadioStationInfo loaded = source.reference().contains(":difm:")
+                TuneWeaveRadioStation loaded = source.reference().contains(":difm:")
                         ? source : tuneWeave.loadRadioStationDetail(source.reference());
                 List<MusicDetail> queue = tuneWeave.loadRadioPlaybackQueue(loaded);
                 MuiModApi.postToUiThread(() -> render(loaded, queue));
@@ -104,7 +105,7 @@ public final class RadioDetailView extends LinearLayout {
         });
     }
 
-    private void render(TuneWeaveClientService.RadioStationInfo loaded, List<MusicDetail> queue) {
+    private void render(TuneWeaveRadioStation loaded, List<MusicDetail> queue) {
         station = loaded;
         subscriptionButton.setText(I18n.get(MusicHud.MOD_ID
                 + (loaded.subscribed() ? ".button.unsubscribe" : ".button.subscribe")));
@@ -160,7 +161,7 @@ public final class RadioDetailView extends LinearLayout {
         return button;
     }
 
-    private static String summaryText(TuneWeaveClientService.RadioStationInfo value) {
+    private static String summaryText(TuneWeaveRadioStation value) {
         StringBuilder text = new StringBuilder();
         if (!value.category().isBlank()) text.append(value.category());
         if (!value.region().isBlank()) {

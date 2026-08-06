@@ -12,6 +12,8 @@ import indi.etern.musichud.MusicHud;
 import indi.etern.musichud.beans.music.MusicDetail;
 import indi.etern.musichud.client.services.music.MusicService;
 import indi.etern.musichud.client.services.tuneweave.TuneWeaveClientService;
+import indi.etern.musichud.client.services.tuneweave.TuneWeavePodcast;
+import indi.etern.musichud.client.services.tuneweave.TuneWeavePodcastEpisode;
 import indi.etern.musichud.client.ui.Theme;
 import indi.etern.musichud.client.ui.components.Modal;
 import indi.etern.musichud.client.ui.components.RouterContainer;
@@ -27,15 +29,15 @@ import static icyllis.modernui.view.ViewGroup.LayoutParams.WRAP_CONTENT;
 /** Consumer-facing podcast details. Episode publishing and editing are deliberately absent. */
 public final class PodcastDetailView extends LinearLayout {
     private final TuneWeaveClientService tuneWeave = TuneWeaveClientService.getInstance();
-    private final TuneWeaveClientService.PodcastInfo source;
+    private final TuneWeavePodcast source;
     private final TextView status;
     private final TextView description;
     private final LinearLayout episodes;
     private final Button subscriptionButton;
-    private TuneWeaveClientService.PodcastInfo podcast;
-    private List<TuneWeaveClientService.PodcastEpisodeInfo> episodeList = List.of();
+    private TuneWeavePodcast podcast;
+    private List<TuneWeavePodcastEpisode> episodeList = List.of();
 
-    public PodcastDetailView(Context context, TuneWeaveClientService.PodcastInfo source) {
+    public PodcastDetailView(Context context, TuneWeavePodcast source) {
         super(context);
         this.source = source;
         this.podcast = source;
@@ -105,8 +107,8 @@ public final class PodcastDetailView extends LinearLayout {
         showStatus(I18n.get(MusicHud.MOD_ID + ".text.programs.loading"));
         MusicHud.EXECUTOR.execute(() -> {
             try {
-                TuneWeaveClientService.PodcastInfo loaded = tuneWeave.loadPodcastDetail(source.reference());
-                List<TuneWeaveClientService.PodcastEpisodeInfo> loadedEpisodes = tuneWeave.loadPodcastEpisodes(loaded);
+                TuneWeavePodcast loaded = tuneWeave.loadPodcastDetail(source.reference());
+                List<TuneWeavePodcastEpisode> loadedEpisodes = tuneWeave.loadPodcastEpisodes(loaded);
                 MuiModApi.postToUiThread(() -> render(loaded, loadedEpisodes));
             } catch (RuntimeException error) {
                 MuiModApi.postToUiThread(() -> showStatus(message(error)));
@@ -114,8 +116,8 @@ public final class PodcastDetailView extends LinearLayout {
         });
     }
 
-    private void render(TuneWeaveClientService.PodcastInfo loaded,
-                        List<TuneWeaveClientService.PodcastEpisodeInfo> loadedEpisodes) {
+    private void render(TuneWeavePodcast loaded,
+                        List<TuneWeavePodcastEpisode> loadedEpisodes) {
         podcast = loaded;
         episodeList = List.copyOf(loadedEpisodes);
         subscriptionButton.setText(I18n.get(MusicHud.MOD_ID
@@ -130,10 +132,10 @@ public final class PodcastDetailView extends LinearLayout {
             episodes.addView(empty, new LayoutParams(MATCH_PARENT, WRAP_CONTENT));
             return;
         }
-        for (TuneWeaveClientService.PodcastEpisodeInfo episode : episodeList) addEpisode(episode);
+        for (TuneWeavePodcastEpisode episode : episodeList) addEpisode(episode);
     }
 
-    private void addEpisode(TuneWeaveClientService.PodcastEpisodeInfo episode) {
+    private void addEpisode(TuneWeavePodcastEpisode episode) {
         LinearLayout row = new LinearLayout(getContext());
         row.setGravity(Gravity.CENTER_VERTICAL);
         row.setPadding(dp(10), dp(8), dp(10), dp(8));
@@ -162,11 +164,11 @@ public final class PodcastDetailView extends LinearLayout {
         episodes.addView(row, rowParams);
     }
 
-    private void loadEpisodeDetails(TuneWeaveClientService.PodcastEpisodeInfo episode) {
+    private void loadEpisodeDetails(TuneWeavePodcastEpisode episode) {
         showStatus(I18n.get(MusicHud.MOD_ID + ".text.programs.loadingEpisode"));
         MusicHud.EXECUTOR.execute(() -> {
             try {
-                TuneWeaveClientService.PodcastEpisodeInfo detail = tuneWeave.loadPodcastEpisodeDetail(episode.reference());
+                TuneWeavePodcastEpisode detail = tuneWeave.loadPodcastEpisodeDetail(episode.reference());
                 MusicDetail track = tuneWeave.podcastEpisodeTrack(podcast, detail);
                 var lyrics = detail.hasLyrics() ? tuneWeave.loadLyrics(track) : null;
                 MuiModApi.postToUiThread(() -> showEpisodeDetails(detail, lyrics));
@@ -176,7 +178,7 @@ public final class PodcastDetailView extends LinearLayout {
         });
     }
 
-    private void showEpisodeDetails(TuneWeaveClientService.PodcastEpisodeInfo episode,
+    private void showEpisodeDetails(TuneWeavePodcastEpisode episode,
                                     indi.etern.musichud.beans.music.LyricInfo lyrics) {
         LinearLayout content = new LinearLayout(getContext());
         content.setOrientation(VERTICAL);
@@ -208,7 +210,7 @@ public final class PodcastDetailView extends LinearLayout {
         showStatus("");
     }
 
-    private void play(TuneWeaveClientService.PodcastEpisodeInfo episode) {
+    private void play(TuneWeavePodcastEpisode episode) {
         MusicService.getInstance().sendPushMusicToQueue(tuneWeave.podcastEpisodeTrack(podcast, episode));
     }
 
@@ -241,7 +243,7 @@ public final class PodcastDetailView extends LinearLayout {
         return button;
     }
 
-    private static String metaText(TuneWeaveClientService.PodcastInfo value) {
+    private static String metaText(TuneWeavePodcast value) {
         List<String> parts = new java.util.ArrayList<>();
         if (!value.creatorName().isBlank()) parts.add(value.creatorName());
         if (!value.category().isBlank()) parts.add(value.category());

@@ -6,7 +6,7 @@ import icyllis.modernui.view.View;
 import icyllis.modernui.widget.LinearLayout;
 import icyllis.modernui.widget.TextView;
 import indi.etern.musichud.MusicHud;
-import indi.etern.musichud.client.services.tuneweave.TuneWeaveClientService;
+import indi.etern.musichud.client.services.tuneweave.TuneWeavePodcast;
 import indi.etern.musichud.client.ui.Theme;
 import indi.etern.musichud.client.ui.components.RouterContainer;
 import indi.etern.musichud.client.ui.components.UrlImageView;
@@ -23,7 +23,7 @@ import static icyllis.modernui.view.ViewGroup.LayoutParams.WRAP_CONTENT;
 public final class SearchPodcastResultView extends LinearLayout {
     @Getter
     private static SearchPodcastResultView instance;
-    private static List<TuneWeaveClientService.PodcastInfo> result;
+    private static List<TuneWeavePodcast> result;
 
     public SearchPodcastResultView(Context context) {
         super(context);
@@ -32,24 +32,24 @@ public final class SearchPodcastResultView extends LinearLayout {
         refresh();
     }
 
-    public static void setResult(List<TuneWeaveClientService.PodcastInfo> value) {
+    public static void setResult(List<TuneWeavePodcast> value) {
         result = value;
         if (instance != null) instance.refresh();
     }
 
     public void refresh() {
         removeAllViews();
-        if (result != null) for (TuneWeaveClientService.PodcastInfo podcast : result) addPodcast(podcast);
+        if (result != null) for (TuneWeavePodcast podcast : result) addPodcast(podcast);
     }
 
-    public void append(List<TuneWeaveClientService.PodcastInfo> values) {
+    public void append(List<TuneWeavePodcast> values) {
         if (result == null) result = new java.util.ArrayList<>();
         result = new java.util.ArrayList<>(result);
         result.addAll(values);
-        for (TuneWeaveClientService.PodcastInfo podcast : values) addPodcast(podcast);
+        for (TuneWeavePodcast podcast : values) addPodcast(podcast);
     }
 
-    private void addPodcast(TuneWeaveClientService.PodcastInfo podcast) {
+    private void addPodcast(TuneWeavePodcast podcast) {
         LinearLayout row = new LinearLayout(getContext());
         row.setGravity(Gravity.CENTER_VERTICAL);
         row.setPadding(dp(8), dp(6), dp(8), dp(6));
