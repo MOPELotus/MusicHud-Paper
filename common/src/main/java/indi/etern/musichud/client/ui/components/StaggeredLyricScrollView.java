@@ -95,6 +95,9 @@ public class StaggeredLyricScrollView extends ClampingScrollView {
     private float[] staggerFromOffsets;
     private long lastFrameTimeNanos;
     private volatile MusicDetail musicDetail;
+    private long lyricsSwitchGeneration;
+    private boolean lyricListenerRegistered;
+    private ObjectAnimator lyricSwitchAnimator;
     private final Consumer<LyricLine> lyricLineUpdateListener = this::highlightLine;
     private final Runnable autoRecenterRunnable = new Runnable() {
         @Override
@@ -121,8 +124,6 @@ public class StaggeredLyricScrollView extends ClampingScrollView {
         container.setOrientation(LinearLayout.VERTICAL);
         addView(container, new LayoutParams(MATCH_PARENT, WRAP_CONTENT));
 
-        nowPlayingInfo.getLyricLineUpdateListener().add(lyricLineUpdateListener);
-
         addOnLayoutChangeListener((v, left, top, right, bottom, oldLeft, oldTop, oldRight, oldBottom) -> {
             if (scrollStatus == ScrollStatus.IDLE || scrollStatus == ScrollStatus.MANUAL) {
                 recenter();
@@ -145,22 +146,30 @@ public class StaggeredLyricScrollView extends ClampingScrollView {
 
     public void switchLyrics(MusicDetail musicDetail, Collection<LyricLine> lyrics) {
         this.musicDetail = musicDetail;
+        long generation = ++lyricsSwitchGeneration;
         try {
             stopUpdateLoop();
+            if (lyricSwitchAnimator != null) {
+                lyricSwitchAnimator.cancel();
+                lyricSwitchAnimator = null;
+            }
             if (container.getChildCount() > 0) {
                 ObjectAnimator slideOut = ObjectAnimator.ofFloat(container, View.TRANSLATION_X, 0, -getWidth());
+                lyricSwitchAnimator = slideOut;
                 slideOut.setInterpolator(Easing.EASE_IN_OUT_QUINT);
                 slideOut.setDuration(300);
                 slideOut.addListener(new AnimatorListener() {
                     @Override
                     public void onAnimationEnd(@NonNull Animator animation) {
+                        if (generation != lyricsSwitchGeneration) return;
                         justHighlightedLyricLine = null;
                         lastHighlightedLyricLine = null;
                         animatingLyricViews.clear();
                         container.removeAllViews();
-                        buildLyricRows(lyrics);
+                        buildLyricRows(lyrics, generation);
                         container.setTranslationX(getWidth());
                         ObjectAnimator slideIn = ObjectAnimator.ofFloat(container, View.TRANSLATION_X, 0);
+                        lyricSwitchAnimator = slideIn;
                         slideIn.setInterpolator(Easing.EASE_IN_OUT_QUINT);
                         slideIn.setDuration(300);
                         slideIn.start();
@@ -174,7 +183,7 @@ public class StaggeredLyricScrollView extends ClampingScrollView {
                 if (!continueUpdate) {
                     startUpdateLoop();
                 }
-                buildLyricRows(lyrics);
+                buildLyricRows(lyrics, generation);
             }
         } catch (Exception e) {
             if (logger == null) {
@@ -184,7 +193,7 @@ public class StaggeredLyricScrollView extends ClampingScrollView {
         }
     }
 
-    private void buildLyricRows(Collection<LyricLine> lyrics) {
+    private void buildLyricRows(Collection<LyricLine> lyrics, long generation) {
         lyricLines.clear();
         lyricLineViewList.clear();
 
@@ -202,6 +211,7 @@ public class StaggeredLyricScrollView extends ClampingScrollView {
         container.addView(new RatedHeightView(context, 0.7f, () -> this));
 
         post(() -> {
+            if (generation != lyricsSwitchGeneration) return;
             requestLayout();
             for (LyricLineView line : lyricLineViewList) {
                 line.setTranslationY(line.getTargetOffset(nowPlayingInfo.getCurrentLyricLine()));
@@ -399,11 +409,32 @@ public class StaggeredLyricScrollView extends ClampingScrollView {
     }
 
     @Override
+    protected void onAttachedToWindow() {
+        super.onAttachedToWindow();
+        if (!lyricListenerRegistered) {
+            nowPlayingInfo.getLyricLineUpdateListener().add(lyricLineUpdateListener);
+            lyricListenerRegistered = true;
+        }
+        LyricLine current = nowPlayingInfo.getCurrentLyricLine();
+        if (current != null) {
+            post(() -> highlightLine(current));
+        }
+    }
+
+    @Override
     protected void onDetachedFromWindow() {
         super.onDetachedFromWindow();
+        lyricsSwitchGeneration++;
         stopUpdateLoop();
         removeCallbacks(autoRecenterRunnable);
-        nowPlayingInfo.getLyricLineUpdateListener().remove(lyricLineUpdateListener);
+        if (lyricListenerRegistered) {
+            nowPlayingInfo.getLyricLineUpdateListener().remove(lyricLineUpdateListener);
+            lyricListenerRegistered = false;
+        }
+        if (lyricSwitchAnimator != null) {
+            lyricSwitchAnimator.cancel();
+            lyricSwitchAnimator = null;
+        }
         if (scrollController != null) {
             scrollController.abortAnimation();
         }
