@@ -12,31 +12,32 @@ import org.apache.batik.transcoder.image.PNGTranscoder;
 
 import java.io.ByteArrayOutputStream;
 import java.io.InputStream;
-import java.util.EnumMap;
+import java.util.HashMap;
 import java.util.Map;
 
 /** Loads the small branded SVGs as ModernUI textures once per client session. */
 public final class PlatformIconUtils {
-    private static final float RASTER_SIZE = 256f;
-    private static final Map<TuneWeavePlatform, Image> CACHE = new EnumMap<>(TuneWeavePlatform.class);
+    private static final Map<IconKey, Image> CACHE = new HashMap<>();
 
     private PlatformIconUtils() {
     }
 
-    public static synchronized Image image(TuneWeavePlatform platform) {
-        Image cached = CACHE.get(platform);
+    public static synchronized Image image(TuneWeavePlatform platform, int pixelSize) {
+        int rasterSize = Math.clamp(pixelSize, 16, 128);
+        IconKey key = new IconKey(platform, rasterSize);
+        Image cached = CACHE.get(key);
         if (cached != null) return cached;
         String path = "/assets/music_hud/textures/platforms/" + platform.apiName() + ".svg";
         try (InputStream input = MusicHud.class.getResourceAsStream(path)) {
             if (input == null) return null;
             PNGTranscoder transcoder = new PNGTranscoder();
-            transcoder.addTranscodingHint(PNGTranscoder.KEY_WIDTH, RASTER_SIZE);
-            transcoder.addTranscodingHint(PNGTranscoder.KEY_HEIGHT, RASTER_SIZE);
+            transcoder.addTranscodingHint(PNGTranscoder.KEY_WIDTH, (float) rasterSize);
+            transcoder.addTranscodingHint(PNGTranscoder.KEY_HEIGHT, (float) rasterSize);
             ByteArrayOutputStream output = new ByteArrayOutputStream();
             transcoder.transcode(new TranscoderInput(input), new TranscoderOutput(output));
             try (Bitmap bitmap = BitmapFactory.decodeByteArray(output.toByteArray(), 0, output.size())) {
                 Image result = Image.createTextureFromBitmap(bitmap);
-                CACHE.put(platform, result);
+                CACHE.put(key, result);
                 return result;
             }
         } catch (Exception error) {
@@ -63,5 +64,8 @@ public final class PlatformIconUtils {
             case "bilibili", "bili" -> TuneWeavePlatform.BILIBILI;
             default -> null;
         };
+    }
+
+    private record IconKey(TuneWeavePlatform platform, int pixelSize) {
     }
 }

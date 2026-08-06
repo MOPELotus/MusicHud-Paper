@@ -55,7 +55,7 @@ public final class PlatformSelector extends LinearLayout {
         for (TuneWeavePlatform platform : platforms) {
             CheckableImageButton button = new CheckableImageButton(context);
             button.setScaleType(ImageView.ScaleType.CENTER_INSIDE);
-            Image image = PlatformIconUtils.image(platform);
+            Image image = PlatformIconUtils.image(platform, dp(20));
             if (image != null) {
                 button.setImageDrawable(new InsetDrawable(
                         new indi.etern.musichud.client.ui.drawable.ScaledImageDrawable(

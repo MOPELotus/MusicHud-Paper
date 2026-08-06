@@ -141,7 +141,8 @@ public class MainFragment extends Fragment {
                 instance.albumImage.loadUrl(musicDetail.getAlbum().getThumbnailPicUrl(240));
                 instance.titleText.setText(musicDetail.getName());
                 var platform = PlatformIconUtils.platform(musicDetail);
-                var platformImage = platform == null ? null : PlatformIconUtils.image(platform);
+                var platformImage = platform == null ? null
+                        : PlatformIconUtils.image(platform, instance.platformIcon.dp(20));
                 instance.platformIcon.setImageDrawable(platformImage == null ? null
                         : new indi.etern.musichud.client.ui.drawable.ScaledImageDrawable(
                                 instance.platformIcon.getContext().getResources(), platformImage,
