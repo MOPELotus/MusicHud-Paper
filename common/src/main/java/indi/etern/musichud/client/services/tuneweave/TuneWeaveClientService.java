@@ -1,6 +1,5 @@
 package indi.etern.musichud.client.services.tuneweave;
 
-import com.google.gson.JsonElement;
 import com.google.gson.JsonObject;
 import indi.etern.musichud.beans.music.Playlist;
 import indi.etern.musichud.beans.api.SearchType;
@@ -10,20 +9,14 @@ import indi.etern.musichud.beans.music.LyricInfo;
 import indi.etern.musichud.beans.music.MusicDetail;
 import indi.etern.musichud.beans.music.MusicResourceInfo;
 import indi.etern.musichud.beans.music.UserCategoryPlaylists;
-import indi.etern.musichud.server.api.tuneweave.TuneWeaveApiClient;
 import indi.etern.musichud.server.api.tuneweave.TuneWeavePlatform;
 
 import java.nio.file.Path;
-import java.util.ArrayList;
 import java.util.List;
-import java.util.LinkedHashMap;
 import java.util.Map;
-import java.util.Objects;
 import java.util.concurrent.ConcurrentHashMap;
 
-import static indi.etern.musichud.client.services.tuneweave.TuneWeaveJson.*;
-
-/** Client-owned TuneWeave authentication and credential-scoped requests. */
+/** Stable client facade over TuneWeave's authentication, catalog, library, and playback domains. */
 public final class TuneWeaveClientService {
     private static final TuneWeaveClientService INSTANCE = new TuneWeaveClientService();
     private final TuneWeaveGateway gateway = new TuneWeaveGateway();
@@ -82,10 +75,6 @@ public final class TuneWeaveClientService {
 
     public boolean hasArtist(long id) {
         return entities.hasArtist(id);
-    }
-
-    public String credential(TuneWeavePlatform platform) {
-        return gateway.credential(platform);
     }
 
     public TuneWeaveQrSession startQrLogin(TuneWeavePlatform platform, String loginType) {
@@ -333,12 +322,6 @@ public final class TuneWeaveClientService {
         platformPlaylists.reorderTracks(playlist, tracks);
     }
 
-    private static void requireReference(String reference, String kind) {
-        if (reference == null || reference.isBlank()) {
-            throw new IllegalArgumentException("TuneWeave " + kind + " reference is missing");
-        }
-    }
-
     public List<TuneWeaveUniPlaylist> listUniPlaylists() {
         return uniPlaylists.list();
     }
@@ -415,37 +398,12 @@ public final class TuneWeaveClientService {
         return catalog.search(keywords, searchType, offset, platform);
     }
 
-    private TuneWeavePlatform platformFromReference(String reference) {
-        if (reference.startsWith("account:favorite_tracks:")) {
-            int lastSeparator = reference.lastIndexOf(':');
-            return TuneWeavePlatform.fromApiName(reference.substring(lastSeparator + 1));
-        }
-        int separator = reference.indexOf(':');
-        return separator > 0
-                ? TuneWeavePlatform.fromApiName(reference.substring(0, separator))
-                : defaultPlatform();
-    }
-
     public void logout(TuneWeavePlatform platform) {
         authentication.logout(platform);
     }
 
     public void clearCredential(TuneWeavePlatform platform) {
         authentication.clearCredential(platform);
-    }
-
-    public TuneWeaveApiClient.TuneWeaveResponse requestForPlatform(
-            TuneWeavePlatform platform, String method, String path, Map<String, String> query, JsonElement body) {
-        return gateway.requestForPlatform(platform, method, path, query, body);
-    }
-
-    public TuneWeaveApiClient.TuneWeaveResponse requestWithAllCredentials(
-            String method, String path, Map<String, String> query, JsonElement body) {
-        return gateway.requestWithAllCredentials(method, path, query, body);
-    }
-
-    private static boolean isBlank(String value) {
-        return value == null || value.isBlank();
     }
 
     public boolean isFavoritePlaylist(Playlist playlist) {
