@@ -4,7 +4,6 @@ import indi.etern.musichud.MusicHud;
 import indi.etern.musichud.beans.api.IdlePlaySource;
 import indi.etern.musichud.beans.music.*;
 import indi.etern.musichud.beans.music.actions.MessagedResult;
-import indi.etern.musichud.beans.user.Profile;
 import indi.etern.musichud.interfaces.RegisterMark;
 import indi.etern.musichud.interfaces.ServerConfig;
 import indi.etern.musichud.interfaces.ServerRegister;
@@ -15,7 +14,7 @@ import indi.etern.musichud.network.payloads.pushMessages.c2s.ResolvePlaybackResu
 import indi.etern.musichud.network.payloads.pushMessages.s2c.*;
 import indi.etern.musichud.network.payloads.requestResponseCycle.GetInitialStateResponse;
 import indi.etern.musichud.platform.Environment;
-import indi.etern.musichud.server.api.impl.ncm.LoginApiService;
+import indi.etern.musichud.server.IdleSourceAccessPolicy;
 import indi.etern.musichud.server.ServerPlayerRegistry;
 import indi.etern.musichud.server.playback.PlaybackResolveCoordinator;
 import indi.etern.musichud.server.playback.SharedResourceValidator;
@@ -34,7 +33,6 @@ import java.util.concurrent.atomic.AtomicLong;
 @NoArgsConstructor(access = AccessLevel.PRIVATE)
 public class MusicPlayerServerService {
     private static final ServerConfig serverConfig = ServerConfig.getInstance();
-    private static final ILoginApiService loginApiService = ILoginApiService.getInstance(ApiProvider.NCM);
     private static final ServerPlayerRegistry playerRegistry = ServerPlayerRegistry.getInstance();
     private static final long DEBOUNCE_DELAY_MILLIS = 500;
     private static volatile MusicPlayerServerService instance;
@@ -218,9 +216,7 @@ public class MusicPlayerServerService {
                 }
             }
 
-            LoginApiService.PlayerLoginInfo loginInfo =
-                    loginApiService.getLoginInfoByPlayerUUID(pusherInfo.getPlayerUUID());
-            if (loginInfo != null) {
+            if (playerRegistry.contains(pusherInfo.getPlayerUUID())) {
                 randomTrack.setPusherInfo(pusherInfo);
             } else {
                 randomTrack.setPusherInfo(PusherInfo.EMPTY);
@@ -299,7 +295,7 @@ public class MusicPlayerServerService {
     public void sendSyncPlayingStatusToPlayer(IPlayerClient player) {
         serverNetworkService.sendToPlayer(player,
                 new RefreshMusicQueueMessage(musicQueue));
-        sendUpdateAllIdlePlaySourcesMessageTo(Collections.singleton(loginApiService.getLoginInfoByPlayerUUID(player.getUUID())));
+        sendUpdateAllIdlePlaySourcesMessageTo(Collections.singleton(player));
         if (currentPlaybackSession.isActive()) {
             haveSentMusic = true;
             serverNetworkService.sendToPlayer(player,
@@ -307,17 +303,15 @@ public class MusicPlayerServerService {
         }
     }
 
-    public void sendUpdateAllIdlePlaySourcesMessageTo(Collection<LoginApiService.PlayerLoginInfo> playerLoginInfos) {
-        for (LoginApiService.PlayerLoginInfo playerLoginInfo : playerLoginInfos) {
-            if (playerLoginInfo != null) {
-                IdleSourcesData idleSourcesData = buildIdleSourcesData(playerLoginInfo.getProfile());
-                serverNetworkService.sendToPlayer(playerLoginInfo.getPlayer(),
-                        new UpdateAllIdlePlaySourcesMessage(idleSourcesData.playlistSources(), idleSourcesData.albumSources()));
-            }
+    public void sendUpdateAllIdlePlaySourcesMessageTo(Collection<IPlayerClient> players) {
+        for (IPlayerClient player : players) {
+            IdleSourcesData idleSourcesData = buildIdleSourcesData(player.getUUID());
+            serverNetworkService.sendToPlayer(player,
+                    new UpdateAllIdlePlaySourcesMessage(idleSourcesData.playlistSources(), idleSourcesData.albumSources()));
         }
     }
 
-    private IdleSourcesData buildIdleSourcesData(Profile playerProfile) {
+    private IdleSourcesData buildIdleSourcesData(UUID viewerId) {
         List<Playlist> publicPlaylists = new ArrayList<>();
         List<Playlist> privatePlaylists = new ArrayList<>();
         List<Album> albums = new ArrayList<>();
@@ -339,7 +333,8 @@ public class MusicPlayerServerService {
 
         List<Playlist> processedPrivatePlaylists = new ArrayList<>();
         for (Playlist playlist : privatePlaylists) {
-            if (playlist.getCreator().equals(playerProfile)) {
+            PusherInfo pusherInfo = playlist.getPusherInfo();
+            if (IdleSourceAccessPolicy.canViewPrivateSource(pusherInfo, viewerId)) {
                 processedPrivatePlaylists.add(playlist);
             } else {
                 processedPrivatePlaylists.add(playlist.copyWithSensitiveErased());
@@ -350,8 +345,7 @@ public class MusicPlayerServerService {
     }
 
     public GetInitialStateResponse buildInitialStateFor(IPlayerClient player) {
-        LoginApiService.PlayerLoginInfo loginInfo = loginApiService.getLoginInfoByPlayerUUID(player.getUUID());
-        IdleSourcesData idleSourcesData = buildIdleSourcesData(loginInfo != null ? loginInfo.getProfile() : Profile.ANONYMOUS);
+        IdleSourcesData idleSourcesData = buildIdleSourcesData(player.getUUID());
         return new GetInitialStateResponse(
                 currentPlaybackSession,
                 nextIdleMusicDetail,
@@ -371,7 +365,7 @@ public class MusicPlayerServerService {
                 return;
             }
             if (debounceToken.get() == token) {
-                sendUpdateAllIdlePlaySourcesMessageTo(loginApiService.getPlayerInfoMap().values());
+                sendUpdateAllIdlePlaySourcesMessageTo(playerRegistry.players());
             }
         });
     }
@@ -543,6 +537,13 @@ public class MusicPlayerServerService {
         public void register() {
             playerRegistry.addListener((set) -> {
                 if (instance != null) {
+                    Set<UUID> onlinePlayerIds = new HashSet<>();
+                    set.forEach(player -> onlinePlayerIds.add(player.getUUID()));
+                    boolean removedSources = instance.idlePlaySources.keySet()
+                            .removeIf(pusher -> !onlinePlayerIds.contains(pusher.getPlayerUUID()));
+                    if (removedSources) {
+                        instance.debouncedUpdateAllIdlePlaySources();
+                    }
                     instance.updateContinuable(!set.isEmpty());
                 }
             });
@@ -565,7 +566,7 @@ public class MusicPlayerServerService {
                 logger.info("Skip current music in singleplayer");
             } else if (!votedPlayers.contains(playerUUID) && musicDetail.getId() == id) {
                 votedPlayers.add(playerUUID);
-                voteRate += 1.0f / loginApiService.getPlayerInfoMap().size();
+                voteRate += 1.0f / Math.max(1, playerRegistry.players().size());
                 if (musicDetail.getPusherInfo().getPlayerUUID().equals(playerUUID)) {
                     voteRate += (float) serverConfig.getPusherVoteAdditionalRate();
                     logger.info("Pusher player \"{}\" voted for skip current music {}:{}", playerUUID, id, musicDetail.getName());

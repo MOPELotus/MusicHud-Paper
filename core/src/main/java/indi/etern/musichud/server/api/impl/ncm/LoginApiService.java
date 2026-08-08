@@ -61,7 +61,7 @@ public class LoginApiService implements ILoginApiService {
 
     private static void sendSuccessLoginResultTo(IPlayerClient player, LoginCookieInfo loginCookieInfo, Profile profile) {
         serverNetworkService.sendToPlayer(player, new LoginResultMessage(true, "", loginCookieInfo, profile));
-        MusicPlayerServerService.getInstance().sendUpdateAllIdlePlaySourcesMessageTo(Collections.singleton(loginApiService.getLoginInfoByPlayerUUID(player.getUUID())));
+        MusicPlayerServerService.getInstance().sendUpdateAllIdlePlaySourcesMessageTo(Collections.singleton(player));
     }
 
     void sendLoginFailResult(IPlayerClient player, String message) {
@@ -97,7 +97,7 @@ public class LoginApiService implements ILoginApiService {
     public void joinUnlogged(IPlayerClient player) {
         playerInfoMap.put(player.getUUID(), ILoginApiService.PlayerLoginInfo.of(player, LoginCookieInfo.UNLOGGED));
         loginStateChangeListeners.forEach(mapConsumer -> mapConsumer.accept(playerInfoMap.values()));
-        MusicPlayerServerService.getInstance().sendUpdateAllIdlePlaySourcesMessageTo(Collections.singleton(loginApiService.getLoginInfoByPlayerUUID(player.getUUID())));
+        MusicPlayerServerService.getInstance().sendUpdateAllIdlePlaySourcesMessageTo(Collections.singleton(player));
     }
 
     @Override
@@ -403,7 +403,7 @@ public class LoginApiService implements ILoginApiService {
                 handleLoginExceptions(player, e);
             }
         }
-        MusicPlayerServerService.getInstance().sendUpdateAllIdlePlaySourcesMessageTo(Collections.singleton(getLoginInfoByPlayerUUID(player.getUUID())));
+        MusicPlayerServerService.getInstance().sendUpdateAllIdlePlaySourcesMessageTo(Collections.singleton(player));
     }
 
     record ValidationCodeRequest(int ctcode, long phone) {

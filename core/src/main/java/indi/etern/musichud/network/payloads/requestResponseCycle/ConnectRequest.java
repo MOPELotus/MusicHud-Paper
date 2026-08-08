@@ -13,8 +13,6 @@ import indi.etern.musichud.network.ProtocolCapability;
 import indi.etern.musichud.network.ProtocolInfo;
 import indi.etern.musichud.network.payloads.C2SPayload;
 import indi.etern.musichud.platform.Environment;
-import indi.etern.musichud.server.api.ApiProvider;
-import indi.etern.musichud.server.api.ILoginApiService;
 import indi.etern.musichud.server.ServerPlayerRegistry;
 import indi.etern.musichud.utils.ServerDataPacketVThreadExecutor;
 
@@ -59,14 +57,12 @@ public record ConnectRequest(String projectId, Version clientVersion,
             INetworkRegister.getInstance().autoRegisterPayload(
                     ConnectRequest.class, CODEC,
                     ServerDataPacketVThreadExecutor.execute((startQRLoginRequest, player) -> {
-                        ILoginApiService instance = ILoginApiService.getInstance(ApiProvider.NCM);
                         boolean compatible = ProtocolInfo.isCompatible(
                                 startQRLoginRequest.projectId(), startQRLoginRequest.clientVersion(),
                                 startQRLoginRequest.capabilities());
                         if (MusicHud.getCurrentEnvironment().getSide() == Environment.Side.CLIENT && !clientConfig.getEnabledInIntegratedServer()) {
                             if (compatible) {
                                 ServerPlayerRegistry.getInstance().join(player);
-                                instance.joinUnlogged(player);
                             }
                             return;
                         }
@@ -75,7 +71,6 @@ public record ConnectRequest(String projectId, Version clientVersion,
                         IServerNetworkService.getInstance().sendToPlayer(player, response);
                         if (compatible) {
                             ServerPlayerRegistry.getInstance().join(player);
-                            instance.joinUnlogged(player);
 //                            MusicPlayerServerService.getInstance().sendSyncPlayingStatusToPlayer(player);
                         }
                     })
