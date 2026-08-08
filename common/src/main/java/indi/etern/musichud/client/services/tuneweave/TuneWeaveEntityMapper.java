@@ -191,6 +191,8 @@ final class TuneWeaveEntityMapper {
                 ? object.getAsJsonObject("track") : object;
         MusicDetail track = toTrack(platform, trackData);
         track.setExtraInfo(new MusicDetail.ExtraInfo(true, 0, false));
+        track.setSourcePartRef(reference);
+        track.setCloudSource(true);
         return new TuneWeaveCloudTrack(reference, track,
                 string(object, "filename", ""), longValue(object, "file_size", 0L),
                 string(object, "file_type", ""), longValue(object, "bitrate", 0L),

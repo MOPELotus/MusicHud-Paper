@@ -5,7 +5,6 @@ import icyllis.modernui.mc.MuiModApi;
 import icyllis.modernui.mc.UIManager;
 import icyllis.modernui.widget.Toast;
 import indi.etern.musichud.MusicHud;
-import indi.etern.musichud.Version;
 import indi.etern.musichud.beans.music.MusicDetail;
 import indi.etern.musichud.client.audio.NowPlayingInfo;
 import indi.etern.musichud.client.audio.StreamAudioPlayer;
@@ -15,6 +14,7 @@ import indi.etern.musichud.interfaces.ClientConfig;
 import indi.etern.musichud.interfaces.IClientLoginService;
 import indi.etern.musichud.interfaces.IConnectionManager;
 import indi.etern.musichud.network.IClientNetworkService;
+import indi.etern.musichud.network.ProtocolInfo;
 import indi.etern.musichud.network.RequestResponseManager;
 import indi.etern.musichud.network.payloads.pushMessages.c2s.LogoutMessage;
 import indi.etern.musichud.network.payloads.requestResponseCycle.ConnectRequest;
@@ -68,7 +68,7 @@ public class ConnectionManager implements IConnectionManager {
         if (clientConfig.getEnable()) {
             mode = ConnectionMode.EXTERNAL;
             MusicHud.setConnectStatus(MusicHud.ConnectStatus.NOT_CONNECTED);
-            clientNetworkService.sendToServer(new ConnectRequest(Version.current));
+            clientNetworkService.sendToServer(ConnectRequest.current());
             scheduleConnectTimeoutFallback();
         }
     }
@@ -210,7 +210,8 @@ public class ConnectionManager implements IConnectionManager {
         if (MusicHud.getConnectStatus() == MusicHud.ConnectStatus.NOT_CONNECTED) {
             logger.info("Connecting {} accepted", payload.accepted() ? "accepted" : "denied");
             if (payload.accepted()) {
-                if (Version.compatibleWith(payload.serverVersion())) {
+                if (ProtocolInfo.isCompatible(payload.projectId(), payload.serverVersion(),
+                        payload.capabilities())) {
                     if (!clientDistUtil.inIntegratedServer()
                             && MusicHud.getConnectStatus() != MusicHud.ConnectStatus.CONNECTED
                             && clientConfig.getEnableIsolatedMode()) {
@@ -249,13 +250,8 @@ public class ConnectionManager implements IConnectionManager {
                             }
                         }
                         MusicService.getInstance().refreshQueue(response.getQueue());
-                        if (response.getCurrentPlaying() != MusicDetail.NONE) {
-                            MusicService.getInstance().switchMusic(
-                                    response.getCurrentPlaying(), response.getNextIdle(), response.getStartTime(), "");
-                        } else {
-                            MusicService.getInstance().switchMusic(
-                                    MusicDetail.NONE, response.getNextIdle(), response.getStartTime(), "");
-                        }
+                        MusicService.getInstance().switchMusic(
+                                response.getPlaybackSession(), response.getNextIdle(), "");
                         MusicService.getInstance().getIdlePlaySourceState().external().updateAll(
                                 response.getPlaylistSources(), response.getAlbumSources());
                     })

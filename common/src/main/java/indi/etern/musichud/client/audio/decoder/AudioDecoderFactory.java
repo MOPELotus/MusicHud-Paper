@@ -2,6 +2,7 @@ package indi.etern.musichud.client.audio.decoder;
 
 import indi.etern.musichud.MusicHud;
 import indi.etern.musichud.beans.music.FormatType;
+import indi.etern.musichud.server.playback.SharedResourceValidator;
 import org.apache.logging.log4j.Logger;
 
 import java.io.IOException;
@@ -24,6 +25,20 @@ public final class AudioDecoderFactory {
             return LavaplayerStreamDecoder.open(normalizedIdentifier, headers);
         } catch (IOException e) {
             throw new RuntimeException("Failed to open audio decoder for: " + normalizedIdentifier, e);
+        }
+    }
+
+    public static AudioDecoder openPublicResource(String identifier, FormatType declaredFormat,
+                                                  Map<String, String> headers) {
+        String normalizedIdentifier = AudioFormatDetector.normalizeIdentifier(identifier);
+        try {
+            SharedResourceValidator.requireSafeHttpUrl(normalizedIdentifier);
+            return LavaplayerStreamDecoder.openPublicResource(normalizedIdentifier, headers);
+        } catch (IllegalArgumentException error) {
+            throw new IllegalArgumentException("Invalid public audio resource", error);
+        } catch (IOException error) {
+            throw new RuntimeException(
+                    "Failed to open public audio decoder for: " + normalizedIdentifier, error);
         }
     }
 

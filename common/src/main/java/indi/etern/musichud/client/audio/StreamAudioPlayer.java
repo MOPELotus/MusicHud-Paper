@@ -5,17 +5,15 @@ import indi.etern.musichud.beans.music.Fee;
 import indi.etern.musichud.beans.music.FormatType;
 import indi.etern.musichud.beans.music.MusicDetail;
 import indi.etern.musichud.beans.music.MusicResourceInfo;
-import indi.etern.musichud.beans.music.Quality;
+import indi.etern.musichud.beans.music.PlaybackSession;
 import indi.etern.musichud.client.audio.decoder.*;
-import indi.etern.musichud.client.services.music.MusicService;
-import indi.etern.musichud.client.services.tuneweave.TuneWeaveClientService;
 import indi.etern.musichud.client.ui.hud.renderer.PlayingStatusRenderer;
 import indi.etern.musichud.interfaces.ClientConfig;
-import indi.etern.musichud.server.api.tuneweave.TuneWeaveApiClient;
+import indi.etern.musichud.network.IClientNetworkService;
+import indi.etern.musichud.network.payloads.pushMessages.c2s.PlaybackResourceFailureMessage;
 import lombok.Getter;
 import lombok.SneakyThrows;
 import net.minecraft.client.Minecraft;
-import net.minecraft.client.resources.language.I18n;
 import net.minecraft.sounds.SoundSource;
 import org.apache.logging.log4j.Logger;
 import org.jetbrains.annotations.NotNull;
@@ -50,11 +48,11 @@ public class StreamAudioPlayer {
     private static final long PLAY_INIT_RETRY_SLEEP_MS = 500;// 播放初始化失败后的重试等待
     private static final Logger LOGGER = MusicHud.getLogger(StreamAudioPlayer.class);
     private static final ClientConfig clientConfig = ClientConfig.getInstance();
-    private static final TuneWeaveClientService tuneWeave = TuneWeaveClientService.getInstance();
     private static volatile StreamAudioPlayer instance = null;
     private final int[] buffers = new int[BUFFER_COUNT];
     private final AtomicBoolean initialized = new AtomicBoolean(false);
     private final AtomicReference<Status> status = new AtomicReference<>(Status.IDLE);
+    private final AtomicLong playbackGeneration = new AtomicLong();
     @Getter
     private final Set<Consumer<Status>> statusChangeListener = new HashSet<>();
     private final AtomicLong totalBufferedBytes = new AtomicLong(0);
@@ -74,6 +72,7 @@ public class StreamAudioPlayer {
     private Future<?> playThreadFuture;
     private volatile boolean directPlayback;
     private volatile MusicResourceInfo directMusicResourceInfo = MusicResourceInfo.NONE;
+    private volatile PlaybackSession currentPlaybackSession = PlaybackSession.NONE;
     private long lastStaleDropLogTime = 0;
 
     public static StreamAudioPlayer getInstance() {
@@ -87,12 +86,13 @@ public class StreamAudioPlayer {
         return instance;
     }
 
-    private AudioDecoder loadAudioDecoder(String identifier, FormatType formatType) {
-        return AudioDecoderFactory.open(identifier, formatType);
-    }
-
     private AudioDecoder loadAudioDecoder(String identifier, FormatType formatType, java.util.Map<String, String> headers) {
         return AudioDecoderFactory.open(identifier, formatType, headers);
+    }
+
+    private AudioDecoder loadPublicAudioDecoder(String identifier, FormatType formatType,
+                                                java.util.Map<String, String> headers) {
+        return AudioDecoderFactory.openPublicResource(identifier, formatType, headers);
     }
 
     public Status getStatus() {
@@ -106,43 +106,65 @@ public class StreamAudioPlayer {
         }
     }
 
-    protected void fullyRetryCurrent(@Nullable CompletableFuture<ZonedDateTime> startPlayingFuture) {
-        MusicDetail currentMusicDetail1 = currentMusicDetail;
+    private void fullyRetryCurrent(long expectedGeneration,
+                                   @Nullable CompletableFuture<ZonedDateTime> startPlayingFuture) {
         ZonedDateTime serverStartTime1 = serverStartTime;
         boolean wasDirectPlayback = directPlayback;
         MusicResourceInfo directResourceInfo = directMusicResourceInfo;
+        PlaybackSession playbackSession = currentPlaybackSession;
+        if (expectedGeneration == Long.MAX_VALUE
+                || !playbackGeneration.compareAndSet(expectedGeneration, expectedGeneration + 1)) {
+            return;
+        }
+        long retryGeneration = expectedGeneration + 1;
         stopInternal();
         try {
             Thread.sleep(FULLY_RETRY_SLEEP_MS);
         } catch (InterruptedException ignored) {
-        } finally {
-            LOGGER.info("Fully retrying");
-            CompletableFuture<ZonedDateTime> zonedDateTimeCompletableFuture = wasDirectPlayback
-                    && directResourceInfo != null
-                    && !directResourceInfo.equals(MusicResourceInfo.NONE)
-                    ? playDirectAsync(directResourceInfo.getUrl(), directResourceInfo.getType(), serverStartTime1)
-                    : playAsyncInternal(currentMusicDetail1, serverStartTime1);
-            if (startPlayingFuture != null) {
-                zonedDateTimeCompletableFuture
-                        .thenAccept(startPlayingFuture::complete)
-                        .exceptionally(e -> {
-                            startPlayingFuture.completeExceptionally(e);
-                            return null;
-                        });
-            }
+            Thread.currentThread().interrupt();
+            return;
+        }
+        if (retryGeneration != playbackGeneration.get()) {
+            return;
+        }
+        LOGGER.info("Fully retrying playback generation {} as {}",
+                expectedGeneration, retryGeneration);
+        CompletableFuture<ZonedDateTime> retryFuture = wasDirectPlayback
+                && directResourceInfo != null
+                && !directResourceInfo.equals(MusicResourceInfo.NONE)
+                ? playAsyncInternal(MusicDetail.NONE, serverStartTime1, retryGeneration)
+                : playbackSession.isActive()
+                ? playAsyncInternal(playbackSession.musicDetail(), playbackSession.startTime(), retryGeneration)
+                : CompletableFuture.failedFuture(
+                        new IllegalStateException("No public playback session to retry"));
+        if (startPlayingFuture != null) {
+            retryFuture.thenAccept(startPlayingFuture::complete)
+                    .exceptionally(error -> {
+                        startPlayingFuture.completeExceptionally(error);
+                        return null;
+                    });
         }
     }
 
-    public CompletableFuture<ZonedDateTime> playAsync(MusicDetail musicDetail, ZonedDateTime startTime) {
+    public synchronized CompletableFuture<ZonedDateTime> playSessionAsync(PlaybackSession playbackSession) {
+        if (playbackSession == null || !playbackSession.isActive()) {
+            return CompletableFuture.failedFuture(
+                    new IllegalArgumentException("Public playback session is not active"));
+        }
+        long generation = playbackGeneration.incrementAndGet();
+        stopInternal();
         directPlayback = false;
         directMusicResourceInfo = MusicResourceInfo.NONE;
-        stopInternal();
-        return playAsyncInternal(musicDetail, startTime);
+        currentPlaybackSession = playbackSession;
+        return playAsyncInternal(playbackSession.musicDetail(), playbackSession.startTime(), generation);
     }
 
-    public CompletableFuture<ZonedDateTime> playDirectAsync(String identifier, FormatType formatType,
-                                                            ZonedDateTime startTime) {
+    public synchronized CompletableFuture<ZonedDateTime> playDirectAsync(
+            String identifier, FormatType formatType, ZonedDateTime startTime) {
+        long generation = playbackGeneration.incrementAndGet();
+        stopInternal();
         directPlayback = true;
+        currentPlaybackSession = PlaybackSession.NONE;
         directMusicResourceInfo = new MusicResourceInfo(
                 0L,
                 AudioFormatDetector.normalizeIdentifier(identifier),
@@ -153,11 +175,15 @@ public class StreamAudioPlayer {
                 Fee.UNSET,
                 0
         );
-        stopInternal();
-        return playAsyncInternal(MusicDetail.NONE, startTime);
+        return playAsyncInternal(MusicDetail.NONE, startTime, generation);
     }
 
-    private @NotNull CompletableFuture<ZonedDateTime> playAsyncInternal(MusicDetail musicDetail, ZonedDateTime startTime) {
+    private @NotNull CompletableFuture<ZonedDateTime> playAsyncInternal(
+            MusicDetail musicDetail, ZonedDateTime startTime, long generation) {
+        if (generation != playbackGeneration.get()) {
+            return CompletableFuture.failedFuture(
+                    new CancellationException("Playback generation was superseded"));
+        }
         try {
             currentMusicDetail = musicDetail;
             setStatus(Status.BUFFERING);
@@ -187,7 +213,11 @@ public class StreamAudioPlayer {
                 Thread.sleep(PLAY_INIT_RETRY_SLEEP_MS);
             } catch (Exception ignored) {
             }
-            return playAsyncInternal(musicDetail, startTime);
+            if (generation != playbackGeneration.get()) {
+                return CompletableFuture.failedFuture(
+                        new CancellationException("Playback generation was superseded"));
+            }
+            return playAsyncInternal(musicDetail, startTime, generation);
         }
 
         CompletableFuture<Void> downloadInitializedFuture = new CompletableFuture<>();
@@ -198,24 +228,21 @@ public class StreamAudioPlayer {
         downloadThreadFuture = MusicHud.EXECUTOR.submit(() -> {
             Thread.currentThread().setName("MHWorker-Downloader");
             try {
-                downloadAudioWithRetry(startTime != null, downloadInitializedFuture);
+                downloadAudioWithRetry(startTime != null, downloadInitializedFuture, generation);
             } catch (Exception e) {
+                if (generation != playbackGeneration.get()) {
+                    return;
+                }
                 LOGGER.error("Download thread error", e);
                 setStatus(Status.ERROR);
                 if (e instanceof TerminalDownloadException) {
                     Throwable cause = Objects.requireNonNullElse(e.getCause(), e);
                     downloadInitializedFuture.completeExceptionally(cause);
                     startPlayingFuture.completeExceptionally(cause);
-                    MusicDetail failedMusic = currentMusicDetail;
-                    if (failedMusic != null && failedMusic.equals(
-                            NowPlayingInfo.getInstance().getCurrentlyPlayingMusicDetail())) {
-                        MusicService.getInstance().switchMusic(MusicDetail.NONE, MusicDetail.NONE, null,
-                                I18n.get(MusicHud.MOD_ID + ".text.failedToLoadMusicResource"));
-                    }
                     return;
                 }
                 try {
-                    fullyRetryCurrent(startPlayingFuture);
+                    fullyRetryCurrent(generation, startPlayingFuture);
                 } catch (RuntimeException e1) {
                     LOGGER.error("Retry failed: {}: {}", e1.getClass(), e1.getMessage());
                 }
@@ -224,10 +251,13 @@ public class StreamAudioPlayer {
             }
         });
         downloadInitializedFuture.thenAccept(ignore -> {
+            if (generation != playbackGeneration.get()) {
+                return;
+            }
             playThreadFuture = MusicHud.EXECUTOR.submit(() -> {
                 Thread.currentThread().setName("MH-MusicPlayer");
                 try {
-                    playAudioWithRetry(startPlayingFuture, startTime);
+                    playAudioWithRetry(startPlayingFuture, startTime, generation);
                 } catch (Exception e) {
                     LOGGER.error("Play thread error: {}", e.getMessage());
                     if (!startPlayingFuture.isDone()) {
@@ -241,17 +271,18 @@ public class StreamAudioPlayer {
     }
 
     @SuppressWarnings("BusyWait")
-    private void playAudioWithRetry(CompletableFuture<ZonedDateTime> startPlayingFuture, ZonedDateTime serverStartTime) {
+    private void playAudioWithRetry(CompletableFuture<ZonedDateTime> startPlayingFuture,
+                                    ZonedDateTime serverStartTime, long generation) {
         CompletableFuture<?> currentPlayingFuture = playingFuture;
         CompletableFuture<?> currentDownloadFuture = downloadFuture;
         BlockingQueue<byte[]> playBuffer = audioBuffer;
-        MusicDetail playbackMusicDetail = currentMusicDetail;
         boolean finished = false;
         try {
             // 等待一些数据缓冲
             while (currentPlayingFuture != null && !currentPlayingFuture.isDone()
                     && currentPlayingFuture == playingFuture
                     && !currentDownloadFuture.isDone()
+                    && generation == playbackGeneration.get()
                     && totalBufferedBytes.get() < BUFFER_SIZE * BUFFER_COUNT) {
                 Thread.sleep(INITIAL_BUFFER_WAIT_SLEEP_MS);
             }
@@ -261,7 +292,7 @@ public class StreamAudioPlayer {
                 if (currentPlayingFuture != null && playingFuture != null) {
                     setStatus(Status.ERROR);
                 }
-                fullyRetryCurrent(startPlayingFuture);
+                fullyRetryCurrent(generation, startPlayingFuture);
             } else {
                 if (!initialized.get() || source == 0) {
                     startPlayingFuture.completeExceptionally(new IllegalStateException("Audio player not initialized"));
@@ -312,7 +343,9 @@ public class StreamAudioPlayer {
                     ZonedDateTime wallStart = Objects.requireNonNullElseGet(serverStartTime, ZonedDateTime::now);
                     this.serverStartTime = wallStart;
                     long lastIterationNanos = -1;
-                    while (currentPlayingFuture != null && !currentPlayingFuture.isDone() && currentPlayingFuture == playingFuture) {
+                    while (currentPlayingFuture != null && !currentPlayingFuture.isDone()
+                            && currentPlayingFuture == playingFuture
+                            && generation == playbackGeneration.get()) {
                         try {
                             long iterationNow = System.nanoTime();
                             if (lastIterationNanos > 0) {
@@ -408,12 +441,6 @@ public class StreamAudioPlayer {
                                 LOGGER.debug("Audio playback completed");
                                 currentPlayingFuture.complete(null);
                                 setStatus(Status.IDLE);
-                                NowPlayingInfo playingInfo = NowPlayingInfo.getInstance();
-                                if (playbackMusicDetail != null && playbackMusicDetail != MusicDetail.NONE
-                                        && playbackMusicDetail.equals(playingInfo.getCurrentlyPlayingMusicDetail())
-                                        && currentPlayingFuture == playingFuture) {
-                                    playingInfo.switchMusicInfo(MusicDetail.NONE, MusicDetail.NONE);
-                                }
                                 break;
                             }
 
@@ -431,7 +458,7 @@ public class StreamAudioPlayer {
                         } catch (Exception e) {
                             LOGGER.error("Playback error: {}", e.getMessage(), e);
                             try {
-                                fullyRetryCurrent(startPlayingFuture);
+                                fullyRetryCurrent(generation, startPlayingFuture);
                             } catch (RuntimeException e1) {
                                 break;
                             }
@@ -443,7 +470,7 @@ public class StreamAudioPlayer {
         } catch (InterruptedException ignored) {
         } catch (Exception e) {
             LOGGER.error("Playback error: {}", e.getMessage(), e);
-            fullyRetryCurrent(startPlayingFuture);
+            fullyRetryCurrent(generation, startPlayingFuture);
         } finally {
             if (currentPlayingFuture != null) {
                 currentPlayingFuture.complete(null);
@@ -465,30 +492,33 @@ public class StreamAudioPlayer {
     }
 
     @SuppressWarnings("BusyWait")
-    private void downloadAudioWithRetry(boolean forceSync, CompletableFuture<Void> downloadInitializedFuture) {
+    private void downloadAudioWithRetry(boolean forceSync,
+                                        CompletableFuture<Void> downloadInitializedFuture,
+                                        long generation) {
         CompletableFuture<?> currentPlayingFuture = playingFuture;
         CompletableFuture<?> currentDownloadFuture = downloadFuture;
         BlockingQueue<byte[]> localAudioBuffer = audioBuffer;
 
         int localRetryCount = 0;
         boolean forceSyncInternal = forceSync;
+        boolean localDirectPlayback = directPlayback;
+        MusicResourceInfo localDirectResource = directMusicResourceInfo;
+        PlaybackSession localPlaybackSession = currentPlaybackSession;
 
         MusicResourceInfo musicResourceInfo = MusicResourceInfo.NONE;
         List<String> resourceUrls = List.of();
         int resourceUrlIndex = 0;
         boolean refreshResource = true;
-        while (!currentDownloadFuture.isDone() && currentDownloadFuture == downloadFuture) {
+        while (!currentDownloadFuture.isDone() && currentDownloadFuture == downloadFuture
+                && generation == playbackGeneration.get()) {
             try {
-                if (directPlayback && refreshResource) {
-                    musicResourceInfo = directMusicResourceInfo;
+                if (localDirectPlayback && refreshResource) {
+                    musicResourceInfo = localDirectResource;
                     resourceUrls = musicResourceInfo.getCandidateUrls();
                     resourceUrlIndex = 0;
                     refreshResource = false;
-                } else if (!directPlayback && refreshResource) {
-                    musicResourceInfo = getCurrentMusicResourceInfo(clientConfig.getPrimaryChosenQuality(), musicResourceInfo).get();
-                    if (musicResourceInfo == null) {
-                        continue;
-                    }
+                } else if (refreshResource) {
+                    musicResourceInfo = localPlaybackSession.resourceInfo();
                     resourceUrls = musicResourceInfo.getCandidateUrls();
                     resourceUrlIndex = 0;
                     refreshResource = false;
@@ -500,7 +530,10 @@ public class StreamAudioPlayer {
                     LOGGER.info("Trying backup audio URL {}/{}", resourceUrlIndex, resourceUrls.size() - 1);
                 }
 
-                AudioDecoder decoder = loadAudioDecoder(resourceUrls.get(resourceUrlIndex),
+                AudioDecoder decoder = localDirectPlayback
+                        ? loadAudioDecoder(resourceUrls.get(resourceUrlIndex),
+                        musicResourceInfo.getType(), musicResourceInfo.getHeaders())
+                        : loadPublicAudioDecoder(resourceUrls.get(resourceUrlIndex),
                         musicResourceInfo.getType(), musicResourceInfo.getHeaders());
                 currentDecoder = decoder;
                 downloadInitializedFuture.complete(null);
@@ -551,9 +584,6 @@ public class StreamAudioPlayer {
                 break;
             } catch (Exception e) {
                 if (e instanceof SocketException e1 && e1.getMessage().equals("Closed by interrupt")) break;
-                if (isTerminalDownloadFailure(e)) {
-                    throw new TerminalDownloadException(e);
-                }
                 LOGGER.error("Download error (attempt {})\n{} : {}", localRetryCount + 1, e.getClass().getSimpleName(), e.getMessage());
 
                 localAudioBuffer.clear();
@@ -566,7 +596,14 @@ public class StreamAudioPlayer {
                     resourceUrlIndex++;
                 } else {
                     resourceUrlIndex = 0;
-                    refreshResource = !directPlayback;
+                    if (!localDirectPlayback && localRetryCount >= 3
+                            && generation == playbackGeneration.get()) {
+                        PlaybackSession failedSession = localPlaybackSession;
+                        IClientNetworkService.getInstance().sendToServer(
+                                new PlaybackResourceFailureMessage(
+                                        failedSession.sessionId(), failedSession.revision()));
+                        throw new TerminalDownloadException(e);
+                    }
                 }
                 setStatus(Status.RETRYING);
 
@@ -582,23 +619,6 @@ public class StreamAudioPlayer {
         }
 
         LOGGER.debug("Download task finished");
-    }
-
-    private static boolean isTerminalDownloadFailure(Throwable error) {
-        Throwable cause = error;
-        while ((cause instanceof ExecutionException || cause instanceof CompletionException)
-                && cause.getCause() != null) {
-            cause = cause.getCause();
-        }
-        if (!(cause instanceof TuneWeaveApiClient.TuneWeaveException tuneWeaveError)) {
-            return false;
-        }
-        if (!tuneWeaveError.isRetryable()) {
-            return true;
-        }
-        return "upstream_error".equals(tuneWeaveError.getCode())
-                && tuneWeaveError.getMessage() != null
-                && tuneWeaveError.getMessage().contains("exceeded the size limit");
     }
 
     private void syncPlaying(CompletableFuture<?> currentDownloadFuture) {
@@ -733,8 +753,13 @@ public class StreamAudioPlayer {
     }
 
     @SneakyThrows
-    public void stop() {
+    public synchronized void stop() {
+        playbackGeneration.incrementAndGet();
         stopInternal();
+        directPlayback = false;
+        directMusicResourceInfo = MusicResourceInfo.NONE;
+        currentPlaybackSession = PlaybackSession.NONE;
+        currentMusicDetail = MusicDetail.NONE;
         setStatus(Status.IDLE);
     }
 
@@ -844,25 +869,6 @@ public class StreamAudioPlayer {
             LOGGER.error("Unexpected error during cleanup", e);
             AL10.alGetError();
         }
-    }
-
-    public CompletableFuture<MusicResourceInfo> getCurrentMusicResourceInfo(Quality quality, MusicResourceInfo previous) {
-        if (currentMusicDetail != null && !currentMusicDetail.getSourceRef().isBlank()
-                && tuneWeave.isAvailable()) {
-            return CompletableFuture.supplyAsync(
-                    () -> tuneWeave.getMusicResourceInfo(currentMusicDetail, quality), MusicHud.EXECUTOR)
-                    .thenCompose(value -> {
-                        if (value == MusicResourceInfo.NONE) {
-                            return CompletableFuture.failedFuture(new RuntimeException("Failed to load TuneWeave music resource"));
-                        }
-                        return CompletableFuture.completedFuture(value);
-                     });
-        }
-        MusicService.getInstance().switchMusic(MusicDetail.NONE, MusicDetail.NONE, null,
-                I18n.get(MusicHud.MOD_ID + ".text.failedToLoadMusicResource"));
-        setStatus(Status.ERROR);
-        return CompletableFuture.failedFuture(new IllegalStateException(
-                "TuneWeave track reference is unavailable"));
     }
 
     public enum Status {

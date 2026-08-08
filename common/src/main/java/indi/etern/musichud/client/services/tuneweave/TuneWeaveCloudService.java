@@ -182,11 +182,25 @@ final class TuneWeaveCloudService {
 
     LyricInfo loadLyrics(TuneWeaveCloudTrack cloudTrack) {
         TuneWeaveReference.require(cloudTrack == null ? null : cloudTrack.reference(), "cloud track");
-        TuneWeavePlatform platform = TuneWeaveReference.platform(cloudTrack.reference());
+        return loadLyrics(cloudTrack.reference());
+    }
+
+    TuneWeaveCloudTrack loadTrack(String cloudReference) {
+        TuneWeaveReference.require(cloudReference, "cloud track");
+        return loadLibrary().tracks().stream()
+                .filter(track -> cloudReference.equals(track.reference()))
+                .findFirst()
+                .orElseThrow(() -> new IllegalArgumentException(
+                        "TuneWeave cloud track is no longer available"));
+    }
+
+    LyricInfo loadLyrics(String cloudReference) {
+        TuneWeaveReference.require(cloudReference, "cloud track");
+        TuneWeavePlatform platform = TuneWeaveReference.platform(cloudReference);
         JsonObject data = object(gateway.requestForPlatform(
                 platform, "GET", "/v1/account/cloud/lyrics", Map.of(
                         "platform", platform.apiName(), "user_id", cloudUserId(platform),
-                        "sid", TuneWeaveReference.id(cloudTrack.reference())), null).data());
+                        "sid", TuneWeaveReference.id(cloudReference)), null).data());
         return new LyricInfo(new Lyric(string(data, "plain", "")),
                 new Lyric(string(data, "translated", "")),
                 new Lyric(string(data, "word_synced", "")),

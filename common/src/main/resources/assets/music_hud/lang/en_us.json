@@ -315,6 +315,7 @@
   "music_hud.text.loginRequired": "Login required",
   "music_hud.text.lyrics": "Lyrics",
   "music_hud.text.musicPushError": "Error while loading and pushing music",
+  "music_hud.text.resourceOwnerUnavailable": "The owner of this private cloud track is unavailable",
   "music_hud.text.myAlbums": "My subscribed albums",
   "music_hud.text.myArtists": "My subscribed artists",
   "music_hud.text.myPlaylists": "My playlists",

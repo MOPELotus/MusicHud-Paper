@@ -173,6 +173,29 @@ final class TuneWeaveCatalogService {
         return entities.toVideoInfo(video);
     }
 
+    MusicDetail loadVideoPlaybackDetail(MusicDetail requested) {
+        TuneWeaveVideo video = loadVideoDetail(requested);
+        if (!requested.getSourcePartRef().isBlank()) {
+            TuneWeaveVideoPart part = loadVideoParts(video.reference()).stream()
+                    .filter(candidate -> requested.getSourcePartRef().equals(candidate.reference()))
+                    .findFirst()
+                    .orElseThrow(() -> new IllegalArgumentException(
+                            "TuneWeave video part is no longer available"));
+            return videoPartTrack(video, part);
+        }
+        TuneWeavePlatform platform = platform(video.reference());
+        List<Artist> creators = video.creators().stream()
+                .map(creator -> entities.videoCreatorArtist(platform, creator)).toList();
+        Album album = entities.videoAlbum(platform, video.reference(), video.title(),
+                video.coverUrl(), creators);
+        MusicDetail result = MusicDetail.fromTuneWeave(
+                entities.stableId(platform, "video:" + video.reference()),
+                video.reference(), "video", video.title(), video.durationMillis(), album, creators);
+        result.setPusherInfo(PusherInfo.EMPTY);
+        entities.cacheTrack(result);
+        return result;
+    }
+
     List<TuneWeaveVideoPart> loadVideoParts(String reference) {
         TuneWeaveReference.require(reference, "video");
         TuneWeavePlatform platform = platform(reference);

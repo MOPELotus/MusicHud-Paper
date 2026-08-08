@@ -162,6 +162,22 @@ public final class TuneWeaveClientService {
         return cloud.loadLyrics(cloudTrack);
     }
 
+    public LyricInfo loadCloudLyrics(MusicDetail musicDetail) {
+        if (musicDetail == null || !musicDetail.isCloudSource()
+                || musicDetail.getSourcePartRef().isBlank()) {
+            return LyricInfo.NONE;
+        }
+        return cloud.loadLyrics(musicDetail.getSourcePartRef());
+    }
+
+    public MusicDetail loadCloudTrack(MusicDetail musicDetail) {
+        if (musicDetail == null || !musicDetail.isCloudSource()
+                || musicDetail.getSourcePartRef().isBlank()) {
+            return MusicDetail.NONE;
+        }
+        return cloud.loadTrack(musicDetail.getSourcePartRef()).track();
+    }
+
     public void downloadCloudTrack(TuneWeaveCloudTrack cloudTrack, Path target) {
         cloud.downloadTrack(cloudTrack, target);
     }
@@ -193,6 +209,10 @@ public final class TuneWeaveClientService {
     public MusicDetail podcastEpisodeTrack(TuneWeavePodcast podcast,
                                            TuneWeavePodcastEpisode episode) {
         return programs.podcastEpisodeTrack(podcast, episode);
+    }
+
+    public MusicDetail loadProgramPlaybackDetail(MusicDetail musicDetail) {
+        return programs.loadPlaybackDetail(musicDetail);
     }
 
     public void setPodcastSubscribed(TuneWeavePodcast podcast, boolean subscribed) {
@@ -266,6 +286,10 @@ public final class TuneWeaveClientService {
 
     public TuneWeaveVideo loadVideoDetail(MusicDetail musicDetail) {
         return catalog.loadVideoDetail(musicDetail);
+    }
+
+    public MusicDetail loadVideoPlaybackDetail(MusicDetail musicDetail) {
+        return catalog.loadVideoPlaybackDetail(musicDetail);
     }
 
     public List<TuneWeaveVideoPart> loadVideoParts(String reference) {

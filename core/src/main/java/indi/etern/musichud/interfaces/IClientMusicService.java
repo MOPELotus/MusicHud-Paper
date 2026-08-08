@@ -8,7 +8,6 @@ import indi.etern.musichud.beans.state.ISubscribeState;
 import indi.etern.musichud.platform.Environment;
 import indi.etern.musichud.utils.collections.ObservableSequencedSet;
 
-import java.time.ZonedDateTime;
 import java.util.*;
 import java.util.concurrent.CompletableFuture;
 import java.util.function.BiConsumer;
@@ -49,7 +48,9 @@ public interface IClientMusicService {
 
     void sendRemoveMusicFromQueue(int index, QueueItem item);
 
-    void switchMusic(MusicDetail musicDetail, MusicDetail nextIdleMusicDetail, ZonedDateTime serverStartTime, String message);
+    void switchMusic(PlaybackSession playbackSession, MusicDetail nextIdleMusicDetail, String message);
+
+    PlaybackResolution resolvePublicPlayback(MusicDetail requestedMusic);
 
     CompletableFuture<Artist> loadArtist(long id, boolean ignoreCache);
 

@@ -133,6 +133,34 @@ final class TuneWeaveProgramService {
         return track;
     }
 
+    MusicDetail loadPlaybackDetail(MusicDetail requested) {
+        if (requested == null) {
+            return MusicDetail.NONE;
+        }
+        if ("podcast_episode".equals(requested.getSourceKind())) {
+            TuneWeavePodcastEpisode episode = loadPodcastEpisodeDetail(requested.getSourceRef());
+            TuneWeavePlatform platform = TuneWeaveReference.platform(episode.reference());
+            MusicDetail track = MusicDetail.fromTuneWeave(
+                    entities.stableId(platform, "podcast-episode:" + episode.reference()),
+                    episode.reference(), "podcast_episode", episode.name(),
+                    episode.durationMillis(), requested.getAlbum(), requested.getArtists());
+            track.setPusherInfo(PusherInfo.EMPTY);
+            entities.cacheTrack(track);
+            return track;
+        }
+        if ("radio_station".equals(requested.getSourceKind())) {
+            TuneWeaveRadioStation station = loadRadioStationDetail(requested.getSourceRef());
+            return loadRadioPlaybackQueue(station).stream()
+                    .filter(track -> track.getId() == requested.getId()
+                            && track.getSourcePartRef().equals(requested.getSourcePartRef()))
+                    .findFirst()
+                    .orElseThrow(() -> new IllegalArgumentException(
+                            "TuneWeave radio item is no longer available"));
+        }
+        throw new IllegalArgumentException(
+                "Unsupported TuneWeave program kind: " + requested.getSourceKind());
+    }
+
     void setPodcastSubscribed(TuneWeavePodcast podcast, boolean subscribed) {
         TuneWeaveReference.require(podcast == null ? null : podcast.reference(), "podcast");
         TuneWeavePlatform platform = TuneWeaveReference.platform(podcast.reference());

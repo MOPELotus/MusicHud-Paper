@@ -315,6 +315,7 @@
   "music_hud.text.loginRequired": "需要登入",
   "music_hud.text.lyrics": "歌詞",
   "music_hud.text.musicPushError": "載入並推送音樂時發生錯誤",
+  "music_hud.text.resourceOwnerUnavailable": "此私人雲端歌曲的資源擁有者目前無法使用",
   "music_hud.text.myAlbums": "我收藏的專輯",
   "music_hud.text.myArtists": "我收藏的歌手",
   "music_hud.text.myPlaylists": "我的播放列表 / 收藏的播放列表",

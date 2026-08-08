@@ -304,8 +304,13 @@ public class Codecs {
             @Override
             @NonNull
             public T decode(@NonNull ByteBuf buf) {
-                //noinspection unchecked,rawtypes
-                return (T) ((Enum[]) enumClass.getEnumConstants())[VanillaVarInt.read(buf)];
+                int ordinal = VanillaVarInt.read(buf);
+                T[] constants = enumClass.getEnumConstants();
+                if (ordinal < 0 || ordinal >= constants.length) {
+                    throw new DecoderException("Invalid " + enumClass.getSimpleName()
+                            + " ordinal: " + ordinal);
+                }
+                return constants[ordinal];
             }
 
             @Override

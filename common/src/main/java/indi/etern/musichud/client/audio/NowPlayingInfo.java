@@ -6,7 +6,6 @@ import indi.etern.musichud.beans.music.LyricInfo;
 import indi.etern.musichud.client.ui.dto.LyricLine;
 import indi.etern.musichud.beans.music.MusicDetail;
 import indi.etern.musichud.client.services.music.MusicService;
-import indi.etern.musichud.client.services.tuneweave.TuneWeaveClientService;
 import indi.etern.musichud.client.ui.hud.HudRendererManager;
 import indi.etern.musichud.client.utils.PlayerInfoUtil;
 import indi.etern.musichud.client.utils.image.ImageUtils;
@@ -48,7 +47,6 @@ public class NowPlayingInfo {
             new PlaybackSnapshot(null, null, List.of(), null, null);
     private final AtomicReference<ArrayDeque<LyricLine>> atomicLyricLines = new AtomicReference<>();
     private final ClientConfig clientConfig = ClientConfig.getInstance();
-    private final TuneWeaveClientService tuneWeave = TuneWeaveClientService.getInstance();
     private volatile JMTC jmtc;
     @Setter
     @Getter
@@ -273,7 +271,6 @@ public class NowPlayingInfo {
 
     public void switchMusicInfo(MusicDetail musicDetail, MusicDetail idleNextToPlay) {
         MusicDetail previous;
-        boolean missingLyrics;
         synchronized (playbackStateLock) {
             previous = currentlyPlayingMusicDetail;
             currentlyPlayingMusicDetail = musicDetail;
@@ -282,33 +279,8 @@ public class NowPlayingInfo {
             musicDuration = musicDetail.equals(MusicDetail.NONE)
                     ? null : Duration.ofMillis(musicDetail.getDurationMillis());
             musicStartTime = null;
-            missingLyrics = musicDetail.getLyricInfo().equals(LyricInfo.NONE);
             parseLyrics(musicDetail);
             publishPlaybackStateLocked();
-        }
-        if (missingLyrics && !musicDetail.equals(MusicDetail.NONE)
-                && !musicDetail.getSourceRef().isBlank() && tuneWeave.isAvailable()) {
-            MusicHud.EXECUTOR.execute(() -> {
-                try {
-                    LyricInfo fetched = "video".equals(musicDetail.getSourceKind())
-                            ? tuneWeave.loadVideoLyrics(musicDetail)
-                            : tuneWeave.loadLyrics(musicDetail);
-                    if (fetched.equals(LyricInfo.NONE)) {
-                        return;
-                    }
-                    synchronized (playbackStateLock) {
-                        if (currentlyPlayingMusicDetail != musicDetail) {
-                            return;
-                        }
-                        musicDetail.setLyricInfo(fetched);
-                        parseLyrics(musicDetail);
-                        publishPlaybackStateLocked();
-                    }
-                    callLyricsUpdateListeners(null);
-                } catch (RuntimeException error) {
-                    logger.debug("TuneWeave lyrics unavailable for {}: {}", musicDetail.getSourceRef(), error.getMessage());
-                }
-            });
         }
         try {
             HudRendererManager.getInstance().switchMusic(musicDetail);

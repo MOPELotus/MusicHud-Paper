@@ -11,6 +11,7 @@ import java.util.List;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
 class TuneWeaveMappingTest {
     @Test
@@ -65,5 +66,22 @@ class TuneWeaveMappingTest {
 
         assertEquals(4, TuneWeaveJson.elements(envelope).size());
         assertEquals(List.of("first", "second"), TuneWeaveJson.stringList(items));
+    }
+
+    @Test
+    void cloudMappingPreservesOwnerScopedSelector() {
+        JsonObject track = new JsonObject();
+        track.addProperty("ref", "netease:track:42");
+        track.addProperty("name", "Cloud track");
+        track.addProperty("duration_ms", 60_000);
+        JsonObject cloud = new JsonObject();
+        cloud.addProperty("ref", "netease:cloud:42");
+        cloud.add("track", track);
+
+        TuneWeaveCloudTrack mapped = new TuneWeaveEntityMapper(platform -> null)
+                .toCloudTrack(TuneWeavePlatform.NETEASE, cloud);
+
+        assertEquals("netease:cloud:42", mapped.track().getSourcePartRef());
+        assertTrue(mapped.track().isCloudSource());
     }
 }

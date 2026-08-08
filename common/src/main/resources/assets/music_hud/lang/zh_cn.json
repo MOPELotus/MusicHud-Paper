@@ -315,6 +315,7 @@
   "music_hud.text.loginRequired": "需要登录",
   "music_hud.text.lyrics": "歌词",
   "music_hud.text.musicPushError": "加载并推送音乐时出错",
+  "music_hud.text.resourceOwnerUnavailable": "该私人云盘歌曲的资源所有者当前不可用",
   "music_hud.text.myAlbums": "我收藏的专辑",
   "music_hud.text.myArtists": "我收藏的歌手",
   "music_hud.text.myPlaylists": "我创建的歌单",

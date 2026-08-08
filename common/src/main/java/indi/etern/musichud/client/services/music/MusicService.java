@@ -69,6 +69,7 @@ public class MusicService implements IClientMusicService {
     private volatile boolean favoriteIntelligenceEnabled;
     private volatile boolean favoriteIntelligencePushPending;
     private volatile String favoriteIntelligenceLastReference = "";
+    private PlaybackSession currentPublicSession = PlaybackSession.NONE;
     long lastPressTime = 0;
     private UserCollections currentUserCollections;
 
@@ -268,7 +269,7 @@ public class MusicService implements IClientMusicService {
     public static void resetCurrentMusicStatus() {
         if (instance != null) {
             instance.disableFavoriteIntelligence();
-            instance.switchMusic(MusicDetail.NONE, MusicDetail.NONE, null, "");
+            instance.resetPublicPlayback();
             instance.getIdlePlaySourceState().local().reset();
             instance.musicQueue.clear();
         }
@@ -378,8 +379,25 @@ public class MusicService implements IClientMusicService {
     }
 
     @Override
-    public synchronized void switchMusic(MusicDetail musicDetail, MusicDetail nextIdleMusicDetail, ZonedDateTime serverStartTime, String message) {
+    public synchronized void switchMusic(PlaybackSession playbackSession,
+                                         MusicDetail nextIdleMusicDetail, String message) {
+        Objects.requireNonNull(playbackSession, "playbackSession");
+        if (!playbackSession.supersedes(currentPublicSession)) {
+            return;
+        }
+        currentPublicSession = playbackSession;
+        applyPublicPlayback(playbackSession, nextIdleMusicDetail, message);
+    }
+
+    private synchronized void resetPublicPlayback() {
+        currentPublicSession = PlaybackSession.NONE;
+        applyPublicPlayback(PlaybackSession.NONE, MusicDetail.NONE, "");
+    }
+
+    private void applyPublicPlayback(PlaybackSession playbackSession,
+                                     MusicDetail nextIdleMusicDetail, String message) {
         if (clientConfig.getEnable()) {
+            MusicDetail musicDetail = playbackSession.musicDetail();
             if (!musicQueue.isEmpty()) {// preload image
                 MusicDetail peek = musicQueue.peek().musicDetail();
                 ImageUtils.downloadAsync(peek.getAlbum().getThumbnailPicUrl(240));
@@ -400,7 +418,7 @@ public class MusicService implements IClientMusicService {
                 ImageUtils.downloadAsync(musicDetail.getAlbum().getThumbnailPicUrl(240));
                 StreamAudioPlayer streamAudioPlayer = StreamAudioPlayer.getInstance();
                 nowPlayingInfo.switchMusicInfo(musicDetail, nextIdleMusicDetail);
-                streamAudioPlayer.playAsync(musicDetail, serverStartTime)
+                streamAudioPlayer.playSessionAsync(playbackSession)
                         .thenAccept(startedAt -> nowPlayingInfo.startAt(musicDetail, startedAt))
                         .exceptionally(e -> null);
             } else {//TODO optional account sync
@@ -410,6 +428,56 @@ public class MusicService implements IClientMusicService {
                 streamAudioPlayer.stop();
             }
         }
+    }
+
+    @Override
+    public PlaybackResolution resolvePublicPlayback(MusicDetail requestedMusic) {
+        if (requestedMusic == null || requestedMusic == MusicDetail.NONE
+                || requestedMusic.getSourceRef().isBlank() || !tuneWeave.isAvailable()) {
+            throw new IllegalArgumentException("TuneWeave playback reference is unavailable");
+        }
+        MusicDetail canonical;
+        if (requestedMusic.isCloudSource()) {
+            canonical = tuneWeave.loadCloudTrack(requestedMusic);
+        } else if ("track".equals(requestedMusic.getSourceKind())) {
+            canonical = tuneWeave.loadTrackDetail(requestedMusic);
+        } else if ("video".equals(requestedMusic.getSourceKind())) {
+            canonical = tuneWeave.loadVideoPlaybackDetail(requestedMusic);
+        } else if (Set.of("podcast_episode", "radio_station")
+                .contains(requestedMusic.getSourceKind())) {
+            canonical = tuneWeave.loadProgramPlaybackDetail(requestedMusic);
+        } else {
+            throw new IllegalArgumentException(
+                    "Unsupported TuneWeave playback kind: " + requestedMusic.getSourceKind());
+        }
+        if (canonical == null || canonical == MusicDetail.NONE) {
+            throw new IllegalStateException("TuneWeave returned no canonical track");
+        }
+        canonical.setSourceRef(requestedMusic.getSourceRef());
+        canonical.setSourceKind(requestedMusic.getSourceKind());
+        canonical.setSourcePartRef(requestedMusic.getSourcePartRef());
+        canonical.setClientHostedUni(requestedMusic.isClientHostedUni());
+        canonical.setCloudSource(requestedMusic.isCloudSource());
+        canonical.setPusherInfo(requestedMusic.getPusherInfo());
+        try {
+            LyricInfo lyrics;
+            if (canonical.isCloudSource()) {
+                lyrics = tuneWeave.loadCloudLyrics(canonical);
+            } else if ("video".equals(canonical.getSourceKind())) {
+                lyrics = tuneWeave.loadVideoLyrics(canonical);
+            } else {
+                lyrics = tuneWeave.loadLyrics(canonical);
+            }
+            canonical.setLyricInfo(lyrics == null ? LyricInfo.NONE : lyrics);
+        } catch (RuntimeException ignored) {
+            canonical.setLyricInfo(LyricInfo.NONE);
+        }
+        MusicResourceInfo resource = tuneWeave.getMusicResourceInfo(
+                canonical, clientConfig.getPrimaryChosenQuality());
+        if (resource == null || resource == MusicResourceInfo.NONE || resource.getUrl().isBlank()) {
+            throw new IllegalStateException("TuneWeave returned no playable resource");
+        }
+        return new PlaybackResolution(canonical, resource);
     }
 
     @Override

@@ -13,6 +13,7 @@ import com.sedmelluq.discord.lavaplayer.track.AudioPlaylist;
 import com.sedmelluq.discord.lavaplayer.track.AudioTrack;
 import com.sedmelluq.discord.lavaplayer.track.AudioTrackEndReason;
 import com.sedmelluq.discord.lavaplayer.track.playback.AudioFrame;
+import indi.etern.musichud.server.playback.SharedResourceValidator;
 import org.lwjgl.openal.AL10;
 
 import java.io.IOException;
@@ -57,7 +58,17 @@ public final class LavaplayerStreamDecoder implements AudioDecoder {
     }
 
     public static LavaplayerStreamDecoder open(String identifier, Map<String, String> headers) throws IOException {
-        AudioPlayerManager playerManager = createPlayerManager(headers);
+        return open(identifier, headers, false);
+    }
+
+    public static LavaplayerStreamDecoder openPublicResource(
+            String identifier, Map<String, String> headers) throws IOException {
+        return open(identifier, headers, true);
+    }
+
+    private static LavaplayerStreamDecoder open(String identifier, Map<String, String> headers,
+                                                boolean enforcePublicResourcePolicy) throws IOException {
+        AudioPlayerManager playerManager = createPlayerManager(headers, enforcePublicResourcePolicy);
         AudioTrack track;
         try {
             track = loadTrack(playerManager, identifier);
@@ -210,18 +221,27 @@ public final class LavaplayerStreamDecoder implements AudioDecoder {
         }
     }
 
-    private static AudioPlayerManager createPlayerManager(Map<String, String> headers) {
+    private static AudioPlayerManager createPlayerManager(Map<String, String> headers,
+                                                          boolean enforcePublicResourcePolicy) {
         DefaultAudioPlayerManager manager = new DefaultAudioPlayerManager();
         manager.getConfiguration().setOutputFormat(StandardAudioDataFormats.COMMON_PCM_S16_LE);
-        if (headers != null && !headers.isEmpty()) {
+        manager.setHttpBuilderConfigurator(builder -> {
             List<org.apache.http.Header> defaults = new ArrayList<>();
-            headers.forEach((name, value) -> {
-                if (name != null && value != null && !name.isBlank()) {
-                    defaults.add(new org.apache.http.message.BasicHeader(name, value));
-                }
-            });
-            manager.setHttpBuilderConfigurator(builder -> builder.setDefaultHeaders(defaults));
-        }
+            if (headers != null) {
+                headers.forEach((name, value) -> {
+                    if (name != null && value != null && !name.isBlank()) {
+                        defaults.add(new org.apache.http.message.BasicHeader(name, value));
+                    }
+                });
+            }
+            if (!defaults.isEmpty()) {
+                builder.setDefaultHeaders(defaults);
+            }
+            if (enforcePublicResourcePolicy) {
+                builder.setRedirectStrategy(new SafeAudioRedirectStrategy());
+                builder.setDnsResolver(SharedResourceValidator::resolvePublicAddresses);
+            }
+        });
         manager.registerSourceManager(new HttpAudioSourceManager());
         manager.registerSourceManager(new LocalAudioSourceManager());
         return manager;

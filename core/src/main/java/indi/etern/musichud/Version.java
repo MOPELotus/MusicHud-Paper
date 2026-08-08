@@ -2,22 +2,24 @@ package indi.etern.musichud;
 
 import indi.etern.musichud.network.ByteBufCodec;
 import indi.etern.musichud.network.Codecs;
-import lombok.NonNull;
+import java.util.Objects;
 
-public record Version(long mayor, long minor, long patch, BuildType build) implements Comparable<Version>{
+public record Version(long major, long minor, long patch, BuildType build) implements Comparable<Version> {
     public static final ByteBufCodec<Version> PACKET_CODEC = ByteBufCodec.composite(
-            Codecs.LONG_ARRAY, Version::toLongArray,
-            Version::ofLongArray
+            Codecs.LONG, Version::major,
+            Codecs.LONG, Version::minor,
+            Codecs.LONG, Version::patch,
+            Codecs.ofEnum(BuildType.class), Version::build,
+            Version::new
     );
-    public static final Version current = new Version(1,3,0, BuildType.Alpha);
-    public static final Version leastCompatible = new Version(1,3,0,BuildType.Alpha);
+    public static final Version CURRENT = new Version(2, 0, 0, BuildType.Alpha);
+    public static final Version LEAST_COMPATIBLE = new Version(2, 0, 0, BuildType.Alpha);
 
-    private Long[] toLongArray() {
-        return new Long[]{mayor, minor, patch, (long) build.ordinal()};
-    }
-
-    private static Version ofLongArray(Long[] longs) {
-        return new Version(longs[0], longs[1], longs[2], BuildType.ofOrdinal(longs[3].intValue()));
+    public Version {
+        if (major < 0 || minor < 0 || patch < 0) {
+            throw new IllegalArgumentException("Version components cannot be negative");
+        }
+        Objects.requireNonNull(build, "build");
     }
 
     public enum BuildType {
@@ -31,73 +33,25 @@ public record Version(long mayor, long minor, long patch, BuildType build) imple
         public String toString() {
             return name;
         }
-
-        public static BuildType ofOrdinal(int o) {
-            switch (o) {
-                case 0 -> {
-                    return Alpha;
-                }
-                case 1 -> {
-                    return Beta;
-                }
-                case 2 -> {
-                    return PreRelease;
-                }
-                case 3 -> {
-                    return Stable;
-                }
-                default -> {
-                    return null;
-                }
-            }
-        }
     }
 
     @Override
-    public @NonNull String toString() {
-        return mayor + "." + minor + "." + patch + "-" + build;
+    public String toString() {
+        return major + "." + minor + "." + patch + "-" + build;
     }
 
     @Override
-    public boolean equals(Object obj) {
-        return obj instanceof Version(
-                long mayor1, long minor1, long patch1, BuildType build1
-        ) && mayor1 == mayor && minor1 == minor && patch1 == patch && build1 == build;
+    public int compareTo(Version other) {
+        int result = Long.compare(major, other.major);
+        if (result == 0) result = Long.compare(minor, other.minor);
+        if (result == 0) result = Long.compare(patch, other.patch);
+        if (result == 0) result = Integer.compare(build.ordinal(), other.build.ordinal());
+        return result;
     }
 
-    @Override
-    public int compareTo(@NonNull Version o) {
-        if (equals(o)) {
-            return 0;
-        } else {
-            if (mayor > o.mayor) {
-                return 4;
-            } else if (mayor == o.mayor){
-                if (minor > o.minor) {
-                    return 3;
-                } else if (minor == o.minor){
-                    if (patch > o.patch) {
-                        return 2;
-                    } else if (patch == o.patch){
-                        if (build.ordinal() > o.build.ordinal()) {
-                            return 1;
-                        } else {
-                            return -1;
-                        }
-                    } else {
-                        return -2;
-                    }
-                } else {
-                    return -3;
-                }
-            } else {
-                return -4;
-            }
-        }
-    }
-
-    public static boolean compatibleWith(Version v) {
-        int i = leastCompatible.compareTo(v);
-        return i <= 0;
+    public static boolean compatibleWith(Version version) {
+        return version != null
+                && version.major == CURRENT.major
+                && LEAST_COMPATIBLE.compareTo(version) <= 0;
     }
 }

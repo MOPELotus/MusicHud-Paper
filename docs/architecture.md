@@ -66,6 +66,28 @@ Paper and Velocity code currently lives on dedicated repository branches and is 
 - Music-platform credentials remain client-owned and must not be placed in Minecraft Server state or logs.
 - Server-coordinated client resolution is limited to establishing or refreshing a shared public playback session.
 
+## Public playback session
+
+The queue stores stable TuneWeave resource identity and requester ownership. It does not persist a CDN URL. Immediately before playback, the server asks clients to resolve that queue item in this order:
+
+```text
+requester / owner
+        ↓ unavailable or rejected
+other connected clients in stable UUID order
+        ↓
+canonical MusicDetail + lyrics + MusicResourceInfo
+        ↓ server validation and header sanitization
+PlaybackSession(sessionId, sequence, revision, startTime)
+        ↓
+all listeners consume the same resource and timeline
+```
+
+The resolve request is a narrow protocol operation, not a general client-worker API. The response cannot carry a TuneWeave credential. `PlaybackSession` carries the canonical `MusicDetail` (including its `LyricInfo`), the sanitized `MusicResourceInfo`, the authoritative start time, a monotonic server sequence, and revision identity. The sequence orders track/stop events; revision orders resource refreshes within one session.
+
+A local decoder or download failure only changes local player status. It reports the affected `(sessionId, revision)` to the server and does not clear `NowPlayingInfo`. Once the server's failure threshold is reached, it resolves a replacement resource, retains the original session ID and timeline, increments the revision, and broadcasts the refreshed session.
+
+Shared URLs are limited to HTTP(S). Both the server acceptance path and the public-session client download path reject loopback, private, link-local, multicast, DNS-rebinding targets, and unsafe redirect targets. Only a small non-credential request-header allowlist survives server sanitization. This restriction is scoped to server-shared playback; an explicitly local/direct playback source retains the caller's local-network semantics.
+
 ## Dependency direction
 
 ```text
@@ -76,3 +98,5 @@ platform adapters → common Minecraft behavior → core contracts
 ```
 
 Reverse dependencies from core contracts into Fabric, NeoForge, Paper, Velocity, or provider-specific implementation details are not allowed.
+
+The public playback path now depends on the provider-neutral `IClientMusicService.resolvePublicPlayback` boundary and `ServerPlayerRegistry`. Historical server account/catalog payloads still use legacy class names and are a remaining boundary-cleanup item; they must not be extended or reused for new playback behavior.

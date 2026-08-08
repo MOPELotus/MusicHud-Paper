@@ -1,7 +1,5 @@
 package indi.etern.musichud.server.api;
 
-import com.google.common.cache.Cache;
-import com.google.common.cache.CacheBuilder;
 import indi.etern.musichud.MusicHud;
 import indi.etern.musichud.beans.api.IdlePlaySource;
 import indi.etern.musichud.beans.music.*;
@@ -12,40 +10,46 @@ import indi.etern.musichud.interfaces.ServerConfig;
 import indi.etern.musichud.interfaces.ServerRegister;
 import indi.etern.musichud.network.IPlayerClient;
 import indi.etern.musichud.network.IServerNetworkService;
+import indi.etern.musichud.network.payloads.pushMessages.c2s.PlaybackResourceFailureMessage;
+import indi.etern.musichud.network.payloads.pushMessages.c2s.ResolvePlaybackResultMessage;
 import indi.etern.musichud.network.payloads.pushMessages.s2c.*;
 import indi.etern.musichud.network.payloads.requestResponseCycle.GetInitialStateResponse;
 import indi.etern.musichud.platform.Environment;
 import indi.etern.musichud.server.api.impl.ncm.LoginApiService;
+import indi.etern.musichud.server.ServerPlayerRegistry;
+import indi.etern.musichud.server.playback.PlaybackResolveCoordinator;
+import indi.etern.musichud.server.playback.SharedResourceValidator;
 import indi.etern.musichud.throwable.MusicResourceLoadingException;
 import indi.etern.musichud.utils.IClientDistUtil;
 import lombok.*;
 import org.apache.logging.log4j.Logger;
 
-import java.time.LocalDateTime;
-import java.time.ZoneId;
+import java.time.Duration;
 import java.time.ZonedDateTime;
 import java.util.*;
 import java.util.concurrent.ConcurrentHashMap;
-import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicInteger;
+import java.util.concurrent.atomic.AtomicLong;
 
 @NoArgsConstructor(access = AccessLevel.PRIVATE)
 public class MusicPlayerServerService {
     private static final ServerConfig serverConfig = ServerConfig.getInstance();
     private static final ILoginApiService loginApiService = ILoginApiService.getInstance(ApiProvider.NCM);
+    private static final ServerPlayerRegistry playerRegistry = ServerPlayerRegistry.getInstance();
     private static final long DEBOUNCE_DELAY_MILLIS = 500;
     private static volatile MusicPlayerServerService instance;
     final Map<PusherInfo, Set<IdlePlaySource>> idlePlaySources = new ConcurrentHashMap<>();
-    private final IMusicApiService musicApiService = IMusicApiService.getInstance(ApiProvider.NCM);
+    private final IMusicApiService musicApiService = IMusicApiService.getInstance(ApiProvider.TUNEWEAVE);
     private final CurrentVoteInfo currentVoteInfo = new CurrentVoteInfo();
     private final Logger logger = MusicHud.getLogger(MusicPlayerServerService.class);
-    private final Cache<CacheKey, MusicResourceInfo> musicResourceInfoCache = CacheBuilder.newBuilder()
-            .expireAfterAccess(5, TimeUnit.MINUTES)
-            .maximumSize(20)
-            .build();
     private final IServerNetworkService serverNetworkService = IServerNetworkService.getInstance();
+    private final PlaybackResolveCoordinator playbackResolveCoordinator = new PlaybackResolveCoordinator(
+            serverNetworkService::sendToPlayer, Duration.ofSeconds(10));
     private final AtomicInteger debounceToken = new AtomicInteger(0);
     private final AtomicInteger pusherGeneration = new AtomicInteger(0);
+    private final AtomicLong playbackSequence = new AtomicLong();
+    private final Map<SessionRevision, Set<UUID>> playbackFailureReports = new ConcurrentHashMap<>();
+    private final Set<SessionRevision> playbackRefreshes = ConcurrentHashMap.newKeySet();
     private volatile int runningPusherGeneration = -1;
 
     private Runnable createMusicPusher(int generation) {
@@ -59,7 +63,6 @@ public class MusicPlayerServerService {
             pusherThread = thread;
             pusherThreadRunning = true;
             String message = "";
-            Map<UUID, LoginApiService.PlayerLoginInfo> loginedPlayerInfoMap = loginApiService.getPlayerInfoMap();
             while (MusicPlayerServerService.this.continuable && generation == pusherGeneration.get()) {
                 MusicDetail switchedToPlay = null;
                 try {
@@ -86,30 +89,50 @@ public class MusicPlayerServerService {
                             }
                             PusherInfo pusherInfo = switchedToPlay.getPusherInfo();
                             if (pusherInfo != null &&
-                                    loginedPlayerInfoMap.keySet().stream().noneMatch(
-                                            uuid -> uuid.equals(pusherInfo.getPlayerUUID())
-                                    )
+                                    !playerRegistry.contains(pusherInfo.getPlayerUUID())
                             ) {
                                 continue;
                             }
                         }
                     } else {
                         switchedToPlay = musicQueue.remove().musicDetail();
-                        serverNetworkService.sendToPlayerInfos(loginedPlayerInfoMap.values(),
+                        serverNetworkService.sendToPlayers(playerRegistry.players(),
                                 new RefreshMusicQueueMessage(musicQueue));
                     }
 
                     nextIdleMusicDetail = preloadMusicDetail != null ? preloadMusicDetail : MusicDetail.NONE;
 
-                    serverNetworkService.sendToPlayerInfos(
-                            loginedPlayerInfoMap.values(),
-                            new SwitchMusicMessage(switchedToPlay, nextIdleMusicDetail, message)
+                    MusicDetail requestedMusic = switchedToPlay;
+                    UUID ownerId = requestedMusic.getPusherInfo().getPlayerUUID();
+                    if (requestedMusic.isCloudSource() && !playerRegistry.contains(ownerId)) {
+                        serverNetworkService.sendToPlayers(playerRegistry.players(),
+                                new CommonNotificationMessage(MessagedResult.fail(
+                                        MusicHud.MOD_ID + ".text.resourceOwnerUnavailable", null)));
+                        logger.info("Skipped owner-scoped cloud resource because owner {} is offline",
+                                ownerId);
+                        continue;
+                    }
+                    PlaybackSession playbackSession = resolvePlaybackSession(
+                            UUID.randomUUID(), playbackSequence.incrementAndGet(),
+                            0, requestedMusic, null)
+                            .orElseThrow(() -> new MusicResourceLoadingException(
+                                    new IllegalStateException("No client could resolve public playback"),
+                                    requestedMusic, false));
+                    if (!continuable || generation != pusherGeneration.get()) {
+                        break;
+                    }
+                    switchedToPlay = playbackSession.musicDetail();
+                    currentVoteInfo.resetTo(switchedToPlay);
+                    synchronized (MusicPlayerServerService.this) {
+                        haveSentMusic = true;
+                        currentPlaybackSession = playbackSession;
+                        playbackFailureReports.clear();
+                    }
+                    serverNetworkService.sendToPlayers(
+                            playerRegistry.players(),
+                            new SwitchMusicMessage(playbackSession, nextIdleMusicDetail, message)
                     );
                     message = "";
-                    currentVoteInfo.resetTo(switchedToPlay);
-                    haveSentMusic = true;
-                    currentMusicDetail = switchedToPlay;
-                    nowPlayingStartTime = ZonedDateTime.now();
                     logger.info("Switched to music: {} (ID: {})", switchedToPlay.getName(), switchedToPlay.getId());
                     int musicIntervalMillis = 1000;
                     //noinspection BusyWait
@@ -128,8 +151,8 @@ public class MusicPlayerServerService {
                     } else {
                         message1 = MusicHud.MOD_ID + ".text.musicPushError";
                     }
-                    serverNetworkService.sendToPlayerInfos(
-                            loginedPlayerInfoMap.values(),
+                    serverNetworkService.sendToPlayers(
+                            playerRegistry.players(),
                             new CommonNotificationMessage(MessagedResult.fail(message1, null))
                     );
                     logger.error("Failed to push music: {} (id: {})",
@@ -210,12 +233,10 @@ public class MusicPlayerServerService {
     Queue<QueueItem> musicQueue = new java.util.concurrent.ConcurrentLinkedQueue<>();
     boolean continuable;
     @Getter
-    private volatile MusicDetail currentMusicDetail = MusicDetail.NONE;
+    private volatile PlaybackSession currentPlaybackSession = PlaybackSession.NONE;
     @Getter
     private MusicDetail nextIdleMusicDetail = MusicDetail.NONE;
     private MusicDetail preloadMusicDetail = MusicDetail.NONE;
-    @Getter
-    private volatile ZonedDateTime nowPlayingStartTime = ZonedDateTime.of(LocalDateTime.MIN, ZoneId.systemDefault());
     private volatile Thread pusherThread;
     private volatile boolean pusherThreadRunning = false;
     private boolean haveSentMusic = false;
@@ -255,31 +276,34 @@ public class MusicPlayerServerService {
         }
     }
 
-    private void stopSendingMusic() {
+    private synchronized void stopSendingMusic() {
         pusherGeneration.incrementAndGet();
         this.continuable = false;
         if (pusherThread != null) {
             pusherThread.interrupt();
         }
-        currentMusicDetail = MusicDetail.NONE;
+        PlaybackSession stoppedSession = PlaybackSession.stopped(playbackSequence.incrementAndGet());
         if (haveSentMusic) {
             haveSentMusic = false;
-            serverNetworkService.sendToPlayerInfos(
-                    loginApiService.getPlayerInfoMap().values(),
-                    new SwitchMusicMessage(MusicDetail.NONE, MusicDetail.NONE, "")
+            serverNetworkService.sendToPlayers(
+                    playerRegistry.players(),
+                    new SwitchMusicMessage(stoppedSession, MusicDetail.NONE, "")
             );
             currentVoteInfo.resetTo(MusicDetail.NONE);
         }
+        currentPlaybackSession = stoppedSession;
+        playbackFailureReports.clear();
+        playbackRefreshes.clear();
     }
 
     public void sendSyncPlayingStatusToPlayer(IPlayerClient player) {
         serverNetworkService.sendToPlayer(player,
                 new RefreshMusicQueueMessage(musicQueue));
         sendUpdateAllIdlePlaySourcesMessageTo(Collections.singleton(loginApiService.getLoginInfoByPlayerUUID(player.getUUID())));
-        if (currentMusicDetail != MusicDetail.NONE) {
+        if (currentPlaybackSession.isActive()) {
             haveSentMusic = true;
             serverNetworkService.sendToPlayer(player,
-                    new SyncCurrentPlayingMessage(currentMusicDetail, nextIdleMusicDetail, nowPlayingStartTime));
+                    new SyncCurrentPlayingMessage(currentPlaybackSession, nextIdleMusicDetail));
         }
     }
 
@@ -329,9 +353,8 @@ public class MusicPlayerServerService {
         LoginApiService.PlayerLoginInfo loginInfo = loginApiService.getLoginInfoByPlayerUUID(player.getUUID());
         IdleSourcesData idleSourcesData = buildIdleSourcesData(loginInfo != null ? loginInfo.getProfile() : Profile.ANONYMOUS);
         return new GetInitialStateResponse(
-                currentMusicDetail,
+                currentPlaybackSession,
                 nextIdleMusicDetail,
-                nowPlayingStartTime,
                 new ArrayDeque<>(musicQueue),
                 idleSourcesData.playlistSources(),
                 idleSourcesData.albumSources()
@@ -370,7 +393,7 @@ public class MusicPlayerServerService {
         }
         musicDetail.setPusherInfo(pusherInfo);
         musicQueue.add(new QueueItem(musicDetail, UUID.randomUUID()));
-        serverNetworkService.sendToPlayerInfos(loginApiService.getPlayerInfoMap().values(),
+        serverNetworkService.sendToPlayers(playerRegistry.players(),
                 new RefreshMusicQueueMessage(musicQueue));
         updateContinuable(true);
     }
@@ -380,7 +403,7 @@ public class MusicPlayerServerService {
             if (queueItem.musicDetail().getId() == id && queueItem.queueUniqueID().equals(queueUniqueID)) {
                 if (queueItem.musicDetail().getPusherInfo().getPlayerUUID().equals(playerUUID)) {
                     musicQueue.remove(queueItem);
-                    serverNetworkService.sendToPlayerInfos(loginApiService.getPlayerInfoMap().values(),
+                    serverNetworkService.sendToPlayers(playerRegistry.players(),
                             new RefreshMusicQueueMessage(musicQueue));
                 } else {
                     logger.warn("Player {} tried to remove music {} (id: {}) not pushed by them", playerUUID, queueItem.musicDetail().getName(), id);
@@ -419,45 +442,78 @@ public class MusicPlayerServerService {
         currentVoteInfo.vote(id, playerUUID);
     }
 
-    public MusicResourceInfo getMusicResourceInfo(long id, Quality quality, String retryFor, UUID playerUUID) {
+    public void acceptPlaybackResolution(IPlayerClient resolver, ResolvePlaybackResultMessage result) {
+        playbackResolveCoordinator.accept(resolver, result);
+    }
+
+    public void reportPlaybackResourceFailure(IPlayerClient player,
+                                              PlaybackResourceFailureMessage report) {
+        PlaybackSession current = currentPlaybackSession;
+        if (!current.isActive() || !current.sessionId().equals(report.sessionId())
+                || current.revision() != report.revision()
+                || !playerRegistry.contains(player.getUUID())) {
+            return;
+        }
+        SessionRevision key = new SessionRevision(report.sessionId(), report.revision());
+        Set<UUID> reporters = playbackFailureReports.computeIfAbsent(
+                key, ignored -> ConcurrentHashMap.newKeySet());
+        reporters.add(player.getUUID());
+        int onlinePlayers = Math.max(1, playerRegistry.players().size());
+        int threshold = Math.min(2, onlinePlayers);
+        if (reporters.size() < threshold || !playbackRefreshes.add(key)) {
+            return;
+        }
+        MusicHud.EXECUTOR.execute(() -> refreshPlaybackSession(current, key));
+    }
+
+    private void refreshPlaybackSession(PlaybackSession staleSession, SessionRevision failureKey) {
         try {
-            List<MusicDetail> musicDetails = IMusicApiService.getInstance(ApiProvider.NCM).getMusicDetailByIds(List.of(id), null);
-            if (musicDetails.size() == 1) {
-                MusicDetail musicDetail = musicDetails.getFirst();
-                try {
-                    logger.debug("Try to load music resource info from cache with id: {}", id);
-                    MusicResourceInfo musicResourceInfo = musicResourceInfoCache.get(new CacheKey(id, quality),
-                            () -> {
-                                logger.debug("Cache not found with id: {}, loading", id);
-                                return getMusicResourceInfoWithoutCache(quality, musicDetail, playerUUID);
-                            });
-                    if (musicResourceInfo.getUrl().equals(retryFor)) {
-                        logger.debug("Reload music resource info due to client retry for url \"{}\"", retryFor);
-                        musicResourceInfo = getMusicResourceInfoWithoutCache(quality, musicDetail, playerUUID);
-                        musicResourceInfoCache.put(new CacheKey(id, quality), musicResourceInfo);
-                    }
-                    return musicResourceInfo;
-                } catch (Exception e) {
-                    logger.error("Failed to get resource info for music: {}", musicDetail.getName(), e);
-                    return MusicResourceInfo.NONE;
+            Optional<PlaybackSession> refreshed = resolvePlaybackSession(
+                    staleSession.sessionId(), staleSession.sequence(),
+                    staleSession.revision() + 1,
+                    staleSession.musicDetail(), staleSession.startTime());
+            if (refreshed.isEmpty()) return;
+            synchronized (this) {
+                if (!currentPlaybackSession.sessionId().equals(staleSession.sessionId())
+                        || currentPlaybackSession.revision() != staleSession.revision()) {
+                    return;
                 }
-            } else if (musicDetails.size() > 1) {
-                throw new IllegalStateException();
-            } else {
-                return MusicResourceInfo.NONE;
+                currentPlaybackSession = refreshed.get();
+                serverNetworkService.sendToPlayers(
+                        playerRegistry.players(),
+                        new SwitchMusicMessage(refreshed.get(), nextIdleMusicDetail, ""));
             }
-        } catch (Exception e) {
-            return MusicResourceInfo.NONE;
+        } finally {
+            playbackFailureReports.remove(failureKey);
+            playbackRefreshes.remove(failureKey);
         }
     }
 
-    private @NonNull MusicResourceInfo getMusicResourceInfoWithoutCache(Quality quality, MusicDetail musicDetail, UUID playerUUID) {
-        MusicResourceInfo resourceInfo = musicApiService.getResourceInfo(musicDetail, quality, playerUUID);
-        if (resourceInfo != null && !resourceInfo.equals(MusicResourceInfo.NONE)) {
-            return resourceInfo;
-        } else {
-            throw new RuntimeException("Failed to get resource info for music: " + musicDetail.getName() + " (ID: " + musicDetail.getId() + ")");
+    private Optional<PlaybackSession> resolvePlaybackSession(UUID sessionId, long sequence,
+                                                             int revision,
+                                                             MusicDetail requested,
+                                                             ZonedDateTime startTime) {
+        List<IPlayerClient> onlinePlayers = playerRegistry.players();
+        List<IPlayerClient> candidates = PlaybackResolveCoordinator.eligibleResolvers(
+                onlinePlayers, requested);
+        for (IPlayerClient candidate : candidates) {
+            Optional<PlaybackResolution> resolution = playbackResolveCoordinator.resolveWith(
+                    candidate, requested, revision);
+            if (resolution.isEmpty()) continue;
+            try {
+                MusicDetail canonical = resolution.get().musicDetail();
+                canonical.setPusherInfo(requested.getPusherInfo());
+                ZonedDateTime authoritativeStartTime = startTime == null
+                        ? ZonedDateTime.now() : startTime;
+                return Optional.of(SharedResourceValidator.createSession(
+                        sessionId, sequence, revision, requested, canonical,
+                        resolution.get().resourceInfo(), authoritativeStartTime));
+            } catch (IllegalArgumentException error) {
+                logger.warn("Rejected invalid public playback resolution from player {}",
+                        candidate.getUUID());
+            }
         }
+        return Optional.empty();
     }
 
     public void removeAllIdlePlaySource(PusherInfo pusherInfo) {
@@ -478,14 +534,14 @@ public class MusicPlayerServerService {
     private record IdleSourcesData(List<Playlist> playlistSources, List<Album> albumSources) {
     }
 
-    private record CacheKey(long musicId, Quality quality) {
+    private record SessionRevision(UUID sessionId, int revision) {
     }
 
     @RegisterMark
     public static class Register implements ServerRegister {
         @Override
         public void register() {
-            loginApiService.getLoginStateChangeListeners().add((set) -> {
+            playerRegistry.addListener((set) -> {
                 if (instance != null) {
                     instance.updateContinuable(!set.isEmpty());
                 }

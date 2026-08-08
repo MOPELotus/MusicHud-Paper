@@ -2,6 +2,7 @@ package indi.etern.musichud.network.payloads.requestResponseCycle;
 
 import indi.etern.musichud.beans.music.Album;
 import indi.etern.musichud.beans.music.MusicDetail;
+import indi.etern.musichud.beans.music.PlaybackSession;
 import indi.etern.musichud.beans.music.Playlist;
 import indi.etern.musichud.beans.music.QueueItem;
 import indi.etern.musichud.interfaces.CommonRegister;
@@ -15,7 +16,6 @@ import indi.etern.musichud.network.payloads.ApiResponsePayload;
 import lombok.AllArgsConstructor;
 import lombok.Getter;
 
-import java.time.ZonedDateTime;
 import java.util.List;
 import java.util.Queue;
 
@@ -25,12 +25,10 @@ public class GetInitialStateResponse extends ApiResponsePayload {
     public static final ByteBufCodec<GetInitialStateResponse> CODEC =
             RequestResponseCodecs.withCycleId(
                     ByteBufCodec.composite(
-                            MusicDetail.CODEC,
-                            GetInitialStateResponse::getCurrentPlaying,
+                            PlaybackSession.CODEC,
+                            GetInitialStateResponse::getPlaybackSession,
                             MusicDetail.CODEC,
                             GetInitialStateResponse::getNextIdle,
-                            Codecs.ZONED_DATE_TIME,
-                            GetInitialStateResponse::getStartTime,
                             Codecs.ofQueue(() -> QueueItem.CODEC),
                             GetInitialStateResponse::getQueue,
                             Codecs.ofList(() -> Playlist.CODEC),
@@ -41,9 +39,8 @@ public class GetInitialStateResponse extends ApiResponsePayload {
                     )
             );
 
-    private final MusicDetail currentPlaying;
+    private final PlaybackSession playbackSession;
     private final MusicDetail nextIdle;
-    private final ZonedDateTime startTime;
     private final Queue<QueueItem> queue;
     private final List<Playlist> playlistSources;
     private final List<Album> albumSources;
