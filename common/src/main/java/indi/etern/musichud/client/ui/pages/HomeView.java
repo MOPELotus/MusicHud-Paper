@@ -51,8 +51,7 @@ public class HomeView extends LinearLayout {
     private static final Logger LOGGER = MusicHud.getLogger(HomeView.class);
     private static final MusicService musicService = MusicService.getInstance();
     private static final ClientConfig clientConfig = ClientConfig.getInstance();
-    @Getter
-    private static HomeView instance;
+    private static final ActiveViewReference<HomeView> ACTIVE_INSTANCE = new ActiveViewReference<>();
     private final Set<MusicCollection> serverIdlePlaySources = musicService.getIdlePlaySourceState().external().getSources();
     private final Set<MusicCollection> clientIdlePlaySources = musicService.getIdlePlaySourceState().local().getSources();
     private final Map<MusicCollection, MusicCollectionCard> idlePlaySourceCardMap = new ConcurrentHashMap<>();
@@ -109,7 +108,7 @@ public class HomeView extends LinearLayout {
     private Unregister playbackStateRegister;
     private final Consumer<NowPlayingInfo.PlaybackSnapshot> playbackStateListener = snapshot ->
             MuiModApi.postToUiThread(() -> {
-                if (instance == this) {
+                if (ACTIVE_INSTANCE.isCurrent(this)) {
                     applyPlaybackSnapshot(snapshot);
                 }
             });
@@ -129,8 +128,12 @@ public class HomeView extends LinearLayout {
         refresh();
     }
 
+    public static HomeView getInstance() {
+        return ACTIVE_INSTANCE.get();
+    }
+
     public void refresh() {
-        instance = this;
+        ACTIVE_INSTANCE.attach(this);
         releaseSubscriptions();
         Context context = getContext();
         removeAllViews();
@@ -554,7 +557,7 @@ public class HomeView extends LinearLayout {
     @Override
     protected void onAttachedToWindow() {
         super.onAttachedToWindow();
-        instance = this;
+        ACTIVE_INSTANCE.attach(this);
         subscribePlaybackState();
         applyPlaybackSnapshot(NowPlayingInfo.getInstance().snapshot());
     }
@@ -563,6 +566,6 @@ public class HomeView extends LinearLayout {
     protected void onDetachedFromWindow() {
         super.onDetachedFromWindow();
         releaseSubscriptions();
-        instance = null;
+        ACTIVE_INSTANCE.detach(this);
     }
 }
