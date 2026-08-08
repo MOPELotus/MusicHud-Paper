@@ -6,7 +6,6 @@ import indi.etern.musichud.beans.music.Playlist;
 import indi.etern.musichud.beans.music.PusherInfo;
 import indi.etern.musichud.network.ByteBufCodec;
 import indi.etern.musichud.network.Codecs;
-import indi.etern.musichud.server.api.ApiProvider;
 import indi.etern.musichud.server.api.IMusicApiService;
 import lombok.Getter;
 import lombok.Setter;
@@ -42,10 +41,10 @@ public final class IdlePlaySource {
         if (musicCollection == null) {
             if (type.equals(Album.class)) {
                 dataLoaded = true;
-                musicCollection = IMusicApiService.getInstance(ApiProvider.TUNEWEAVE).getAlbumInfoDetail(id, true, playerUUID);
+                musicCollection = IMusicApiService.getInstance().getAlbumInfoDetail(id, true, playerUUID);
             } else if (type.equals(Playlist.class)) {
                 dataLoaded = true;
-                musicCollection = IMusicApiService.getInstance(ApiProvider.TUNEWEAVE).getPlaylistDetail(id, true, playerUUID);
+                musicCollection = IMusicApiService.getInstance().getPlaylistDetail(id, true, playerUUID);
             }
         }
     }

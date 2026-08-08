@@ -1,8 +1,6 @@
 package indi.etern.musichud.interfaces;
 
 import indi.etern.musichud.MusicHud;
-import indi.etern.musichud.network.NetworkReceiver;
-import indi.etern.musichud.network.payloads.pushMessages.s2c.LoginResultMessage;
 import indi.etern.musichud.platform.Environment;
 
 import java.util.function.Consumer;
@@ -36,11 +34,9 @@ public interface IClientLoginService {
 
     Unregister addLoginStateListener(Consumer<LoginState> listener);
 
-    boolean hasPreviousLoginInfo();
+    boolean hasStoredSession();
 
-    void loginToServer();
+    void restoreSession();
 
-    void logoutAndReloginAsAnonymous();
-
-    NetworkReceiver<LoginResultMessage> getLoginResultReceiver();
+    void logout();
 }

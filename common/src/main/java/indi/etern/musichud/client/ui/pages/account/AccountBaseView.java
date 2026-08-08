@@ -51,7 +51,7 @@ public class AccountBaseView extends LinearLayout {
         } else if (LoginService.getInstance().isLogined()
                 || LoginService.getInstance().hasAnyTuneWeaveLogin()) {
             status1 = Status.LOGGED;
-        } else if (LoginService.getInstance().hasPreviousLoginInfo()) {
+        } else if (LoginService.getInstance().hasStoredSession()) {
             status1 = Status.LOADING;
         } else {
             status1 = Status.UNLOGGED;
@@ -141,7 +141,7 @@ public class AccountBaseView extends LinearLayout {
             retryButton.setVisibility(GONE);
             loadingRing.setVisibility(VISIBLE);
             LoginService.getInstance().clearLastLoginErrorMessage();
-            LoginService.getInstance().loginToServer();
+            LoginService.getInstance().restoreSession();
         });
         buttons.addView(retryButton, new LayoutParams(WRAP_CONTENT, WRAP_CONTENT));
 
@@ -155,7 +155,7 @@ public class AccountBaseView extends LinearLayout {
             logoutButton.setVisibility(GONE);
             loadingRing.setVisibility(VISIBLE);
             LoginService.getInstance().clearLastLoginErrorMessage();
-            LoginService.getInstance().logoutAndReloginAsAnonymous();
+            LoginService.getInstance().logout();
         });
         buttons.addView(logoutButton, new LayoutParams(WRAP_CONTENT, WRAP_CONTENT));
 

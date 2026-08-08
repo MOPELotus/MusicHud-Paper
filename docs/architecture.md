@@ -99,4 +99,4 @@ platform adapters → common Minecraft behavior → core contracts
 
 Reverse dependencies from core contracts into Fabric, NeoForge, Paper, Velocity, or provider-specific implementation details are not allowed.
 
-The public playback path now depends on the provider-neutral `IClientMusicService.resolvePublicPlayback` boundary and `ServerPlayerRegistry`. Historical server account/catalog payloads still use legacy class names and are a remaining boundary-cleanup item; they must not be extended or reused for new playback behavior.
+The public playback path depends on the provider-neutral `IClientMusicService.resolvePublicPlayback` boundary and `ServerPlayerRegistry`. Server membership is established by the 2.0 handshake and is independent of music-platform login state. Provider login, search, catalog reads, and account mutations are absent from the Minecraft network protocol and remain client-owned TuneWeave operations.

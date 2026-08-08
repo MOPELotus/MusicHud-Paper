@@ -28,7 +28,7 @@ The breaking TuneWeave protocol generation is `2.0.0-alpha`. The handshake now r
 - a compatible protocol `Version`;
 - capability `PUBLIC_PLAYBACK_SESSION`.
 
-An upstream MusicHud peer, a pre-2.0 peer, or a peer without the public-session contract is rejected before account or queue state is initialized. The provider list advertises `TUNEWEAVE`, not the historical NCM alias.
+An upstream MusicHud peer, a pre-2.0 peer, or a peer without the public-session contract is rejected before player membership or queue state is initialized. The handshake exposes protocol capabilities only; music-platform discovery and credentials remain client-owned TuneWeave concerns.
 
 Public playback uses these contracts:
 
@@ -45,3 +45,5 @@ Each authoritative track or stop event receives a monotonic server `sequence`. A
 `GetMusicResourceRequest` and `GetMusicResourceResponse` were removed. Listeners never resolve the active public track through their own account.
 
 Credentials, authorization headers, passwords, cookies, and refresh tokens are not valid protocol payload content. Resolver-supplied media headers are reduced to `Accept`, `Accept-Language`, `Origin`, `Referer`, and `User-Agent` before a session becomes authoritative.
+
+The 2.0 generation has no server account/login protocol and no generic provider endpoint bridge. Search, collection materialization, subscription changes, login, and other provider operations execute through the client's TuneWeave boundary. The Minecraft protocol contains only connection negotiation, public playback coordination, queue/idle-source state, and synchronization messages.

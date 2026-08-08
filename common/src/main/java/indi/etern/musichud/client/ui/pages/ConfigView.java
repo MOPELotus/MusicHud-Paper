@@ -16,6 +16,7 @@ import indi.etern.musichud.beans.api.AutoConnectServerFilterType;
 import indi.etern.musichud.beans.music.Quality;
 import indi.etern.musichud.client.services.ConnectionManager;
 import indi.etern.musichud.client.services.LoginService;
+import indi.etern.musichud.client.network.vanilla.VanillaPlayerProxy;
 import indi.etern.musichud.client.ui.Theme;
 import indi.etern.musichud.client.ui.ToastUtil;
 import indi.etern.musichud.client.ui.components.Modal;
@@ -34,8 +35,10 @@ import indi.etern.musichud.interfaces.IClientLoginService;
 import indi.etern.musichud.interfaces.ServerConfig;
 import indi.etern.musichud.server.api.*;
 import indi.etern.musichud.server.api.tuneweave.TuneWeaveApiClient;
+import indi.etern.musichud.server.ServerPlayerRegistry;
 import lombok.Getter;
 import net.minecraft.util.Util;
+import net.minecraft.client.Minecraft;
 import net.minecraft.client.resources.language.I18n;
 import org.apache.commons.lang3.Range;
 import org.jetbrains.annotations.NotNull;
@@ -395,12 +398,14 @@ public class ConfigView extends LinearLayout {
             enableInIntegratedServerOption.create(integratedServerCategory);
             ApiServerManager apiServerManager = ApiServerManager.getInstance();
             enableInIntegratedServerOption.setOnChanged(() -> {
-                ILoginApiService loginApiService = ILoginApiService.getInstance(ApiProvider.NCM);
+                Minecraft minecraft = Minecraft.getInstance();
+                if (minecraft.player == null) return;
+                var player = VanillaPlayerProxy.ofPlayer(minecraft.player);
                 if (clientConfig.getEnabledInIntegratedServer()) {
-                    loginApiService.reconnectAll();
+                    ServerPlayerRegistry.getInstance().join(player);
                 } else {
+                    ServerPlayerRegistry.getInstance().leave(player);
                     MusicPlayerServerService.getInstance().reset();
-                    loginApiService.disconnectToAll();
                 }
             });
 

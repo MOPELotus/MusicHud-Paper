@@ -2,7 +2,6 @@ package indi.etern.musichud.platform.mod.config;
 
 import indi.etern.musichud.MusicHud;
 import indi.etern.musichud.beans.api.AutoConnectServerFilterType;
-import indi.etern.musichud.beans.login.LoginCookieInfo;
 import indi.etern.musichud.beans.music.Quality;
 import indi.etern.musichud.beans.user.ProfileConfigData;
 import indi.etern.musichud.interfaces.ClientConfig;
@@ -40,7 +39,6 @@ public class ClientConfigDefinition implements ClientConfig {
     private int hudWidth = 152;
     private int hudHeight = 52;
     private int hudCornerRadius = 8;
-    private String clientCookie = "";
     private String clientAccountConfig = "";
     private String tuneWeaveBaseUrl = "http://127.0.0.1:7832";
     private String tuneWeaveCredentials = "{}";
@@ -81,7 +79,6 @@ public class ClientConfigDefinition implements ClientConfig {
         hudWidth = SimpleTomlConfig.getInt(values, "hudWidth", hudWidth);
         hudHeight = SimpleTomlConfig.getInt(values, "hudHeight", hudHeight);
         hudCornerRadius = SimpleTomlConfig.getInt(values, "hudCornerRadius", hudCornerRadius);
-        clientCookie = SimpleTomlConfig.getString(values, "clientCookie", clientCookie);
         clientAccountConfig = SimpleTomlConfig.getString(values, "clientAccountConfig", clientAccountConfig);
         tuneWeaveBaseUrl = normalizeTuneWeaveBaseUrl(SimpleTomlConfig.getString(
                 values, "tuneWeaveBaseUrl", tuneWeaveBaseUrl));
@@ -207,11 +204,6 @@ public class ClientConfigDefinition implements ClientConfig {
     @Override
     public void setHudCornerRadius(int hudCornerRadius) {
         this.hudCornerRadius = hudCornerRadius;
-    }
-
-    @Override
-    public void setClientCookie(LoginCookieInfo clientCookie) {
-        this.clientCookie = clientCookie == null ? "" : JsonUtil.gson.toJson(clientCookie);
     }
 
     @Override
@@ -377,11 +369,6 @@ public class ClientConfigDefinition implements ClientConfig {
     }
 
     @Override
-    public LoginCookieInfo getClientCookie() {
-        return parseJson(clientCookie, LoginCookieInfo.class);
-    }
-
-    @Override
     public ProfileConfigData getClientAccountConfig() {
         return parseJson(clientAccountConfig, ProfileConfigData.class);
     }
@@ -459,7 +446,6 @@ public class ClientConfigDefinition implements ClientConfig {
                 new SimpleTomlConfig.Entry("hudWidth", "HUD width", hudWidth),
                 new SimpleTomlConfig.Entry("hudHeight", "HUD height", hudHeight),
                 new SimpleTomlConfig.Entry("hudCornerRadius", "HUD rounded corner radius", hudCornerRadius),
-                new SimpleTomlConfig.Entry("clientCookie", "Client NCM cookie json", clientCookie),
                 new SimpleTomlConfig.Entry("clientAccountConfig", "Client account config json", clientAccountConfig),
                 new SimpleTomlConfig.Entry("tuneWeaveBaseUrl", "TuneWeave API URL used directly by this client", tuneWeaveBaseUrl),
                 new SimpleTomlConfig.Entry("tuneWeaveCredentials", "Client-owned TuneWeave credentials by platform (private)", tuneWeaveCredentials),

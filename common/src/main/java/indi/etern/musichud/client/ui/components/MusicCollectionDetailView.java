@@ -24,7 +24,7 @@ import indi.etern.musichud.client.ui.drawable.ScaledImageDrawable;
 import indi.etern.musichud.client.utils.image.ImageUtils;
 import indi.etern.musichud.client.utils.ui.ButtonInsetBackgroundFactory;
 import indi.etern.musichud.interfaces.Unregister;
-import indi.etern.musichud.server.api.impl.ncm.CommonCaches;
+import indi.etern.musichud.client.services.music.MusicEntityCache;
 import indi.etern.musichud.utils.CollectionUpdateNotifier;
 import indi.etern.musichud.utils.collections.ObservableSequencedSet;
 import net.minecraft.client.resources.language.I18n;
@@ -283,8 +283,8 @@ public class MusicCollectionDetailView extends LinearLayout {
         MuiModApi.postToUiThread(() -> {
             if (!isAttachedToWindow()) return;
             MusicCollection latest = albumCollection
-                    ? CommonCaches.albumsCache.getIfPresent(collectionId)
-                    : CommonCaches.playlistsCache.getIfPresent(collectionId);
+                    ? MusicEntityCache.getAlbum(collectionId)
+                    : MusicEntityCache.getPlaylist(collectionId);
             if (latest != null && latest != musicCollection) {
                 musicCollection = latest;
                 unregisterTracksSync();

@@ -8,6 +8,7 @@ import indi.etern.musichud.MusicHud;
 import indi.etern.musichud.beans.music.MusicDetail;
 import indi.etern.musichud.client.audio.NowPlayingInfo;
 import indi.etern.musichud.client.audio.StreamAudioPlayer;
+import indi.etern.musichud.client.network.vanilla.VanillaPlayerProxy;
 import indi.etern.musichud.client.services.music.MusicService;
 import indi.etern.musichud.client.ui.ToastUtil;
 import indi.etern.musichud.interfaces.ClientConfig;
@@ -16,11 +17,12 @@ import indi.etern.musichud.interfaces.IConnectionManager;
 import indi.etern.musichud.network.IClientNetworkService;
 import indi.etern.musichud.network.ProtocolInfo;
 import indi.etern.musichud.network.RequestResponseManager;
-import indi.etern.musichud.network.payloads.pushMessages.c2s.LogoutMessage;
+import indi.etern.musichud.network.payloads.pushMessages.c2s.DisconnectMessage;
 import indi.etern.musichud.network.payloads.requestResponseCycle.ConnectRequest;
 import indi.etern.musichud.network.payloads.requestResponseCycle.ConnectResponse;
 import indi.etern.musichud.network.payloads.requestResponseCycle.GetInitialStateRequest;
 import indi.etern.musichud.network.payloads.requestResponseCycle.GetInitialStateResponse;
+import indi.etern.musichud.server.ServerPlayerRegistry;
 import indi.etern.musichud.utils.IClientDistUtil;
 import lombok.AccessLevel;
 import lombok.Getter;
@@ -96,7 +98,11 @@ public class ConnectionManager implements IConnectionManager {
     @Override
     public synchronized void launchIsolated() {
         mode = ConnectionMode.ISOLATED;
-        IClientLoginService.getInstance().loginToServer();
+        if (Minecraft.getInstance().player != null) {
+            ServerPlayerRegistry.getInstance().join(
+                    VanillaPlayerProxy.ofPlayer(Minecraft.getInstance().player));
+        }
+        IClientLoginService.getInstance().restoreSession();
         MusicService.resetCurrentMusicStatus();
         NowPlayingInfo.getInstance().stop();
         StreamAudioPlayer.getInstance().stop();
@@ -111,7 +117,7 @@ public class ConnectionManager implements IConnectionManager {
 
     @Override
     public synchronized void disconnect() {
-        clientNetworkService.sendToServer(LogoutMessage.MESSAGE);
+        clientNetworkService.sendToServer(DisconnectMessage.INSTANCE);
         MusicService.resetCurrentMusicStatus();
         NowPlayingInfo.getInstance().stop();
         StreamAudioPlayer.getInstance().stop();
@@ -219,10 +225,9 @@ public class ConnectionManager implements IConnectionManager {
                     }
                     connectGeneration.incrementAndGet();
                     MusicHud.setConnectStatus(MusicHud.ConnectStatus.CONNECTED);
-                    clientLoginService.loginToServer();
+                    clientLoginService.restoreSession();
                     requestInitialState();
                 } else {
-                    clientLoginService.logoutAndReloginAsAnonymous();
                     MusicHud.setConnectStatus(MusicHud.ConnectStatus.INCOMPATIBLE);
                 }
             } else {

@@ -13,16 +13,13 @@ import indi.etern.musichud.network.ProtocolCapability;
 import indi.etern.musichud.network.ProtocolInfo;
 import indi.etern.musichud.network.payloads.S2CPayload;
 import indi.etern.musichud.platform.Environment;
-import indi.etern.musichud.server.api.ApiProvider;
 
-import java.util.List;
 import java.util.Objects;
 import java.util.Set;
 
 
 public record ConnectResponse(boolean accepted, String projectId, Version serverVersion,
-                              Set<ProtocolCapability> capabilities,
-                              List<ApiProvider> availableApis) implements S2CPayload {
+                              Set<ProtocolCapability> capabilities) implements S2CPayload {
     public static final ByteBufCodec<ConnectResponse> CODEC =
             ByteBufCodec.composite(
                     Codecs.BOOL,
@@ -33,8 +30,6 @@ public record ConnectResponse(boolean accepted, String projectId, Version server
                     ConnectResponse::serverVersion,
                     Codecs.ofSet(() -> Codecs.ofEnum(ProtocolCapability.class)),
                     ConnectResponse::capabilities,
-                    Codecs.ofList(() -> Codecs.ofEnum(ApiProvider.class)),
-                    ConnectResponse::availableApis,
                     ConnectResponse::new
             );
 
@@ -42,12 +37,11 @@ public record ConnectResponse(boolean accepted, String projectId, Version server
         projectId = Objects.requireNonNullElse(projectId, "");
         Objects.requireNonNull(serverVersion, "serverVersion");
         capabilities = capabilities == null ? Set.of() : Set.copyOf(capabilities);
-        availableApis = availableApis == null ? List.of() : List.copyOf(availableApis);
     }
 
     public static ConnectResponse current(boolean accepted) {
         return new ConnectResponse(accepted, ProtocolInfo.PROJECT_ID, Version.CURRENT,
-                ProtocolInfo.CAPABILITIES, List.of(ApiProvider.TUNEWEAVE));
+                ProtocolInfo.CAPABILITIES);
     }
 
     @RegisterMark

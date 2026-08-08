@@ -43,8 +43,6 @@ import java.util.concurrent.ConcurrentHashMap;
 import java.util.function.BiConsumer;
 import java.util.function.Consumer;
 
-import static indi.etern.musichud.server.api.impl.ncm.CommonCaches.*;
-
 public class MusicService implements IClientMusicService {
     private static final IClientNetworkService clientNetworkService = IClientNetworkService.getInstance();
     private static final ClientConfig clientConfig = ClientConfig.getInstance();
@@ -111,20 +109,20 @@ public class MusicService implements IClientMusicService {
                 MusicHud.EXECUTOR.submit(() -> {
                     if (userCategoryPlaylists != null) {
                         Playlist likeList = userCategoryPlaylists.getLikeList();
-                        if (playlistsCache.asMap().putIfAbsent(likeList.getId(), likeList) == null) {
+                        if (MusicEntityCache.putPlaylistIfAbsent(likeList.getId(), likeList)) {
                             CollectionUpdateNotifier.notifyPlaylistUpdated(likeList.getId());
                         }
                         userCategoryPlaylists.getCreatedPlaylist()
                                 .forEach(playlist -> {
                                     if (playlist.getMusicDetails() != null && playlist.getMusicDetails().size() == playlist.getMusicTrackCount()
-                                            && playlistsCache.asMap().putIfAbsent(playlist.getId(), playlist) == null) {
+                                            && MusicEntityCache.putPlaylistIfAbsent(playlist.getId(), playlist)) {
                                         CollectionUpdateNotifier.notifyPlaylistUpdated(playlist.getId());
                                     }
                                 });
                         userCategoryPlaylists.getSubscribedPlaylist()
                                 .forEach(playlist -> {
                                     if (playlist.getMusicDetails() != null && playlist.getMusicDetails().size() == playlist.getMusicTrackCount()
-                                            && playlistsCache.asMap().putIfAbsent(playlist.getId(), playlist) == null) {
+                                            && MusicEntityCache.putPlaylistIfAbsent(playlist.getId(), playlist)) {
                                         CollectionUpdateNotifier.notifyPlaylistUpdated(playlist.getId());
                                     }
                                 });
@@ -132,7 +130,7 @@ public class MusicService implements IClientMusicService {
                     if (subscribedAlbums != null) {
                         subscribedAlbums.forEach(album -> {
                             if (album.getMusicDetails() != null && album.getMusicDetails().size() == album.getMusicTrackCount()
-                                    && albumsCache.asMap().putIfAbsent(album.getId(), album) == null) {
+                                    && MusicEntityCache.putAlbumIfAbsent(album.getId(), album)) {
                                 CollectionUpdateNotifier.notifyAlbumUpdated(album.getId());
                             }
                         });
@@ -140,7 +138,7 @@ public class MusicService implements IClientMusicService {
                     if (subscribedArtists != null) {
                         subscribedArtists.forEach(artist -> {
                             if (artist.getMusicDetails() != null && !artist.getMusicDetails().isEmpty() && !artist.getDescription().isEmpty()) {
-                                artistsCache.asMap().putIfAbsent(artist.getId(), artist);
+                                MusicEntityCache.putArtistIfAbsent(artist.getId(), artist);
                             }
                         });
                     }
@@ -281,7 +279,7 @@ public class MusicService implements IClientMusicService {
     @Override
     public CompletableFuture<Playlist> loadPlaylistDetail(long id, boolean ignoreCache) {
         if (!ignoreCache) {
-            Playlist cachedPlaylist = playlistsCache.getIfPresent(id);
+            Playlist cachedPlaylist = MusicEntityCache.getPlaylist(id);
             if (cachedPlaylist != null && cachedPlaylist.getMusicDetails() != null
                     && (!cachedPlaylist.getMusicDetails().isEmpty() || cachedPlaylist.getMusicTrackCount() == 0)) {
                 return CompletableFuture.completedFuture(cachedPlaylist);
@@ -294,7 +292,7 @@ public class MusicService implements IClientMusicService {
             }
             return CompletableFuture.supplyAsync(() -> tuneWeave.loadPlaylistDetail(id), MusicHud.EXECUTOR)
                     .thenApply(playlist -> {
-                        playlistsCache.put(id, playlist);
+                        MusicEntityCache.putPlaylist(id, playlist);
                         return playlist;
                     });
         }
@@ -304,7 +302,7 @@ public class MusicService implements IClientMusicService {
     @Override
     public CompletableFuture<Album> loadAlbumDetail(long id, boolean ignoreCache) {
         if (!ignoreCache) {
-            Album cachedAlbum = albumsCache.getIfPresent(id);
+            Album cachedAlbum = MusicEntityCache.getAlbum(id);
             if (cachedAlbum != null && cachedAlbum.getMusicDetails() != null
                     && (!cachedAlbum.getMusicDetails().isEmpty() || cachedAlbum.getMusicTrackCount() == 0)) {
                 return CompletableFuture.completedFuture(cachedAlbum);
@@ -317,7 +315,7 @@ public class MusicService implements IClientMusicService {
             }
             return CompletableFuture.supplyAsync(() -> tuneWeave.loadAlbumDetail(id), MusicHud.EXECUTOR)
                     .thenApply(album -> {
-                        albumsCache.put(id, album);
+                        MusicEntityCache.putAlbum(id, album);
                         return album;
                     });
         }
@@ -483,7 +481,7 @@ public class MusicService implements IClientMusicService {
     @Override
     public CompletableFuture<Artist> loadArtist(long id, boolean ignoreCache) {
         if (!ignoreCache) {
-            Artist cachedArtist = artistsCache.getIfPresent(id);
+            Artist cachedArtist = MusicEntityCache.getArtist(id);
             if (cachedArtist != null && cachedArtist.getMusicDetails() != null) {
                 return CompletableFuture.completedFuture(cachedArtist);
             }
@@ -495,7 +493,7 @@ public class MusicService implements IClientMusicService {
             }
             return CompletableFuture.supplyAsync(() -> tuneWeave.loadArtistDetail(id), MusicHud.EXECUTOR)
                     .thenApply(artist -> {
-                        artistsCache.put(id, artist);
+                        MusicEntityCache.putArtist(id, artist);
                         return artist;
                     });
         }

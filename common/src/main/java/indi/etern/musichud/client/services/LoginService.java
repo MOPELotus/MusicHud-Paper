@@ -3,33 +3,23 @@ package indi.etern.musichud.client.services;
 import icyllis.modernui.mc.MuiModApi;
 import indi.etern.musichud.MusicHud;
 import indi.etern.musichud.beans.api.AutoConnectServerFilterType;
-import indi.etern.musichud.beans.login.LoginCookieInfo;
-import indi.etern.musichud.beans.login.LoginType;
 import indi.etern.musichud.beans.user.Profile;
 import indi.etern.musichud.beans.user.ProfileConfigData;
 import indi.etern.musichud.client.interfaces.IClientEventService;
 import indi.etern.musichud.client.network.vanilla.VanillaPlayerProxy;
 import indi.etern.musichud.client.ui.pages.account.AccountBaseView;
-import indi.etern.musichud.client.ui.pages.account.LoginView;
 import indi.etern.musichud.client.services.tuneweave.TuneWeaveClientService;
 import indi.etern.musichud.client.services.tuneweave.TuneWeaveSession;
 import indi.etern.musichud.client.services.music.MusicService;
 import indi.etern.musichud.interfaces.*;
-import indi.etern.musichud.network.IClientNetworkService;
-import indi.etern.musichud.network.NetworkReceiver;
-import indi.etern.musichud.network.payloads.pushMessages.c2s.AnonymousLoginMessage;
-import indi.etern.musichud.network.payloads.pushMessages.c2s.CookieLoginMessage;
-import indi.etern.musichud.network.payloads.pushMessages.c2s.LogoutMessage;
-import indi.etern.musichud.network.payloads.pushMessages.s2c.LoginResultMessage;
-import indi.etern.musichud.server.api.impl.ncm.LoginApiService;
 import indi.etern.musichud.server.api.ApiServerManager;
 import indi.etern.musichud.server.api.tuneweave.TuneWeavePlatform;
+import indi.etern.musichud.server.ServerPlayerRegistry;
 import lombok.AccessLevel;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.multiplayer.ServerData;
-import net.minecraft.client.resources.language.I18n;
 import org.apache.logging.log4j.Logger;
 
 import java.util.List;
@@ -40,7 +30,6 @@ import java.util.regex.Pattern;
 
 @NoArgsConstructor(access = AccessLevel.PRIVATE)
 public class LoginService implements IClientLoginService {
-    private static final IClientNetworkService clientNetworkService = IClientNetworkService.getInstance();
     private static final ClientConfig clientConfig = ClientConfig.getInstance();
     private static final Logger logger = MusicHud.getLogger(LoginService.class);
     private static final TuneWeaveClientService tuneWeave = TuneWeaveClientService.getInstance();
@@ -50,53 +39,6 @@ public class LoginService implements IClientLoginService {
     @Getter
     private volatile String lastLoginErrorMessage;
     private final AtomicInteger platformSessionVersion = new AtomicInteger(0);
-    @Getter
-    NetworkReceiver<LoginResultMessage> loginResultReceiver = (loginResult, player) -> {
-        MusicHud.EXECUTOR.submit(() -> {
-            Thread.currentThread().setName("MHWorker-Login-V");
-            LoginCookieInfo loginCookieInfo = loginResult.loginCookieInfo();
-            LoginType type = loginCookieInfo.type();
-            Profile profile = loginResult.profile();
-            if (type != LoginType.UNLOGGED && type != LoginType.ANONYMOUS && loginResult.success()) {
-                loginCookieInfo.setToClientCookie();
-                Profile.setCurrent(profile);
-                lastLoginErrorMessage = null;
-            } else if (type == LoginType.ANONYMOUS && Profile.ANONYMOUS.equals(profile)) {
-                loginCookieInfo.setToClientCookie();
-                if (availableTuneWeavePlatform() == null) {
-                    Profile.setCurrent(Profile.ANONYMOUS);
-                } else {
-                    restoreTuneWeaveSession();
-                }
-                lastLoginErrorMessage = null;
-            } else {
-                logger.warn("Login failed");
-                lastLoginErrorMessage = resolveLoginErrorMessage(loginResult.message());
-            }
-            notifyLoginStateChanged();
-            AccountBaseView accountBaseView = AccountBaseView.getInstance();
-            if (accountBaseView != null) {
-                if (loginResult.success()) {
-                    ProfileConfigData profileConfigData = ProfileConfigData.getInstance();
-                    profileConfigData.setProfile(profile);
-                    profileConfigData.saveToConfig();
-                    MuiModApi.postToUiThread(accountBaseView::refresh);
-                } else {
-                    MuiModApi.postToUiThread(() -> {
-                        accountBaseView.refresh();
-                        String message = resolveLoginErrorMessage(loginResult.message());
-                        accountBaseView.onLoginFailed(message);
-                        LoginView loginView = LoginView.getInstance();
-                        if (loginView != null) {
-                            loginView.reset();
-                            loginView.errorText(message);
-                        }
-                    });
-                }
-            }
-        });
-    };
-
     public static LoginService getInstance() {
         if (instance == null) {
             synchronized (LoginService.class) {
@@ -115,15 +57,13 @@ public class LoginService implements IClientLoginService {
 
     @Override
     public LoginState getLoginState() {
-        LoginCookieInfo loginCookieInfo = LoginCookieInfo.clientCurrentCookie();
-        LoginType type = loginCookieInfo.type();
         Profile current = Profile.getCurrent();
         boolean tuneWeaveCredential = availableTuneWeavePlatform() != null;
         boolean realProfile = current != null && !current.equals(Profile.ANONYMOUS);
         if (tuneWeaveCredential && realProfile) {
             return LoginState.LOGGED_IN;
         }
-        if (type == LoginType.ANONYMOUS || Profile.ANONYMOUS.equals(current)) {
+        if (Profile.ANONYMOUS.equals(current)) {
             return LoginState.ANONYMOUS;
         }
         return LoginState.UNLOGGED;
@@ -142,21 +82,12 @@ public class LoginService implements IClientLoginService {
         loginStateListeners.forEach(listener -> listener.accept(state));
     }
 
-    private static String resolveLoginErrorMessage(String message) {
-        if (message != null && message.startsWith(MusicHud.MOD_ID)) {
-            return I18n.get(message);
-        }
-        return message;
-    }
-
     public void clearLastLoginErrorMessage() {
         lastLoginErrorMessage = null;
     }
 
     @Override
-    public boolean hasPreviousLoginInfo() {
-        // TuneWeave owns platform credentials in client mode. The old server
-        // cookie is intentionally ignored by the new API integration.
+    public boolean hasStoredSession() {
         return availableTuneWeavePlatform() != null;
     }
 
@@ -168,25 +99,12 @@ public class LoginService implements IClientLoginService {
     }
 
     @Override
-    public void loginToServer() {
-        logger.info("Joining the MusicHud TuneWeave server anonymously; TuneWeave credentials stay client-owned");
-        loginAsAnonymousToServer();
-        if (availableTuneWeavePlatform() != null) {
-            restoreTuneWeaveSession();
-        }
-    }
-
-    private void loginAsAnonymousToServer() {
-        LoginCookieInfo loginCookieInfo = LoginCookieInfo.clientCurrentCookie();
-        if (loginCookieInfo.type() == LoginType.ANONYMOUS) {
-            clientNetworkService.sendToServer(new CookieLoginMessage(loginCookieInfo, false));
-        } else {
-            clientNetworkService.sendToServer(AnonymousLoginMessage.REQUEST);
-        }
+    public void restoreSession() {
+        restoreTuneWeaveSession();
     }
 
     @Override
-    public void logoutAndReloginAsAnonymous() {
+    public void logout() {
         platformSessionVersion.incrementAndGet();
         MusicHud.EXECUTOR.execute(() -> {
             try {
@@ -195,10 +113,8 @@ public class LoginService implements IClientLoginService {
                 tuneWeave.clearCredential(tuneWeave.defaultPlatform());
                 logger.warn("TuneWeave logout failed; discarded the local caller credential");
             }
-            clientNetworkService.sendToServer(LogoutMessage.MESSAGE);
             Profile.setCurrent(Profile.ANONYMOUS);
             notifyLoginStateChanged();
-            loginAsAnonymousToServer();
             refreshAccountView();
         });
     }
@@ -288,9 +204,9 @@ public class LoginService implements IClientLoginService {
                     LoginService loginService = LoginService.getInstance();
                     if (status == ApiServerManager.BinaryApiServerStatus.RUNNING
                             && Minecraft.getInstance().player != null
-                            && loginService.hasPreviousLoginInfo()
+                            && loginService.hasStoredSession()
                             && !loginService.isLogined()) {
-                        loginService.loginToServer();
+                        loginService.restoreSession();
                     }
                 });
             }
@@ -319,15 +235,8 @@ public class LoginService implements IClientLoginService {
                 });
             });
             eventService.registerClientPlayerQuit((player) -> {
-                MusicHud.EXECUTOR.execute(() -> {
-                    if (MusicHud.getConnectStatus() == MusicHud.ConnectStatus.NOT_CONNECTED) {
-                        if (clientConfig.getEnableIsolatedMode()) {
-                            LoginApiService.getInstance().logout(VanillaPlayerProxy.ofPlayer(player));
-                        }
-                    } else {
-                        MusicHud.setConnectStatus(MusicHud.ConnectStatus.NOT_CONNECTED);
-                    }
-                });
+                ServerPlayerRegistry.getInstance().leave(VanillaPlayerProxy.ofPlayer(player));
+                MusicHud.setConnectStatus(MusicHud.ConnectStatus.NOT_CONNECTED);
             });
         }
     }

@@ -4,27 +4,17 @@ import indi.etern.musichud.beans.api.SearchType;
 import indi.etern.musichud.beans.music.*;
 import indi.etern.musichud.beans.music.actions.SubscribableType;
 import indi.etern.musichud.beans.music.actions.SubscribeAction;
-import indi.etern.musichud.server.api.impl.ncm.MusicApiService;
 import indi.etern.musichud.server.api.impl.tuneweave.TuneWeaveMusicApiService;
 import org.jetbrains.annotations.Nullable;
 
 import java.util.LinkedHashSet;
 import java.util.List;
-import java.util.Objects;
 import java.util.UUID;
 import java.util.function.Function;
 
 public interface IMusicApiService {
-    static IMusicApiService getInstance(ApiProvider apiProvider) {
-        if (Objects.requireNonNull(apiProvider) == ApiProvider.TUNEWEAVE) {
-            return TuneWeaveMusicApiService.getInstance();
-        }
-        if (apiProvider == ApiProvider.NCM) {
-            // Keep the old enum value as a source-compatible alias while the
-            // active provider is TuneWeave.
-            return TuneWeaveMusicApiService.getInstance();
-        }
-        throw new IllegalArgumentException("Invalid api provider");
+    static IMusicApiService getInstance() {
+        return TuneWeaveMusicApiService.getInstance();
     }
 
     Playlist getPlaylistDetail(long id, boolean ignoreCache, @Nullable UUID player);

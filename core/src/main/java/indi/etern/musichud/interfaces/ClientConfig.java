@@ -2,7 +2,6 @@ package indi.etern.musichud.interfaces;
 
 import indi.etern.musichud.MusicHud;
 import indi.etern.musichud.beans.api.AutoConnectServerFilterType;
-import indi.etern.musichud.beans.login.LoginCookieInfo;
 import indi.etern.musichud.beans.music.Quality;
 import indi.etern.musichud.beans.user.ProfileConfigData;
 import indi.etern.musichud.platform.Environment;
@@ -92,10 +91,6 @@ public interface ClientConfig {
     int getHudCornerRadius();
 
     void setHudCornerRadius(int hudCornerRadius);
-
-    LoginCookieInfo getClientCookie();
-
-    void setClientCookie(LoginCookieInfo clientCookie);
 
     ProfileConfigData getClientAccountConfig();
 

@@ -224,7 +224,6 @@
   "music_hud.field.hint.searchMusic": "搜尋音樂 ...",
   "music_hud.increase_volume": "提高音量",
   "music_hud.internal.clientAccountConfig": "用戶端內部帳戶資訊",
-  "music_hud.internal.clientCookie": "用戶端內部 Cookie",
   "music_hud.modal.clearApiLogs.button1": "是",
   "music_hud.modal.clearApiLogs.button2": "否",
   "music_hud.modal.clearApiLogs.warning": "確定要清除所有 API 伺服器日誌嗎？",

@@ -37,7 +37,7 @@ public class MusicPlayerServerService {
     private static final long DEBOUNCE_DELAY_MILLIS = 500;
     private static volatile MusicPlayerServerService instance;
     final Map<PusherInfo, Set<IdlePlaySource>> idlePlaySources = new ConcurrentHashMap<>();
-    private final IMusicApiService musicApiService = IMusicApiService.getInstance(ApiProvider.TUNEWEAVE);
+    private final IMusicApiService musicApiService = IMusicApiService.getInstance();
     private final CurrentVoteInfo currentVoteInfo = new CurrentVoteInfo();
     private final Logger logger = MusicHud.getLogger(MusicPlayerServerService.class);
     private final IServerNetworkService serverNetworkService = IServerNetworkService.getInstance();

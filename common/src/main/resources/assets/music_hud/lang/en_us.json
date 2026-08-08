@@ -224,7 +224,6 @@
   "music_hud.field.hint.searchMusic": "Search music ...",
   "music_hud.increase_volume": "Increase volume",
   "music_hud.internal.clientAccountConfig": "Client internal Account Config",
-  "music_hud.internal.clientCookie": "Client internal cookie",
   "music_hud.modal.clearApiLogs.button1": "Yes",
   "music_hud.modal.clearApiLogs.button2": "No",
   "music_hud.modal.clearApiLogs.warning": "Are you sure you want to clear all API server logs?",

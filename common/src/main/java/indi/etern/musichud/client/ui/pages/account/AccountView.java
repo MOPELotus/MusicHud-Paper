@@ -47,7 +47,7 @@ import static icyllis.modernui.view.ViewGroup.LayoutParams.WRAP_CONTENT;
 public class AccountView extends LinearLayout {
     @Getter
     private static AccountView instance;
-    private final IClientLoginService IClientLoginService = LoginService.getInstance();
+    private final IClientLoginService clientLoginService = LoginService.getInstance();
     private final TuneWeaveClientService tuneWeave = TuneWeaveClientService.getInstance();
     private TuneWeavePlatform selectedPlatform = tuneWeave.defaultPlatform();
     private boolean showingUniPlaylists;
@@ -326,7 +326,7 @@ public class AccountView extends LinearLayout {
         var background2 = backgroundFactory.newBackgroundDrawable();
         logoutButton.setBackground(background2);
         logoutButton.setOnClickListener(b -> {
-            IClientLoginService.logoutAndReloginAsAnonymous();
+            clientLoginService.logout();
         });
         buttonsLayout.addView(logoutButton, new LayoutParams(WRAP_CONTENT, WRAP_CONTENT));
 

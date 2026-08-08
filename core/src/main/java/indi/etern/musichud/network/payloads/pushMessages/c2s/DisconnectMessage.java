@@ -7,23 +7,22 @@ import indi.etern.musichud.network.INetworkRegister;
 import indi.etern.musichud.network.payloads.C2SPayload;
 import indi.etern.musichud.server.ServerPlayerRegistry;
 import indi.etern.musichud.utils.ServerDataPacketVThreadExecutor;
-import lombok.AccessLevel;
-import lombok.NoArgsConstructor;
 
-@NoArgsConstructor(access = AccessLevel.PUBLIC)
-public class LogoutMessage implements C2SPayload {
-    public static final LogoutMessage MESSAGE = new LogoutMessage();
-    public static final ByteBufCodec<LogoutMessage> CODEC = ByteBufCodec.unit(MESSAGE);
+public final class DisconnectMessage implements C2SPayload {
+    public static final DisconnectMessage INSTANCE = new DisconnectMessage();
+    public static final ByteBufCodec<DisconnectMessage> CODEC = ByteBufCodec.unit(INSTANCE);
+
+    private DisconnectMessage() {
+    }
 
     @RegisterMark
-    public static class RegisterImpl implements CommonRegister {
+    public static final class RegisterImpl implements CommonRegister {
         @Override
         public void register() {
             INetworkRegister.getInstance().autoRegisterPayload(
-                    LogoutMessage.class, CODEC,
+                    DisconnectMessage.class, CODEC,
                     ServerDataPacketVThreadExecutor.execute((message, player) ->
-                            ServerPlayerRegistry.getInstance().leave(player))
-            );
+                            ServerPlayerRegistry.getInstance().leave(player)));
         }
     }
 }
