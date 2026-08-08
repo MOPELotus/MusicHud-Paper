@@ -41,14 +41,32 @@ class WordByWordLyricParserTest {
         assertEquals(4, line.phraseEndingOffsetMap().get(Duration.ofMillis(1000)));
     }
 
+    @Test
+    void expandsMultipleLineTimestampsAndShiftsPhraseTiming() {
+        List<WordByWordLyricParser.LyricLineMetaData> lines = parseLines(
+                "[0,1000][2000,1000](0,500)逐字(500,500)歌词");
+
+        assertEquals(2, lines.size());
+        assertEquals(Duration.ZERO, lines.get(0).startTime());
+        assertEquals(Duration.ofMillis(2000), lines.get(1).startTime());
+        assertEquals("逐字歌词", lines.get(1).lyric());
+        assertEquals(2, lines.get(1).phraseEndingOffsetMap().get(Duration.ofMillis(2500)));
+        assertEquals(4, lines.get(1).phraseEndingOffsetMap().get(Duration.ofMillis(3000)));
+    }
+
     private static WordByWordLyricParser.LyricLineMetaData parseSingleLine(String lyric) {
+        List<WordByWordLyricParser.LyricLineMetaData> lines = parseLines(lyric);
+        assertEquals(1, lines.size());
+        return lines.getFirst();
+    }
+
+    private static List<WordByWordLyricParser.LyricLineMetaData> parseLines(String lyric) {
         List<WordByWordLyricParser.LyricLineMetaData> lines = new ArrayList<>();
         WordByWordLyricParser.matchLine(lyric, line -> {
             if (line.type() == LyricLine.Type.NORMAL) {
                 lines.add(line);
             }
         });
-        assertEquals(1, lines.size());
-        return lines.getFirst();
+        return lines;
     }
 }

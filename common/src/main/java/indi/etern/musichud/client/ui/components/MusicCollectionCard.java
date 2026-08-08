@@ -147,8 +147,11 @@ public class MusicCollectionCard extends LinearLayout {
             ToggleSubscribeButton toggleSubscribeButton = new ToggleSubscribeButton(context);
             toggleSubscribeButton.setBackground(backgroundFactory.newBackgroundDrawable());
             row1.addView(toggleSubscribeButton, new LayoutParams(row2.dp(22), row2.dp(22), 0));
-            if (musicCollection instanceof Playlist playlist) {
-                if (playlist.getCreator().getUserId() == Profile.getCurrent().getUserId()) {
+            Profile currentProfile = Profile.getCurrent();
+            if (currentProfile == null || currentProfile.equals(Profile.ANONYMOUS)) {
+                toggleSubscribeButton.setVisibility(GONE);
+            } else if (musicCollection instanceof Playlist playlist) {
+                if (playlist.getCreator().getUserId() == currentProfile.getUserId()) {
                     toggleSubscribeButton.setVisibility(GONE);
                 } else {
                     var subscribeState = musicService.getPlaylistSubscribeState(playlist);
