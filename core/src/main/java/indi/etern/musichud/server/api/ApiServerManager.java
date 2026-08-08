@@ -14,10 +14,10 @@ import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
-import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.function.Consumer;
 
 @RegisterMark
@@ -41,10 +41,10 @@ public class ApiServerManager implements ServerRegister {
 
     private final Logger apiLogger = LogManager.getLogger(MusicHud.LOGGER_BASE_NAME + "/API");
     @Getter
-    private final List<Consumer<BinaryApiServerStatus>> apiStatusListeners = new ArrayList<>();
+    private final List<Consumer<BinaryApiServerStatus>> apiStatusListeners = new CopyOnWriteArrayList<>();
     private volatile Process process;
     @Getter
-    private BinaryApiServerStatus binaryApiServerStatus = BinaryApiServerStatus.STOPPED;
+    private volatile BinaryApiServerStatus binaryApiServerStatus = BinaryApiServerStatus.STOPPED;
     private int triedCount = 0;
     private boolean initialized = false;
     private Thread hook;
@@ -195,7 +195,7 @@ public class ApiServerManager implements ServerRegister {
 
                     CompletableFuture<Integer> future = new CompletableFuture<>();
                     processFuture = future;
-                    MusicHud.EXECUTOR.execute(() -> waitForTuneWeave(launchedProcess));
+                    MusicHud.EXECUTOR.execute(() -> waitForTuneWeave(launchedProcess, executablePath));
 
                     MusicHud.EXECUTOR.execute(() -> {
                         Thread.currentThread().setName("MHWorker-API-Console");
@@ -266,7 +266,7 @@ public class ApiServerManager implements ServerRegister {
         return Files.isRegularFile(path) && (windows || Files.isExecutable(path));
     }
 
-    private void waitForTuneWeave(Process launchedProcess) {
+    private void waitForTuneWeave(Process launchedProcess, Path executablePath) {
         for (int attempt = 0; attempt < 120; attempt++) {
             if (process != launchedProcess || !launchedProcess.isAlive()) {
                 return;
@@ -274,6 +274,16 @@ public class ApiServerManager implements ServerRegister {
             if (TuneWeaveApiClient.isAvailable()) {
                 setApiStatus(BinaryApiServerStatus.RUNNING);
                 apiLogger.info("TuneWeave API server started");
+                ApiBinaryUpdateService.CleanupReport cleanup = ApiBinaryUpdateService.getInstance()
+                        .cleanupObsoleteManagedBinaries(executablePath.toAbsolutePath().getParent(), executablePath);
+                if (!cleanup.skipped() && (cleanup.deleted() > 0 || cleanup.missing() > 0)) {
+                    apiLogger.info("Cleaned {} obsolete TuneWeave binaries and {} stale manifest entries",
+                            cleanup.deleted(), cleanup.missing());
+                }
+                if (cleanup.failed() > 0 || cleanup.rejected() > 0) {
+                    apiLogger.warn("Deferred cleanup of {} TuneWeave binaries; rejected {} unsafe manifest entries",
+                            cleanup.failed(), cleanup.rejected());
+                }
                 return;
             }
             try {
@@ -315,7 +325,13 @@ public class ApiServerManager implements ServerRegister {
 
     private void setApiStatus(BinaryApiServerStatus status) {
         binaryApiServerStatus = status;
-        apiStatusListeners.forEach(l -> l.accept(status));
+        for (Consumer<BinaryApiServerStatus> listener : apiStatusListeners) {
+            try {
+                listener.accept(status);
+            } catch (RuntimeException error) {
+                apiLogger.warn("TuneWeave API status listener failed for {}", status, error);
+            }
+        }
     }
 
     public enum BinaryApiServerStatus {

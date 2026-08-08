@@ -710,7 +710,7 @@ public class ConfigView extends LinearLayout {
         while (!Files.isDirectory(path)) {
             path = path.getParent();
             if (path == null) {
-                path = Paths.get("music-hud");
+                path = Paths.get("musichud-tuneweave");
                 break;
             }
         }
@@ -1016,10 +1016,14 @@ public class ConfigView extends LinearLayout {
                     ToastUtil.show(I18n.get(MusicHud.MOD_ID + ".modal.downloadApiServer.renameFailed"));
                     return;
                 }
-                updateService.updateMhApiJson(targetDir[0], downloaded.tag(),
-                        downloaded.version(), finalPath.getFileName().toString());
+                if (!updateService.recordManagedInstallation(targetDir[0], downloaded.tag(),
+                        downloaded.version(), finalPath.getFileName().toString())) {
+                    ToastUtil.show(I18n.get(MusicHud.MOD_ID + ".modal.downloadApiServer.renameFailed"));
+                    return;
+                }
                 String configPath = updateService.relativizePath(finalPath);
                 serverConfig.setServerApiBinaryExecutablePath(configPath);
+                serverConfig.save();
                 if (serverApiBinaryPathInput[0] != null) {
                     serverApiBinaryPathInput[0].setText(configPath);
                 }
@@ -1062,7 +1066,7 @@ public class ConfigView extends LinearLayout {
                     latest[0] = r;
                     releaseLabel.setText(I18n.get(MusicHud.MOD_ID + ".modal.downloadApiServer.release.label")
                             .replace("{tag}", r.tag()));
-                    String oldVersion = ApiBinaryUpdateService.getInstance().checkExistingVersion(targetDir[0], r.tag());
+                    String oldVersion = ApiBinaryUpdateService.getInstance().findInstalledVersion(targetDir[0], r.tag());
                     if (oldVersion != null) {
                         warning.setText(I18n.get(MusicHud.MOD_ID + ".modal.downloadApiServer.existingVersion")
                                 .replace("{version}", oldVersion).replace("{tag}", r.tag()));
@@ -1085,7 +1089,7 @@ public class ConfigView extends LinearLayout {
             warning.setVisibility(GONE);
             return;
         }
-        String oldVersion = ApiBinaryUpdateService.getInstance().checkExistingVersion(targetDir, tag);
+        String oldVersion = ApiBinaryUpdateService.getInstance().findInstalledVersion(targetDir, tag);
         if (oldVersion != null) {
             warning.setText(I18n.get(MusicHud.MOD_ID + ".modal.downloadApiServer.existingVersion")
                     .replace("{version}", oldVersion).replace("{tag}", tag));
