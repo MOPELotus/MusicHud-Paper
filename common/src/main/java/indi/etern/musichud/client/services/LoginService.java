@@ -169,7 +169,7 @@ public class LoginService implements IClientLoginService {
 
     @Override
     public void loginToServer() {
-        logger.info("Joining the Music HUD server anonymously; TuneWeave credentials stay client-owned");
+        logger.info("Joining the MusicHud TuneWeave server anonymously; TuneWeave credentials stay client-owned");
         loginAsAnonymousToServer();
         if (availableTuneWeavePlatform() != null) {
             restoreTuneWeaveSession();

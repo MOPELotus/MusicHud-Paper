@@ -207,7 +207,7 @@ public class ImageUtils {
             URL imageUrl = URI.create(url).toURL();
             connection = (HttpURLConnection) imageUrl.openConnection();
             connection.setRequestMethod("GET");
-            connection.setRequestProperty("User-Agent", "MusicHud/1.0 (+https://github.com/MOPELotus/MusicHud-Paper)");
+            connection.setRequestProperty("User-Agent", "MusicHud-TuneWeave/1 (+" + MusicHud.PROJECT_URL + ")");
             boolean qqCdn = isQqImageHost(imageUrl.getHost());
             // ModernUI's bitmap decoder does not accept the WebP variant
             // returned by QQ CDN when it is advertised in Accept.

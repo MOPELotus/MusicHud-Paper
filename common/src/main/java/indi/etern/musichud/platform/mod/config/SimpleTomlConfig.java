@@ -52,9 +52,9 @@ final class SimpleTomlConfig {
                 Files.createDirectories(parent);
             }
             try (BufferedWriter writer = Files.newBufferedWriter(path, StandardCharsets.UTF_8)) {
-                writer.write("# Music Hud configuration");
+                writer.write("# MusicHud TuneWeave configuration");
                 writer.newLine();
-                writer.write("# This file is managed by Music Hud's built-in config loader.");
+                writer.write("# This file is managed by MusicHud TuneWeave's built-in config loader.");
                 writer.newLine();
                 writer.newLine();
                 for (Entry entry : entries) {

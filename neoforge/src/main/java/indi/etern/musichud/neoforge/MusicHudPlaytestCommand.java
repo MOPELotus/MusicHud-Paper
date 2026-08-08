@@ -16,7 +16,7 @@ final class MusicHudPlaytestCommand {
     }
 
     static void register(CommandDispatcher<CommandSourceStack> dispatcher) {
-        dispatcher.register(Commands.literal("musichud")
+        dispatcher.register(Commands.literal("musichud-tuneweave")
                 .then(Commands.literal("playtest")
                         .then(Commands.literal("stop").executes(context -> stop(context.getSource())))
                         .then(Commands.argument("identifier", StringArgumentType.greedyString())
@@ -29,28 +29,28 @@ final class MusicHudPlaytestCommand {
     private static int play(CommandSourceStack source, String identifier) {
         ServerPlayer player = source.getPlayer();
         if (player == null) {
-            source.sendFailure(Component.literal("Only a player can receive a local MusicHud playtest."));
+            source.sendFailure(Component.literal("Only a player can receive a local MusicHud TuneWeave playtest."));
             return 0;
         }
         IServerNetworkService.getInstance().sendToPlayer(
                 VanillaPlayerProxy.ofPlayer(player),
                 new DebugPlaytestMessage(identifier, FormatType.AUTO, false)
         );
-        source.sendSuccess(() -> Component.literal("Requested MusicHud playtest playback."), false);
+        source.sendSuccess(() -> Component.literal("Requested MusicHud TuneWeave playtest playback."), false);
         return 1;
     }
 
     private static int stop(CommandSourceStack source) {
         ServerPlayer player = source.getPlayer();
         if (player == null) {
-            source.sendFailure(Component.literal("Only a player can receive a local MusicHud playtest."));
+            source.sendFailure(Component.literal("Only a player can receive a local MusicHud TuneWeave playtest."));
             return 0;
         }
         IServerNetworkService.getInstance().sendToPlayer(
                 VanillaPlayerProxy.ofPlayer(player),
                 new DebugPlaytestMessage("", FormatType.AUTO, true)
         );
-        source.sendSuccess(() -> Component.literal("Stopped MusicHud playtest playback."), false);
+        source.sendSuccess(() -> Component.literal("Stopped MusicHud TuneWeave playtest playback."), false);
         return 1;
     }
 }

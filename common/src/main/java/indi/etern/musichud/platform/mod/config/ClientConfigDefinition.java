@@ -439,15 +439,15 @@ public class ClientConfigDefinition implements ClientConfig {
     @Override
     public synchronized void save() {
         SimpleTomlConfig.write(SimpleTomlConfig.path(FILE_NAME), List.of(
-                new SimpleTomlConfig.Entry("enable", "Enable Music Hud functions", enable),
+                new SimpleTomlConfig.Entry("enable", "Enable MusicHud TuneWeave functions", enable),
                 new SimpleTomlConfig.Entry("showTranslatedCnLyrics", "Show translated Chinese lyrics", showTranslatedCnLyrics),
                 new SimpleTomlConfig.Entry("disableVanillaMusic", "Disable vanilla game music", disableVanillaMusic),
                 new SimpleTomlConfig.Entry("hideHudWhenNotPlaying", "Hide HUD when not playing music", hideHudWhenNotPlaying),
                 new SimpleTomlConfig.Entry("enableHud", "Enable HUD", enableHud),
                 new SimpleTomlConfig.Entry("enableMarqueeText", "Enable marquee animation on overflow text", enableMarqueeText),
-                new SimpleTomlConfig.Entry("mixWithVanillaSoundVolume", "Mix Music Hud volume with vanilla music volume", mixWithVanillaSoundVolume),
+                new SimpleTomlConfig.Entry("mixWithVanillaSoundVolume", "Mix MusicHud TuneWeave volume with vanilla music volume", mixWithVanillaSoundVolume),
                 new SimpleTomlConfig.Entry("muted", "Record muted switch", muted),
-                new SimpleTomlConfig.Entry("soundVolume", "Sound volume for Music Hud audio", soundVolume),
+                new SimpleTomlConfig.Entry("soundVolume", "Sound volume for MusicHud TuneWeave audio", soundVolume),
                 new SimpleTomlConfig.Entry("soundVolumeInterval", "Sound volume interval for hot key adjustment", soundVolumeInterval),
                 new SimpleTomlConfig.Entry("primaryChosenQuality", "Primary chosen quality", primaryChosenQuality.name()),
                 new SimpleTomlConfig.Entry("mainScreenAdditionalBackgroundDarken", "Main screen additional background darken rate", mainScreenAdditionalBackgroundDarken),

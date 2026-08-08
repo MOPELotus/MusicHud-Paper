@@ -93,7 +93,7 @@ public class ApiServerFetcher {
             try {
                 HttpRequest request = HttpRequest.newBuilder(URI.create(TUNEWEAVE_MANIFEST_URL))
                         .header("Accept", "application/json")
-                        .header("User-Agent", "MusicHUD-TuneWeave")
+                        .header("User-Agent", MusicHud.PROJECT_NAME)
                         .GET().build();
                 HttpResponse<String> response = HTTP.send(request, HttpResponse.BodyHandlers.ofString());
                 if (response.statusCode() != 200) {
@@ -145,7 +145,7 @@ public class ApiServerFetcher {
                 MessageDigest digest = MessageDigest.getInstance("SHA-256");
                 String url = proxy.resolveUrl(artifact.getDownloadUrl());
                 HttpRequest request = HttpRequest.newBuilder(URI.create(url))
-                        .header("User-Agent", "MusicHUD-TuneWeave")
+                        .header("User-Agent", MusicHud.PROJECT_NAME)
                         .GET().build();
                 HttpResponse<InputStream> response = HTTP.send(request, HttpResponse.BodyHandlers.ofInputStream());
                 if (response.statusCode() != 200) throw new IOException("TuneWeave download returned HTTP " + response.statusCode());
@@ -165,7 +165,7 @@ public class ApiServerFetcher {
                 }
                 HttpRequest checksumRequest = HttpRequest.newBuilder(URI.create(
                                 proxy.resolveUrl(artifact.getVerification().getChecksumUrl())))
-                        .header("User-Agent", "MusicHUD-TuneWeave").GET().build();
+                        .header("User-Agent", MusicHud.PROJECT_NAME).GET().build();
                 HttpResponse<String> checksumResponse = HTTP.send(checksumRequest,
                         HttpResponse.BodyHandlers.ofString(java.nio.charset.StandardCharsets.UTF_8));
                 if (checksumResponse.statusCode() != 200) throw new IOException("Checksum download returned HTTP " + checksumResponse.statusCode());

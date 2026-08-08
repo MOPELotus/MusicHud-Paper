@@ -28,7 +28,7 @@ import static indi.etern.musichud.client.services.tuneweave.TuneWeaveJson.string
 import static indi.etern.musichud.client.services.tuneweave.TuneWeaveJson.stringMap;
 import static indi.etern.musichud.client.services.tuneweave.TuneWeaveJson.unwrap;
 
-/** Resolves playable streams for every TuneWeave-backed Music HUD track kind. */
+/** Resolves playable streams for every TuneWeave-backed Minecraft track kind. */
 final class TuneWeavePlaybackService {
     private final TuneWeaveGateway gateway;
 

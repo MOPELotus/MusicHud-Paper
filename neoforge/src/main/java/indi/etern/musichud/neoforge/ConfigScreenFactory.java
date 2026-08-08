@@ -1,5 +1,6 @@
 package indi.etern.musichud.neoforge;
 
+import indi.etern.musichud.MusicHud;
 import indi.etern.musichud.client.ui.screen.MainFragment;
 import indi.etern.musichud.client.ui.screen.MusicHudScreen;
 import net.minecraft.client.gui.screens.Screen;
@@ -14,6 +15,6 @@ public class ConfigScreenFactory implements IConfigScreenFactory {
     public Screen createScreen(@NotNull ModContainer container, @NotNull Screen modListScreen) {
         var fragment = new MainFragment();
         fragment.setDefaultSelectedIndex(3); // Setting page
-        return MusicHudScreen.createScreen(fragment, null, modListScreen, "Music HUD");
+        return MusicHudScreen.createScreen(fragment, null, modListScreen, MusicHud.DISPLAY_NAME);
     }
 }

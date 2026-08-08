@@ -181,14 +181,14 @@ loom {
         client {
             setRunDirectory file("../fabric/run/client")
             jvmArguments.addAll(
-                    "-Dmusichud.log.level=DEBUG",
+                    "-Dmusichud-tuneweave.log.level=DEBUG",
                     "-Dfabric.dli.config=${rootProject.rootDir}/.gradle/loom-cache/projects/${project.name}/launch.cfg"
             )
         }
         server {
             setRunDirectory file("../fabric/run/server")
             jvmArguments.addAll(
-                    "-Dmusichud.log.level=DEBUG",
+                    "-Dmusichud-tuneweave.log.level=DEBUG",
                     "-Dfabric.dli.config=${rootProject.rootDir}/.gradle/loom-cache/projects/${project.name}/launch.cfg"
             )
         }

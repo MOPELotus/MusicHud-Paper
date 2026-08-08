@@ -15,7 +15,7 @@ public class ServerConfigDefinition implements ServerConfig {
 
     private String serverApiBaseUrl = "http://127.0.0.1:7832";
     private boolean startupBinaryApiServerWhenLaunch = true;
-    private String serverApiBinaryExecutablePath = "MusicHud/tuneweave";
+    private String serverApiBinaryExecutablePath = "MusicHud-TuneWeave/tuneweave";
     private double pusherVoteAdditionalRate = 0.5;
     private int port = 7832;
     @Setter

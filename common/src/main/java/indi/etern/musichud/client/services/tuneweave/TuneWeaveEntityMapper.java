@@ -25,7 +25,7 @@ import java.util.function.Function;
 
 import static indi.etern.musichud.client.services.tuneweave.TuneWeaveJson.*;
 
-/** Converts TuneWeave snapshots to Music HUD domain entities and owns their identity cache. */
+/** Converts TuneWeave snapshots to normalized Minecraft-domain entities and owns their identity cache. */
 final class TuneWeaveEntityMapper {
     private final Map<Long, MusicDetail> tracks = new ConcurrentHashMap<>();
     private final Map<Long, Playlist> playlists = new ConcurrentHashMap<>();

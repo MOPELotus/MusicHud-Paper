@@ -2,6 +2,7 @@ package indi.etern.musichud.fabric.config;
 
 import com.terraformersmc.modmenu.api.ConfigScreenFactory;
 import com.terraformersmc.modmenu.api.ModMenuApi;
+import indi.etern.musichud.MusicHud;
 import indi.etern.musichud.client.ui.screen.MusicHudScreen;
 import indi.etern.musichud.client.ui.screen.MainFragment;
 
@@ -11,7 +12,7 @@ public class ModMenuConfigurer implements ModMenuApi {
         return parent -> {
             var fragment = new MainFragment();
             fragment.setDefaultSelectedIndex(3);//Setting page
-            return MusicHudScreen.createScreen(fragment, null, parent, "Music HUD");
+            return MusicHudScreen.createScreen(fragment, null, parent, MusicHud.DISPLAY_NAME);
         };
     }
 }

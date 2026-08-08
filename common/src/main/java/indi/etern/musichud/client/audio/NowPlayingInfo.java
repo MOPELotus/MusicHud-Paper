@@ -122,7 +122,7 @@ public class NowPlayingInfo {
     }
 
     private void jmtcLoop() {
-        jmtc = JMTC.getInstance(new JMTCSettings("Minecraft-MusicHUD", "Minecraft-MusicHUD"));
+        jmtc = JMTC.getInstance(new JMTCSettings("Minecraft-MusicHud-TuneWeave", MusicHud.DISPLAY_NAME));
         JMTCCallbacks jmtcCallbacks = new JMTCCallbacks();
         jmtcCallbacks.onPlay = () -> {
             MusicHud.EXECUTOR.execute(() -> {
@@ -179,7 +179,7 @@ public class NowPlayingInfo {
                         if (splits.length > 1) {
                             suffix = splits[splits.length - 1];
                         }
-                        Path tempFile = Files.createTempFile("MusicHUD-SMTC-Album", "." + suffix);
+                        Path tempFile = Files.createTempFile("MusicHud-TuneWeave-SMTC-Album", "." + suffix);
                         tempFile.toFile().deleteOnExit();
                         artUri = ImageUtils.downloadAsync(picUrl, inputStream -> {
                             try {
@@ -194,7 +194,7 @@ public class NowPlayingInfo {
                     }
                 } else {
                     try {
-                        Path tempFile = Files.createTempFile("MusicHUD-SMTC-Icon", ".png");
+                        Path tempFile = Files.createTempFile("MusicHud-TuneWeave-SMTC-Icon", ".png");
                         tempFile.toFile().deleteOnExit();
                         try (InputStream iconStream = getClass().getResourceAsStream("/assets/music_hud/icon.png")) {
                             if (iconStream != null) {
