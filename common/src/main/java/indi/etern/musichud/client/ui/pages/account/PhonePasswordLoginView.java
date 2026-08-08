@@ -34,6 +34,7 @@ public class PhonePasswordLoginView extends LinearLayout implements ILoginView {
 
     public PhonePasswordLoginView(Context context) {
         super(context);
+        LoginFeaturePolicy.requireEnabled(LoginFeaturePolicy.LoginMethod.PASSWORD);
         setOrientation(LinearLayout.VERTICAL);
         setGravity(Gravity.CENTER_HORIZONTAL);
 

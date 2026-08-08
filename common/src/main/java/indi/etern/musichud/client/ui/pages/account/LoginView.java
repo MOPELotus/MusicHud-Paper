@@ -17,15 +17,19 @@ import lombok.Getter;
 import lombok.NonNull;
 import net.minecraft.client.resources.language.I18n;
 
+import java.util.List;
+
 import static icyllis.modernui.view.ViewGroup.LayoutParams.MATCH_PARENT;
 import static icyllis.modernui.view.ViewGroup.LayoutParams.WRAP_CONTENT;
 
-public class LoginView extends FrameLayout implements ILoginView{
+public class LoginView extends FrameLayout implements ILoginView {
+    private static final List<LoginFeaturePolicy.LoginMethod> LOGIN_METHODS =
+            LoginFeaturePolicy.enabledMethods();
     @Getter
     private static LoginView instance;
     @Getter
     private final ViewPager pager;
-    private final ILoginView[] loginViews = new ILoginView[3];
+    private final ILoginView[] loginViews = new ILoginView[LOGIN_METHODS.size()];
 
     public LoginView(Context context) {
         super(context);
@@ -92,7 +96,7 @@ public class LoginView extends FrameLayout implements ILoginView{
     private class Adapter extends PagerAdapter {
         @Override
         public int getCount() {
-            return 3;
+            return LOGIN_METHODS.size();
         }
 
         @NonNull
@@ -104,11 +108,10 @@ public class LoginView extends FrameLayout implements ILoginView{
 
             container.addView(sv);
 
-            ILoginView layout = switch (position) {
-                case 0 -> new QRLoginView(context);
-                case 1 -> new PhonePasswordLoginView(context);
-                case 2 -> new PhoneCodeLoginView(context);
-                default -> new QRLoginView(context);
+            ILoginView layout = switch (LOGIN_METHODS.get(position)) {
+                case QR_CODE -> new QRLoginView(context);
+                case PASSWORD -> new PhonePasswordLoginView(context);
+                case DEVICE_CODE -> new PhoneCodeLoginView(context);
             };
             loginViews[position] = layout;
 
@@ -132,11 +135,10 @@ public class LoginView extends FrameLayout implements ILoginView{
 
         @Override
         public CharSequence getPageTitle(int position) {
-            return I18n.get(switch (position) {
-                case 0 -> MusicHud.MOD_ID + ".text.login.page.qrCode";
-                case 1 -> MusicHud.MOD_ID + ".text.login.page.password";
-                case 2 -> MusicHud.MOD_ID + ".text.login.page.deviceCode";
-                default -> "";
+            return I18n.get(switch (LOGIN_METHODS.get(position)) {
+                case QR_CODE -> MusicHud.MOD_ID + ".text.login.page.qrCode";
+                case PASSWORD -> MusicHud.MOD_ID + ".text.login.page.password";
+                case DEVICE_CODE -> MusicHud.MOD_ID + ".text.login.page.deviceCode";
             });
         }
     }
