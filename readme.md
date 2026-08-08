@@ -39,7 +39,7 @@ fabric     Fabric integration and packaging
 neoforge   NeoForge integration and packaging
 ```
 
-更完整的边界说明见 [架构文档](docs/architecture.md) 和 [TuneWeave contract](docs/tuneweave-contract.md)。
+更完整的边界说明见 [架构文档](docs/architecture.md) 和 [TuneWeave contract](docs/tuneweave-contract.md)；对上游默认开发分支的选择性吸收记录见 [upstream-sync.md](docs/upstream-sync.md)。
 
 ## Privacy
 
