@@ -64,9 +64,11 @@ public final class ApiDownloadSession {
 
     public void reportProgress(long downloaded, long total, long expectedGeneration) {
         synchronized (this) {
-            if (generation != expectedGeneration) return;
+            if (generation != expectedGeneration || page != Page.DOWNLOADING) return;
+            this.downloaded = downloaded;
+            this.total = total;
         }
-        reportProgress(downloaded, total);
+        fire();
     }
 
     public void complete(ApiBinaryUpdateService.DownloadedRelease release) {
@@ -81,8 +83,11 @@ public final class ApiDownloadSession {
     public boolean complete(long expectedGeneration, ApiBinaryUpdateService.DownloadedRelease release) {
         synchronized (this) {
             if (generation != expectedGeneration || page != Page.DOWNLOADING) return false;
+            this.release = release;
+            this.page = Page.DONE;
+            this.future = null;
         }
-        complete(release);
+        fire();
         return true;
     }
 
@@ -100,8 +105,13 @@ public final class ApiDownloadSession {
     public boolean fail(long expectedGeneration) {
         synchronized (this) {
             if (generation != expectedGeneration || page != Page.DOWNLOADING) return false;
+            this.page = Page.IDLE;
+            this.release = null;
+            this.future = null;
+            this.downloaded = 0;
+            this.total = -1;
         }
-        fail();
+        fire();
         return true;
     }
 
