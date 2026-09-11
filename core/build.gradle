@@ -16,6 +16,8 @@ dependencies {
     compileOnly "org.projectlombok:lombok:$rootProject.lombok_version"
     compileOnly "org.jetbrains:annotations:26.0.2"
     annotationProcessor "org.projectlombok:lombok:$rootProject.lombok_version"
+    annotationProcessor project(':processor')
+    compileOnly project(':processor')
     testCompileOnly "org.projectlombok:lombok:$rootProject.lombok_version"
     testAnnotationProcessor "org.projectlombok:lombok:$rootProject.lombok_version"
     testImplementation "org.junit.jupiter:junit-jupiter:$rootProject.junit_version"
@@ -30,25 +32,24 @@ dependencies {
     implementation "com.google.guava:guava:33.3.1-jre"
     implementation "io.netty:netty-buffer:4.1.118.Final"
     implementation "io.netty:netty-codec:4.1.118.Final"
-    implementation "com.github.umjammer:jlayer:$rootProject.jlayer_version"
-    implementation "org.jflac:jflac-codec:$rootProject.jflac_version"
     implementation "com.github.hypfvieh:dbus-java-core:$rootProject.dbus_version"
     implementation "com.github.hypfvieh:dbus-java-transport-native-unixsocket:$rootProject.dbus_version"
 }
 
 java {
     withSourcesJar()
-    sourceCompatibility = JavaVersion.VERSION_21
-    targetCompatibility = JavaVersion.VERSION_21
+    sourceCompatibility = JavaVersion.VERSION_25
+    targetCompatibility = JavaVersion.VERSION_25
 }
 
 tasks.withType(JavaCompile).configureEach {
-    it.options.release = 21
+    it.options.release = 25
+    it.options.compilerArgs += ['-Amusichud.module=' + project.name]
 }
 
 test {
-    useJUnitPlatform()
-    enabled = false
+    useJUnitPlatform { excludeTags 'integration' }
+    enabled = true
 }
 
 publishing {

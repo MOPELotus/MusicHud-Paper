@@ -14,8 +14,9 @@ dependencyResolutionManagement {
     }
 }
 
-rootProject.name = 'music_hud'
+rootProject.name = 'musichud-tuneweave-plugins'
 
 include 'core'
+include 'processor'
 include 'paper'
 include 'velocity'

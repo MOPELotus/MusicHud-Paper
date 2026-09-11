@@ -42,6 +42,8 @@ dependencies {
 
     compileOnly "org.projectlombok:lombok:$rootProject.lombok_version"
     annotationProcessor "org.projectlombok:lombok:$rootProject.lombok_version"
+    compileOnly project(':processor')
+    annotationProcessor project(':processor')
     testCompileOnly "org.projectlombok:lombok:$rootProject.lombok_version"
     testAnnotationProcessor "org.projectlombok:lombok:$rootProject.lombok_version"
     testImplementation "org.junit.jupiter:junit-jupiter:$rootProject.junit_version"
@@ -50,13 +52,14 @@ dependencies {
 
 java {
     withSourcesJar()
-    sourceCompatibility = JavaVersion.VERSION_21
-    targetCompatibility = JavaVersion.VERSION_21
+    sourceCompatibility = JavaVersion.VERSION_25
+    targetCompatibility = JavaVersion.VERSION_25
 }
 
 tasks.withType(JavaCompile).configureEach {
-    options.release = 21
+    options.release = 25
     options.encoding = 'UTF-8'
+    options.compilerArgs += ['-Amusichud.module=paper']
 }
 
 tasks.withType(Test).configureEach {
@@ -86,6 +89,8 @@ tasks.shadowJar {
     configurations = [project.configurations.shadowBundle]
     archiveClassifier = ''
 }
+
+tasks.jar { archiveClassifier = 'plain' }
 
 tasks.assemble {
     dependsOn tasks.shadowJar

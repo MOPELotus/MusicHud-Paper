@@ -41,19 +41,26 @@ dependencies {
 
     compileOnly "org.projectlombok:lombok:$rootProject.lombok_version"
     annotationProcessor "org.projectlombok:lombok:$rootProject.lombok_version"
+    compileOnly project(':processor')
+    annotationProcessor project(':processor')
     testImplementation "org.junit.jupiter:junit-jupiter:$rootProject.junit_version"
+    testImplementation project(':core')
+    testImplementation "com.velocitypowered:velocity-api:$rootProject.velocity_api_version"
+    testImplementation "io.netty:netty-buffer:$rootProject.netty_version"
+    testImplementation "io.netty:netty-codec:$rootProject.netty_version"
     testRuntimeOnly "org.junit.platform:junit-platform-launcher"
 }
 
 java {
     withSourcesJar()
-    sourceCompatibility = JavaVersion.VERSION_21
-    targetCompatibility = JavaVersion.VERSION_21
+    sourceCompatibility = JavaVersion.VERSION_25
+    targetCompatibility = JavaVersion.VERSION_25
 }
 
 tasks.withType(JavaCompile).configureEach {
-    options.release = 21
+    options.release = 25
     options.encoding = 'UTF-8'
+    options.compilerArgs += ['-Amusichud.module=velocity']
 }
 
 tasks.withType(Test).configureEach {
@@ -64,6 +71,8 @@ tasks.shadowJar {
     configurations = [project.configurations.shadowBundle]
     archiveClassifier = ''
 }
+
+tasks.jar { archiveClassifier = 'plain' }
 
 tasks.assemble {
     dependsOn tasks.shadowJar

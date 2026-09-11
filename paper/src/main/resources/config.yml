@@ -1,6 +1,2 @@
-serverApiBaseUrl: "http://localhost:3000"
-startupBinaryApiServerWhenLaunch: true
-# Relative paths are resolved from plugins/MusicHud/
-serverApiBinaryExecutablePath: "api"
+# Music accounts and TuneWeave run on clients, not on the server.
 pusherVoteAdditionalRate: 0.5
-useRandomCnIp: true

@@ -6,3 +6,29 @@ allprojects {
     group = rootProject.maven_group
     version = rootProject.mod_version
 }
+
+subprojects {
+    if (name in ['paper', 'velocity']) {
+        plugins.withId('com.gradleup.shadow') {
+            def verifyProtocol = tasks.register('verifyProtocolJar') {
+                dependsOn tasks.named('shadowJar')
+                inputs.file(tasks.named('shadowJar').flatMap { it.archiveFile })
+                doLast {
+                    new java.util.zip.ZipFile(tasks.named('shadowJar').get().archiveFile.get().asFile).withCloseable { zip ->
+                        for (String path : ['META-INF/musichud-registries.core.properties',
+                                            'indi/mopelotus/musichud/network/ProtocolInfo.class',
+                                            'indi/mopelotus/musichud/network/PayloadFragments.class',
+                                            'indi/mopelotus/musichud/beans/music/PlaybackSession.class']) {
+                            if (zip.getEntry(path) == null) throw new GradleException("Missing shared protocol entry ${path}")
+                        }
+                        if (zip.entries().toList().any { it.name.contains('/impl/ncm/') || it.name.contains('CookieLoginRequest')
+                                || it.name.contains('PhonePasswordLoginRequest') || it.name.contains('EmailPasswordLoginRequest') }) {
+                            throw new GradleException('Legacy provider/auth protocol remains in plugin artifact')
+                        }
+                    }
+                }
+            }
+            tasks.named('build').configure { dependsOn verifyProtocol }
+        }
+    }
+}
