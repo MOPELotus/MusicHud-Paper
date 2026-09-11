@@ -1,6 +1,6 @@
-package indi.etern.musichud.client.audio;
+package indi.mopelotus.musichud.client.audio;
 
-import indi.etern.musichud.client.ui.dto.LyricLine;
+import indi.mopelotus.musichud.client.ui.dto.LyricLine;
 import org.junit.jupiter.api.Test;
 
 import java.time.Duration;

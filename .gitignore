@@ -120,3 +120,6 @@ runs/
 
 bin/
 common/logs/
+
+# Local planning and audit notes; never publish roadmap files
+docs/roadmap/

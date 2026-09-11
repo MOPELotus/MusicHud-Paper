@@ -6,6 +6,8 @@ MusicHud TuneWeave 是一个由 TuneWeave 驱动的 Minecraft 音乐播放与同
 
 ## 当前支持范围
 
+模组、资源和网络标识为 `musichud_tuneweave`。不能与上游 MusicHud 并装（Java 包仍有重叠）；加载器会拒绝该组合。已知旧配置与 Uni 歌单首次使用时复制到独立路径，旧文件保留，新文件存在时不覆盖，详见 [迁移说明](docs/protocol.md)。
+
 本分支面向 Minecraft 26.2 / Java 25，当前可直接构建：
 
 - Fabric 客户端模组
@@ -87,7 +89,7 @@ TuneWeave 网络/下载集成测试默认不运行；显式执行：
 
 ## 标识与迁移
 
-本批次已完成项目展示名、Gradle 项目名、构建产物名、日志名与 loader metadata 的独立化。Java package 暂时保留 `indi.etern.musichud.*`；mod ID、网络 namespace 和既有配置/持久化路径需要与协议及迁移测试一起原子调整，详见 [protocol.md](docs/protocol.md)。在该迁移完成前，不支持与 upstream MusicHud 同时安装。
+本批次已完成项目展示名、Gradle 项目名、构建产物名、日志名与 loader metadata 的独立化。Java package 暂时保留 `indi.mopelotus.musichud.*`；mod ID、网络 namespace 和既有配置/持久化路径需要与协议及迁移测试一起原子调整，详见 [protocol.md](docs/protocol.md)。在该迁移完成前，不支持与 upstream MusicHud 同时安装。
 
 ## License 与 attribution
 

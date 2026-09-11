@@ -1,4 +1,4 @@
-package indi.etern.musichud.beans.music;
+package indi.mopelotus.musichud.beans.music;
 
 import io.netty.buffer.ByteBuf;
 import io.netty.buffer.Unpooled;
@@ -25,6 +25,8 @@ class PlaybackSessionCodecTest {
         MusicResourceInfo resource = new MusicResourceInfo(
                 42, "https://8.8.8.8/audio", 320000, 1234,
                 FormatType.MP3, "abc", Fee.UNSET, 90_000);
+        resource.setQualityMetadata(Quality.LOSSLESS, Quality.HIGHER);
+        resource.setResolvedTrackReference("netease:resolved:42");
         PlaybackSession source = new PlaybackSession(
                 UUID.randomUUID(), 9, 3, track, resource,
                 ZonedDateTime.of(2026, 8, 8, 12, 30, 15, 0, ZoneOffset.UTC));
@@ -44,6 +46,9 @@ class PlaybackSessionCodecTest {
                     decoded.musicDetail().getLyricInfo().getLyric().getLyric());
             assertEquals("https://8.8.8.8/audio", decoded.resourceInfo().getUrl());
             assertEquals(source.startTime(), decoded.startTime());
+            assertEquals(Quality.LOSSLESS, decoded.resourceInfo().getRequestedQuality());
+            assertEquals(Quality.HIGHER, decoded.resourceInfo().getActualQuality());
+            assertEquals("netease:resolved:42", decoded.resourceInfo().getResolvedTrackReference());
         } finally {
             buffer.release();
         }

@@ -1,4 +1,4 @@
-package indi.etern.musichud;
+package indi.mopelotus.musichud;
 
 import io.netty.buffer.ByteBuf;
 import io.netty.buffer.Unpooled;

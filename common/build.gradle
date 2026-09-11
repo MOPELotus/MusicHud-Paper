@@ -9,10 +9,6 @@ base {
     archivesName = "$rootProject.archives_name-$project.name"
 }
 
-def localModernUiDir = rootProject.hasProperty('local_modernui_dir')
-        ? rootProject.file(rootProject.property('local_modernui_dir'))
-        : rootProject.file('../modernui-mc')
-
 repositories {
     maven {
         name = 'NeoForged'
@@ -87,7 +83,7 @@ dependencies {
 
     api "dev.icyllis:modernui-core:$rootProject.modernui_version"
     api "icyllis.modernui:ModernUI-Markflow:$rootProject.modernui_version"
-    compileOnly files(new File(localModernUiDir, "neoforge/build/libs/ModernUI-NeoForge-${rootProject.minecraft_version}-${rootProject.local_modernui_version}.jar"))
+    compileOnly "io.github.mopelotus.modernui:ModernUI-NeoForge:$rootProject.modernui_fork_version@jar"
 
     implementation "dev.arbjerg:lavaplayer:$rootProject.lavaplayer_version"
     implementation "com.github.hypfvieh:dbus-java-core:$rootProject.dbus_version"

@@ -1,6 +1,6 @@
-package indi.etern.musichud.server;
+package indi.mopelotus.musichud.server;
 
-import indi.etern.musichud.beans.music.PusherInfo;
+import indi.mopelotus.musichud.beans.music.PusherInfo;
 import org.junit.jupiter.api.Test;
 
 import java.util.UUID;

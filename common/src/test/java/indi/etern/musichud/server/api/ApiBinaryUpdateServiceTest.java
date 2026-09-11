@@ -1,4 +1,4 @@
-package indi.etern.musichud.server.api;
+package indi.mopelotus.musichud.server.api;
 
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;

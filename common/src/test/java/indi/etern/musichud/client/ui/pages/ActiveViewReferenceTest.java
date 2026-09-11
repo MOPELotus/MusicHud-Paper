@@ -1,4 +1,4 @@
-package indi.etern.musichud.client.ui.pages;
+package indi.mopelotus.musichud.client.ui.pages;
 
 import org.junit.jupiter.api.Test;
 

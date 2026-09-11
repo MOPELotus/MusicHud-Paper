@@ -1,13 +1,16 @@
-package indi.etern.musichud.client.utils.lyrics;
+package indi.mopelotus.musichud.client.utils.lyrics;
 
-import indi.etern.musichud.client.ui.dto.LyricLine;
+import indi.mopelotus.musichud.beans.music.Lyric;
+import indi.mopelotus.musichud.beans.music.LyricInfo;
+import indi.mopelotus.musichud.beans.music.MusicDetail;
+import indi.mopelotus.musichud.client.ui.dto.LyricLine;
 import org.junit.jupiter.api.Test;
 
 import java.time.Duration;
 import java.util.ArrayList;
 import java.util.List;
 
-import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.*;
 
 class WordByWordLyricParserTest {
     @Test
@@ -52,6 +55,26 @@ class WordByWordLyricParserTest {
         assertEquals("逐字歌词", lines.get(1).lyric());
         assertEquals(2, lines.get(1).phraseEndingOffsetMap().get(Duration.ofMillis(2500)));
         assertEquals(4, lines.get(1).phraseEndingOffsetMap().get(Duration.ofMillis(3000)));
+    }
+
+    @Test
+    void attachesQqLrcTranslationToNearbyQrcLinesAndIgnoresPlaceholders() {
+        MusicDetail detail = MusicDetail.fromTuneWeave(1, "qq:004Nn9kj2qndCo", "track", "DAMIDAMI", 180000, null, List.of());
+        detail.setLyricInfo(new LyricInfo(
+                new Lyric(""),
+                new Lyric("[ti:DAMIDAMI]\n[00:00.00]//\n[00:07.50]明月光，夜夜亮\n[00:09.05]让我来看看：有谁睡得不香？"),
+                new Lyric("[7505,1546](7505,244)Moon's up high\n[9051,1823](9051,449)Counting sheep"),
+                new Lyric("")
+        ));
+
+        List<LyricLine> lines = WordByWordLyricParser.parse(detail).stream()
+                .filter(line -> line.getType() == LyricLine.Type.NORMAL)
+                .toList();
+        assertEquals(2, lines.size());
+        assertEquals("Moon's up high", lines.get(0).getText());
+        assertEquals("明月光，夜夜亮", lines.get(0).getTranslatedText());
+        assertEquals("Counting sheep", lines.get(1).getText());
+        assertEquals("让我来看看：有谁睡得不香？", lines.get(1).getTranslatedText());
     }
 
     private static WordByWordLyricParser.LyricLineMetaData parseSingleLine(String lyric) {

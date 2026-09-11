@@ -1,4 +1,4 @@
-package indi.etern.musichud.client.audio;
+package indi.mopelotus.musichud.client.audio;
 
 import org.junit.jupiter.api.Test;
 

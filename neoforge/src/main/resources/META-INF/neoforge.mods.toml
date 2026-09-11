@@ -4,34 +4,35 @@ issueTrackerURL = "https://github.com/MOPELotus/MusicHud-TuneWeave/issues"
 license = "LGPL-3.0"
 
 [[mods]]
-modId = "music_hud"
+modId = "musichud_tuneweave"
 version = "${version}"
 displayName = "MusicHud TuneWeave"
 authors = "Etern, MOPELotus"
-description = "Minecraft music playback and synchronization powered by TuneWeave | 由 TuneWeave 驱动的 Minecraft 音乐播放与同步项目"
+description = "Client music playback and synchronization powered by TuneWeave | 由 TuneWeave 驱动的客户端音乐播放与同步项目"
 displayURL = "https://github.com/MOPELotus/MusicHud-TuneWeave"
-logoFile = "assets/music_hud/icon.png"
+logoFile = "assets/musichud_tuneweave/icon.png"
 
-[[dependencies.music_hud]]
+[[dependencies.musichud_tuneweave]]
 modId = "neoforge"
 type = "required"
 versionRange = "[26.2,)"
 ordering = "NONE"
 side = "BOTH"
 
-[[dependencies.music_hud]]
+[[dependencies.musichud_tuneweave]]
 modId = "minecraft"
 type = "required"
 versionRange = "[26.2,)"
 ordering = "NONE"
 side = "BOTH"
 
-[[dependencies.music_hud]]
+[[dependencies.musichud_tuneweave]]
 modId = "modernui"
 type = "required"
-versionRange = "[3.12.0.5,)"
+versionRange = "[3.13.0.7,)"
 ordering = "AFTER"
 side = "CLIENT"
 
+
 [[mixins]]
-config = "music_hud.mixins.json"
+config = "musichud_tuneweave.mixins.json"

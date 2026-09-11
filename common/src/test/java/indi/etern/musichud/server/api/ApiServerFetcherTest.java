@@ -1,6 +1,6 @@
-package indi.etern.musichud.server.api;
+package indi.mopelotus.musichud.server.api;
 
-import indi.etern.musichud.MusicHud;
+import indi.mopelotus.musichud.MusicHud;
 import lombok.SneakyThrows;
 import org.apache.logging.log4j.Logger;
 import org.junit.jupiter.api.Tag;

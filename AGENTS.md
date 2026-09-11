@@ -28,7 +28,7 @@ neoforge   NeoForge lifecycle, networking and packaging
 
 Only those modules are included by this branch's `settings.gradle`. Paper and Velocity are formal server/proxy targets but currently live on dedicated branches; do not claim they build from this branch.
 
-The Java package and transitional mod/network identifier remain `indi.etern.musichud.*` and `music_hud`. This is not an upstream-compatibility promise. Identifier changes must be atomic with protocol/config/data migration and tests.
+The Java package remains `indi.mopelotus.musichud.*`; the independent mod/network/resource identifier is `musichud_tuneweave`. Known legacy config and Uni data files are copied without overwriting current files; see `docs/protocol.md`. Upstream MusicHud cannot be installed alongside this fork because Java packages still overlap. Further identifier changes must be atomic with protocol/config/data migration and tests.
 
 ## Build and test
 

@@ -1,4 +1,4 @@
-package indi.etern.musichud.client.audio.decoder;
+package indi.mopelotus.musichud.client.audio.decoder;
 
 import org.apache.http.ProtocolException;
 import org.junit.jupiter.api.Test;

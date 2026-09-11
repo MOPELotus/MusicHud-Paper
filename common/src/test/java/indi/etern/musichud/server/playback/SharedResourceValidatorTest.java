@@ -1,12 +1,13 @@
-package indi.etern.musichud.server.playback;
+package indi.mopelotus.musichud.server.playback;
 
-import indi.etern.musichud.beans.music.Album;
-import indi.etern.musichud.beans.music.Artist;
-import indi.etern.musichud.beans.music.Fee;
-import indi.etern.musichud.beans.music.FormatType;
-import indi.etern.musichud.beans.music.MusicDetail;
-import indi.etern.musichud.beans.music.MusicResourceInfo;
-import indi.etern.musichud.beans.music.PlaybackSession;
+import indi.mopelotus.musichud.beans.music.Album;
+import indi.mopelotus.musichud.beans.music.Artist;
+import indi.mopelotus.musichud.beans.music.Fee;
+import indi.mopelotus.musichud.beans.music.FormatType;
+import indi.mopelotus.musichud.beans.music.MusicDetail;
+import indi.mopelotus.musichud.beans.music.MusicResourceInfo;
+import indi.mopelotus.musichud.beans.music.PlaybackSession;
+import indi.mopelotus.musichud.beans.music.Quality;
 import org.junit.jupiter.api.Test;
 
 import java.time.ZonedDateTime;
@@ -30,12 +31,17 @@ class SharedResourceValidatorTest {
                 Map.of("User-Agent", "MusicHud", "Authorization", "secret"),
                 List.of("https://1.1.1.1/backup"));
 
+        resource.setQualityMetadata(Quality.HIRES, Quality.LOSSLESS);
+        resource.setResolvedTrackReference("netease:resolved:1");
         PlaybackSession session = SharedResourceValidator.createSession(
                 UUID.randomUUID(), 1, 0, track, track, resource, ZonedDateTime.now());
 
         assertTrue(session.isActive());
         assertEquals(Map.of("user-agent", "MusicHud"), session.resourceInfo().getHeaders());
         assertEquals(List.of("https://1.1.1.1/backup"), session.resourceInfo().getBackupUrls());
+        assertEquals(Quality.HIRES, session.resourceInfo().getRequestedQuality());
+        assertEquals(Quality.LOSSLESS, session.resourceInfo().getActualQuality());
+        assertEquals("netease:resolved:1", session.resourceInfo().getResolvedTrackReference());
     }
 
     @Test
