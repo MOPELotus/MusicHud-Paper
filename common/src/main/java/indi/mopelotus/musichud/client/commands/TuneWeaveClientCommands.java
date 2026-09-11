@@ -19,7 +19,7 @@ public final class TuneWeaveClientCommands {
     private TuneWeaveClientCommands() {}
 
     public static void register(CommandDispatcher<CommandSourceStack> dispatcher) {
-        for (String alias : new String[]{"tuneweave", "mt", "musichud-tuneweave", "musichud"}) {
+        for (String alias : new String[]{"tuneweave"}) {
             dispatcher.register(root(Commands.literal(alias)));
         }
     }
@@ -38,7 +38,7 @@ public final class TuneWeaveClientCommands {
     }
 
     public static <S> void registerFabric(CommandDispatcher<S> dispatcher, java.util.function.BiConsumer<S, Component> feedback) {
-        for (String alias : new String[]{"tuneweave", "mt", "musichud-tuneweave", "musichud"}) {
+        for (String alias : new String[]{"tuneweave"}) {
             dispatcher.register(fabricRoot(com.mojang.brigadier.builder.LiteralArgumentBuilder.<S>literal(alias), feedback));
         }
     }
@@ -67,7 +67,7 @@ public final class TuneWeaveClientCommands {
                 .append(Component.literal("/mt api status").withStyle(ChatFormatting.WHITE)).append(Component.literal("  查看 TuneWeave API\n").withStyle(ChatFormatting.GRAY))
                 .append(Component.literal("/mt me").withStyle(ChatFormatting.WHITE)).append(Component.literal("  查看三平台账号状态\n").withStyle(ChatFormatting.GRAY))
                 .append(Component.literal("/mt skip").withStyle(ChatFormatting.WHITE)).append(Component.literal("  强制/投票切歌\n").withStyle(ChatFormatting.GRAY))
-                .append(Component.literal("别名: /mt /musichud-tuneweave /musichud /tuneweave").withStyle(ChatFormatting.DARK_GRAY));
+                .append(Component.literal("单人客户端命令: /tuneweave；多人服务器请使用服务端 /musichud").withStyle(ChatFormatting.DARK_GRAY));
     }
 
     private static MutableComponent field(String key, String value) {
