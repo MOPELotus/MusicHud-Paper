@@ -12,3 +12,7 @@ commands:
     description: MusicHud TuneWeave administration
     usage: /musichud help
     aliases: [musichud-tuneweave, mt]
+permissions:
+  musichud.admin:
+    description: MusicHud TuneWeave administrator commands
+    default: op

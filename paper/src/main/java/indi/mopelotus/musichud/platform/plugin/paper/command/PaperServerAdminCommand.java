@@ -11,6 +11,8 @@ import org.bukkit.command.Command;
 import org.bukkit.command.CommandExecutor;
 import org.bukkit.command.TabCompleter;
 import org.bukkit.command.PluginCommand;
+import org.bukkit.Bukkit;
+import org.bukkit.entity.Player;
 
 import java.util.List;
 import java.util.Collection;
@@ -19,7 +21,7 @@ import java.util.Locale;
 /** Styled Paper admin command for the TuneWeave public playback server. */
 public final class PaperServerAdminCommand implements CommandExecutor, TabCompleter {
     private static final String PREFIX = ChatColor.DARK_GRAY + "[" + ChatColor.GOLD + "MusicHud TuneWeave" + ChatColor.DARK_GRAY + "] ";
-    private static final List<String> ROOT = List.of("help", "status", "api", "playback");
+    private static final List<String> ROOT = List.of("help", "status", "player", "api", "playback");
 
     public void register(org.bukkit.plugin.java.JavaPlugin plugin) {
         PluginCommand command = plugin.getCommand("musichud");
@@ -36,6 +38,7 @@ public final class PaperServerAdminCommand implements CommandExecutor, TabComple
         switch (sub) {
             case "help", "?" -> help(sender, label);
             case "status" -> status(sender);
+            case "player" -> player(sender, args);
             case "api" -> api(sender, args);
             case "playback" -> playback(sender, args);
             default -> { error(sender, "未知子命令: " + args[0]); hint(sender, "使用 /" + label + " help 查看帮助。"); }
@@ -66,6 +69,19 @@ public final class PaperServerAdminCommand implements CommandExecutor, TabComple
         field(sender, "账号状态", "网易云 / QQ / Bilibili 由客户端持有");
     }
 
+    private void player(CommandSender sender, String[] args) {
+        if (!requireAdmin(sender)) return;
+        if (args.length < 2) { hint(sender, "用法: /musichud player <玩家名>"); return; }
+        Player player = Bukkit.getPlayerExact(args[1]);
+        if (player == null) { error(sender, "未找到在线玩家: " + args[1]); return; }
+        boolean tracked = indi.mopelotus.musichud.server.ServerPlayerRegistry.getInstance().contains(player.getUniqueId());
+        header(sender, "玩家详情");
+        field(sender, "玩家", player.getName());
+        field(sender, "UUID", player.getUniqueId());
+        field(sender, "TuneWeave 连接", tracked ? "已连接" : "未连接");
+        field(sender, "账号", "平台账号由客户端持有");
+    }
+
     private void api(CommandSender sender, String[] args) {
         if (args.length < 2 || !args[1].equalsIgnoreCase("status")) {
             hint(sender, "用法: /musichud api status"); return;
@@ -75,6 +91,7 @@ public final class PaperServerAdminCommand implements CommandExecutor, TabComple
     }
 
     private void playback(CommandSender sender, String[] args) {
+        if (!requireAdmin(sender)) return;
         if (args.length < 2 || !args[1].equalsIgnoreCase("skip")) {
             hint(sender, "用法: /musichud playback skip"); return;
         }
@@ -89,10 +106,17 @@ public final class PaperServerAdminCommand implements CommandExecutor, TabComple
     private void hint(CommandSender sender, String value) { raw(sender, PREFIX + ChatColor.GRAY + value); }
     private void raw(CommandSender sender, String value) { sender.sendMessage(value); }
 
+    private boolean requireAdmin(CommandSender sender) {
+        if (!(sender instanceof Player player) || player.hasPermission("musichud.admin")) return true;
+        error(sender, "你没有权限执行这个命令，需要权限: musichud.admin");
+        return false;
+    }
+
     @Override public List<String> onTabComplete(CommandSender sender, Command command, String alias, String[] args) {
         if (args.length == 1) return ROOT.stream().filter(v -> v.startsWith(args[0].toLowerCase(Locale.ROOT))).toList();
         if (args.length == 2 && args[0].equalsIgnoreCase("api")) return List.of("status");
         if (args.length == 2 && args[0].equalsIgnoreCase("playback")) return List.of("skip");
+        if (args.length == 2 && args[0].equalsIgnoreCase("player")) return Bukkit.getOnlinePlayers().stream().map(Player::getName).toList();
         return List.of();
     }
 }
