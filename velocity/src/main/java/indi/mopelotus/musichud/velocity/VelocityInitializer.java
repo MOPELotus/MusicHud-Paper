@@ -15,6 +15,7 @@ import indi.mopelotus.musichud.platform.Environment;
 import indi.mopelotus.musichud.platform.plugin.velocity.config.VelocityServerConfig;
 import indi.mopelotus.musichud.platform.plugin.velocity.event.VelocityEventService;
 import indi.mopelotus.musichud.platform.plugin.velocity.network.VelocityNetworkManager;
+import indi.mopelotus.musichud.platform.plugin.velocity.command.VelocityAdminCommand;
 import org.slf4j.Logger;
 
 import java.io.IOException;
@@ -33,6 +34,7 @@ public final class VelocityInitializer {
     private final Logger logger;
     private final Path dataDirectory;
     private VelocityNetworkManager networkManager;
+    private VelocityAdminCommand adminCommand;
 
     @Inject
     public VelocityInitializer(ProxyServer proxy, Logger logger, @DataDirectory Path dataDirectory) {
@@ -49,6 +51,11 @@ public final class VelocityInitializer {
         // TuneWeave is client-owned in distributed mode; Velocity only forwards
         // public playback state and must not launch a provider API process.
         VelocityServerConfig.getInstance().setStartupBinaryApiServerWhenLaunch(false);
+        adminCommand = new VelocityAdminCommand();
+        proxy.getCommandManager().register(
+                proxy.getCommandManager().metaBuilder("musichud")
+                        .aliases("mt", "musichud-tuneweave", "tuneweave")
+                        .build(), adminCommand);
 
         networkManager = VelocityNetworkManager.getInstance();
         networkManager.initialize(proxy);
