@@ -54,7 +54,6 @@ import java.nio.file.Paths;
 import java.util.*;
 import java.util.concurrent.CancellationException;
 import java.util.concurrent.CompletableFuture;
-import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.function.Consumer;
 
 import static icyllis.modernui.view.ViewGroup.LayoutParams.MATCH_PARENT;
@@ -910,17 +909,12 @@ public class ConfigView extends LinearLayout {
         content.addView(progressPage);
         content.addView(donePage);
 
-        final ApiBinaryUpdateService.DownloadedRelease[] downloadedRelease = {null};
-
-        enum Page { IDLE, DOWNLOADING, DONE, RESETTING }
-        final Page[] state = {Page.IDLE};
-        final CompletableFuture<?>[] downloadFuture = {null};
-        final AtomicBoolean cancelled = new AtomicBoolean(false);
+        ApiDownloadSession downloadSession = ApiDownloadSession.getInstance();
 
         String baseTitle = I18n.get(MusicHud.MOD_ID + ".modal.downloadApiServer.title");
-        java.util.function.Consumer<Page> setPage = page -> {
+        java.util.function.Consumer<ApiDownloadSession.Page> setPage = page -> {
             switch (page) {
-                case IDLE, RESETTING -> {
+                case IDLE -> {
                     title.setText(baseTitle);
                     idlePage.setVisibility(VISIBLE);
                     progressPage.setVisibility(GONE);
@@ -942,26 +936,26 @@ public class ConfigView extends LinearLayout {
         };
 
         Modal.ActionButton cancelBtn = new Modal.ActionButton(button2Text, (btn, dialog) -> {
-            if (Page.DONE.equals(state[0])) {
-                state[0] = Page.IDLE;
-                setPage.accept(Page.IDLE);
+            if (ApiDownloadSession.Page.DONE.equals(downloadSession.snapshot().page())) {
+                downloadSession.reset();
+                setPage.accept(ApiDownloadSession.Page.IDLE);
                 downloadApiServerButton.setText(I18n.get(MusicHud.MOD_ID + ".button.downloadApiServer"));
             }
             dialog.dismiss();
         });
 
         Modal.ActionButton confirmButton = new Modal.ActionButton(button1Text, (btn, dialog) -> {
-            if (Page.IDLE.equals(state[0])) {
-                cancelled.set(false);
-                state[0] = Page.DOWNLOADING;
+            ApiDownloadSession.Page page = downloadSession.snapshot().page();
+            if (ApiDownloadSession.Page.IDLE.equals(page)) {
+                targetDir[0] = Paths.get(directoryTextInput.getText().toString().trim());
+                if (!downloadSession.tryStart(targetDir[0])) return;
                 btn.setText(button1CancelText);
                 cancelBtn.setText(button2hideText);
-                setPage.accept(Page.DOWNLOADING);
+                setPage.accept(ApiDownloadSession.Page.DOWNLOADING);
                 progressBar.setProgress(0);
                 progressText.setText("");
                 downloadApiServerButton.setText(downloadingText);
 
-                targetDir[0] = Paths.get(directoryTextInput.getText().toString().trim());
                 try {
                     Files.createDirectories(targetDir[0]);
                 } catch (IOException ignored) {}
@@ -970,28 +964,17 @@ public class ConfigView extends LinearLayout {
 
                 ApiServerFetcher.DownloadProxy selectedProxy = ApiServerFetcher.DownloadProxy.values()[proxySpinner.getSelectedItemPosition()];
 
-                CompletableFuture<ApiBinaryUpdateService.DownloadedRelease> future = updateService.downloadToTemp(targetDir[0], selectedProxy, (downloaded, total) -> {
-                    MuiModApi.postToUiThread(() -> {
-                        if (cancelled.get()) return;
-                        if (total > 0) {
-                            int pct = (int) (((double) downloaded / total) * 100);
-                            progressBar.setProgress(pct);
-                            progressText.setText(formatBytes(downloaded) + " / " + formatBytes(total));
-                        } else {
-                            progressText.setText(formatBytes(downloaded));
-                        }
-                    });
-                }, cancelled);
-                downloadFuture[0] = future;
+                CompletableFuture<ApiBinaryUpdateService.DownloadedRelease> future = updateService.downloadToTemp(targetDir[0], selectedProxy,
+                        downloadSession::reportProgress, downloadSession.cancelFlag());
+                downloadSession.setFuture(future);
                 future.thenAccept(downloaded -> {
+                    downloadSession.complete(downloaded);
                     MuiModApi.postToUiThread(() -> {
                         downloaded.tempFile().toFile().deleteOnExit();
                         ToastUtil.show(I18n.get(MusicHud.MOD_ID + ".modal.downloadApiServer.done"));
-                        state[0] = Page.DONE;
-                        downloadedRelease[0] = downloaded;
                         doneDesc.setText(I18n.get(MusicHud.MOD_ID + ".modal.downloadApiServer.done.description")
                                 .replace("{path}", downloaded.tempFile().toString()));
-                        setPage.accept(Page.DONE);
+                        setPage.accept(ApiDownloadSession.Page.DONE);
                         btn.setText(button1YesText);
                         btn.setEnabled(true);
                         cancelBtn.setText(button2NoText);
@@ -1001,14 +984,14 @@ public class ConfigView extends LinearLayout {
                         downloadApiServerButton.setText(I18n.get(MusicHud.MOD_ID + ".button.downloadApiServerDone"));
                     });
                 }).exceptionally(ex -> {
+                    downloadSession.fail();
                     MuiModApi.postToUiThread(() -> {
                         if (ex instanceof CancellationException || ex.getCause() instanceof CancellationException) {
                             ToastUtil.show(I18n.get(MusicHud.MOD_ID + ".modal.downloadApiServer.cancelled"));
                         } else {
                             ToastUtil.show(I18n.get(MusicHud.MOD_ID + ".modal.downloadApiServer.error") + ": " + ex.getMessage());
                         }
-                        state[0] = Page.IDLE;
-                        setPage.accept(Page.IDLE);
+                        setPage.accept(ApiDownloadSession.Page.IDLE);
                         btn.setText(button1Text);
                         btn.setEnabled(true);
                         cancelBtn.setText(button2Text);
@@ -1019,28 +1002,24 @@ public class ConfigView extends LinearLayout {
                     });
                     return null;
                 });
-            } else if (Page.DOWNLOADING.equals(state[0])) {
-                cancelled.set(true);
-                if (downloadFuture[0] != null) {
-                    downloadFuture[0].cancel(true);
-                    downloadFuture[0] = null;
-                }
-                state[0] = Page.IDLE;
-                setPage.accept(Page.IDLE);
+            } else if (ApiDownloadSession.Page.DOWNLOADING.equals(page)) {
+                downloadSession.cancel();
+                setPage.accept(ApiDownloadSession.Page.IDLE);
                 btn.setText(button1Text);
                 btn.setEnabled(true);
                 cancelBtn.setText(button2Text);
                 downloadApiServerButton.setText(I18n.get(MusicHud.MOD_ID + ".button.downloadApiServer"));
-            } else if (Page.DONE.equals(state[0])) {
+            } else if (ApiDownloadSession.Page.DONE.equals(page)) {
                 ApiBinaryUpdateService updateService = ApiBinaryUpdateService.getInstance();
-                ApiBinaryUpdateService.DownloadedRelease downloaded = downloadedRelease[0];
+                ApiBinaryUpdateService.DownloadedRelease downloaded = downloadSession.snapshot().release();
                 Path finalPath = downloaded == null ? null
                         : updateService.resolveFinalPath(downloaded.tempFile(), downloaded.tag());
                 if (finalPath == null) {
                     ToastUtil.show(I18n.get(MusicHud.MOD_ID + ".modal.downloadApiServer.renameFailed"));
                     return;
                 }
-                if (!updateService.recordManagedInstallation(targetDir[0], downloaded.tag(),
+                Path installDir = downloadSession.snapshot().targetDir();
+                if (installDir == null || !updateService.recordManagedInstallation(installDir, downloaded.tag(),
                         downloaded.version(), finalPath.getFileName().toString())) {
                     ToastUtil.show(I18n.get(MusicHud.MOD_ID + ".modal.downloadApiServer.renameFailed"));
                     return;
@@ -1055,8 +1034,7 @@ public class ConfigView extends LinearLayout {
                 if (apiServer != null) {
                     apiServer.restartApiServer();
                 }
-                downloadedRelease[0] = null;
-                state[0] = Page.RESETTING;
+                downloadSession.reset();
                 downloadApiServerButton.setText(I18n.get(MusicHud.MOD_ID + ".button.downloadApiServer"));
                 btn.setText(button1Text);
                 cancelBtn.setText(button2Text);
@@ -1064,19 +1042,43 @@ public class ConfigView extends LinearLayout {
             }
         });
 
+        Runnable sessionListener = () -> MuiModApi.postToUiThread(() -> {
+            ApiDownloadSession.Snapshot snapshot = downloadSession.snapshot();
+            setPage.accept(snapshot.page());
+            if (snapshot.targetDir() != null) {
+                targetDir[0] = snapshot.targetDir();
+                directoryTextInput.setText(snapshot.targetDir().toString());
+            }
+            if (snapshot.page() == ApiDownloadSession.Page.DOWNLOADING) {
+                progressBar.setProgress(snapshot.total() > 0
+                        ? (int) Math.min(100, snapshot.downloaded() * 100 / snapshot.total()) : 0);
+                progressText.setText(snapshot.total() > 0
+                        ? formatBytes(snapshot.downloaded()) + " / " + formatBytes(snapshot.total())
+                        : formatBytes(snapshot.downloaded()));
+                downloadApiServerButton.setText(downloadingText);
+            } else if (snapshot.page() == ApiDownloadSession.Page.DONE && snapshot.release() != null) {
+                doneDesc.setText(I18n.get(MusicHud.MOD_ID + ".modal.downloadApiServer.done.description")
+                        .replace("{path}", snapshot.release().tempFile().toString()));
+                downloadApiServerButton.setText(I18n.get(MusicHud.MOD_ID + ".button.downloadApiServerDone"));
+            } else if (snapshot.page() == ApiDownloadSession.Page.IDLE) {
+                downloadApiServerButton.setText(I18n.get(MusicHud.MOD_ID + ".button.downloadApiServer"));
+            }
+        });
         Modal dialog = new Modal(context, title, content, confirmButton, cancelBtn);
 
         dialog.setOnDismissListener(() -> {
-            if (Page.RESETTING.equals(state[0])) {
-                state[0] = Page.IDLE;
-                setPage.accept(Page.IDLE);
-                downloadApiServerButton.setText(I18n.get(MusicHud.MOD_ID + ".button.downloadApiServer"));
-            }
+            downloadSession.removeListener(sessionListener);
         });
 
         downloadApiServerButton.setOnClickListener((v) -> {
             refreshReleaseInfo(releaseNameLabel, latestRelease, targetDir, existingVersionWarning, proxySpinnerRef[0]);
-            setPage.accept(state[0] == Page.DOWNLOADING ? Page.DOWNLOADING : state[0] == Page.DONE ? Page.DONE : Page.IDLE);
+            ApiDownloadSession.Snapshot snapshot = downloadSession.snapshot();
+            if (snapshot.targetDir() != null) {
+                targetDir[0] = snapshot.targetDir();
+                directoryTextInput.setText(snapshot.targetDir().toString());
+            }
+            setPage.accept(snapshot.page());
+            downloadSession.addListener(sessionListener);
             dialog.show();
         });
         return downloadApiServerButton;

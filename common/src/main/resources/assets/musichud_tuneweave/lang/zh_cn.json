@@ -378,6 +378,8 @@
   "musichud_tuneweave.toggle_connection": "切换与服务端的连接",
   "musichud_tuneweave.toggle_hud": "切换 HUD 显示",
   "musichud_tuneweave.vote_skip": "投票切歌",
+  "musichud_tuneweave.error.cause.timeout": "请求超时",
+  "musichud_tuneweave.error.downloadingAudioStream": "重载音频流（第 {trial} 次）\\n{message}",
   "musichud_tuneweave.command.playtest.localOnly": "请安装客户端模组，在单人或联机时自行执行 playtest。服务器命令不能打开玩家本地文件。",
   "musichud_tuneweave.command.playtest.requested": "已请求本地播放测试，不改变公共队列或其他玩家的播放。",
   "musichud_tuneweave.command.playtest.stopped": "已停止本地播放测试。",

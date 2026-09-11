@@ -10,6 +10,7 @@ import indi.mopelotus.musichud.beans.music.PlaybackSession;
 import indi.mopelotus.musichud.beans.music.Quality;
 import indi.mopelotus.musichud.client.audio.decoder.*;
 import indi.mopelotus.musichud.client.ui.hud.renderer.PlayingStatusRenderer;
+import indi.mopelotus.musichud.client.ui.ToastUtil;
 import indi.mopelotus.musichud.client.services.tuneweave.TuneWeaveClientService;
 import indi.mopelotus.musichud.interfaces.ClientConfig;
 import indi.mopelotus.musichud.network.IClientNetworkService;
@@ -17,6 +18,7 @@ import indi.mopelotus.musichud.network.payloads.pushMessages.c2s.PlaybackResourc
 import lombok.Getter;
 import lombok.SneakyThrows;
 import net.minecraft.client.Minecraft;
+import net.minecraft.client.resources.language.I18n;
 import net.minecraft.sounds.SoundSource;
 import org.apache.logging.log4j.Logger;
 import org.jetbrains.annotations.NotNull;
@@ -621,8 +623,20 @@ final class PlaybackEngine implements PlaybackHandoff.Lane {
                 break;
             } catch (Exception e) {
                 if (generation != playbackGeneration.get() || currentDownloadFuture != downloadFuture || currentDownloadFuture.isDone()) return;
-                if (e instanceof SocketException e1 && e1.getMessage().equals("Closed by interrupt")) break;
+                if (e instanceof SocketException e1 && "Closed by interrupt".equals(e1.getMessage())) break;
                 LOGGER.error("Download error (attempt {})\n{} : {}", localRetryCount + 1, e.getClass().getSimpleName(), e.getMessage());
+
+                String failureMessage = e.getMessage();
+                if (e.getCause() instanceof java.util.concurrent.TimeoutException
+                        || (failureMessage != null && (failureMessage.contains("Timeout") || failureMessage.contains("timeout")))) {
+                    failureMessage = I18n.get(MusicHud.MOD_ID + ".error.cause.timeout");
+                }
+                if (failureMessage == null || failureMessage.isBlank()) {
+                    failureMessage = e.getClass().getSimpleName();
+                }
+                ToastUtil.show(I18n.get(MusicHud.MOD_ID + ".error.downloadingAudioStream")
+                        .replace("{trial}", String.valueOf(localRetryCount + 1))
+                        .replace("{message}", failureMessage));
 
                 synchronized (this) {
                     if (generation != playbackGeneration.get() || currentDownloadFuture != downloadFuture) return;

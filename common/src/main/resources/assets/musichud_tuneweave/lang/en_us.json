@@ -378,6 +378,8 @@
   "musichud_tuneweave.toggle_connection": "Toggle Serverside Connection",
   "musichud_tuneweave.toggle_hud": "Toggle HUD display",
   "musichud_tuneweave.vote_skip": "Vote for skip current music (Multiplayer) | Skip current music (Singleplayer)",
+  "musichud_tuneweave.error.cause.timeout": "Request timeout",
+  "musichud_tuneweave.error.downloadingAudioStream": "Reload audio stream ({trial})\\n{message}",
   "musichud_tuneweave.command.playtest.localOnly": "Run playtest yourself with the client mod in singleplayer or multiplayer. Server commands cannot open player-local files.",
   "musichud_tuneweave.command.playtest.requested": "Local playback test requested. The shared queue and other players are unchanged.",
   "musichud_tuneweave.command.playtest.stopped": "Local playback test stopped.",

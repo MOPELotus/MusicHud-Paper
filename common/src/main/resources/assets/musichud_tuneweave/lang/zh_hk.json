@@ -378,6 +378,8 @@
   "musichud_tuneweave.toggle_connection": "切換與伺服器端的連接",
   "musichud_tuneweave.toggle_hud": "切換 HUD 顯示",
   "musichud_tuneweave.vote_skip": "投票切歌",
+  "musichud_tuneweave.error.cause.timeout": "請求逾時",
+  "musichud_tuneweave.error.downloadingAudioStream": "重新載入音訊流（第 {trial} 次）\\n{message}",
   "musichud_tuneweave.command.playtest.localOnly": "請安裝用戶端模組，在單人或多人遊戲中自行執行 playtest。伺服器指令不能開啟玩家本機檔案。",
   "musichud_tuneweave.command.playtest.requested": "已請求本機播放測試，不改變公共佇列或其他玩家的播放。",
   "musichud_tuneweave.command.playtest.stopped": "已停止本機播放測試。",
