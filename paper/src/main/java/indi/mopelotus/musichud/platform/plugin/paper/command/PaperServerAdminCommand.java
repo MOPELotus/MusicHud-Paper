@@ -17,6 +17,9 @@ import org.bukkit.entity.Player;
 import java.util.List;
 import java.util.Collection;
 import java.util.Locale;
+import java.lang.reflect.Method;
+import io.papermc.paper.command.brigadier.BasicCommand;
+import io.papermc.paper.command.brigadier.CommandSourceStack;
 
 /** Styled Paper admin command for the TuneWeave public playback server. */
 public final class PaperServerAdminCommand implements CommandExecutor, TabCompleter {
@@ -24,8 +27,26 @@ public final class PaperServerAdminCommand implements CommandExecutor, TabComple
     private static final List<String> ROOT = List.of("help", "status", "player", "api", "playback");
 
     public void register(org.bukkit.plugin.java.JavaPlugin plugin) {
+        try {
+            Method register = java.util.Arrays.stream(org.bukkit.plugin.java.JavaPlugin.class.getDeclaredMethods())
+                    .filter(method -> method.getName().equals("registerCommand") && method.getParameterCount() == 4)
+                    .findFirst().orElseThrow(NoSuchMethodException::new);
+            register.setAccessible(true);
+            BasicCommand bridge = new BasicCommand() {
+                @Override public void execute(CommandSourceStack stack, String[] args) {
+                    handleCommand(stack.getSender(), "musichud", args);
+                }
+                @Override public Collection<String> suggest(CommandSourceStack stack, String[] args) {
+                    return onTabComplete(stack.getSender(), null, "musichud", args);
+                }
+            };
+            register.invoke(plugin, "musichud", "MusicHud TuneWeave administration", List.of("musichud-tuneweave", "mt"), bridge);
+            return;
+        } catch (ReflectiveOperationException ignored) {
+            // Legacy Paper exposes YAML commands instead of registerCommand.
+        }
         PluginCommand command = plugin.getCommand("musichud");
-        if (command == null) throw new IllegalStateException("musichud command is missing from plugin.yml");
+        if (command == null) throw new IllegalStateException("musichud command is unavailable on this Paper version");
         command.setExecutor(this); command.setTabCompleter(this);
     }
 

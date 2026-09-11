@@ -7,12 +7,3 @@ website: https://github.com/MOPELotus/MusicHud-TuneWeave
 authors: [Etern]
 contributors: [Lotus (Paper adapter)]
 folia-supported: true
-commands:
-  musichud:
-    description: MusicHud TuneWeave administration
-    usage: /musichud help
-    aliases: [musichud-tuneweave, mt]
-permissions:
-  musichud.admin:
-    description: MusicHud TuneWeave administrator commands
-    default: op
