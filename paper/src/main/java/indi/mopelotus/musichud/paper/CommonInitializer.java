@@ -5,7 +5,6 @@ import indi.mopelotus.musichud.platform.Environment;
 import indi.mopelotus.musichud.platform.plugin.paper.config.ServerConfigDefinition;
 import indi.mopelotus.musichud.platform.plugin.paper.event.PaperEventService;
 import indi.mopelotus.musichud.platform.plugin.paper.network.PaperNetworkManager;
-import indi.mopelotus.musichud.server.api.ApiServerManager;
 import org.bukkit.plugin.java.JavaPlugin;
 import indi.mopelotus.musichud.platform.plugin.paper.command.PaperServerAdminCommand;
 
@@ -55,7 +54,6 @@ public final class CommonInitializer extends JavaPlugin {
         if (eventService != null) {
             eventService.fireServerStopping();
         }
-        if (ApiServerManager.getInstance() != null) ApiServerManager.getInstance().stopApiServer();
         eventService = null;
     }
 }

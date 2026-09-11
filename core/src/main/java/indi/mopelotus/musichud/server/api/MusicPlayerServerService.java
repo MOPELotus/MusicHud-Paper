@@ -36,7 +36,6 @@ public class MusicPlayerServerService {
     private static final long DEBOUNCE_DELAY_MILLIS = 500;
     private static volatile MusicPlayerServerService instance;
     final Map<PusherInfo, Set<IdlePlaySource>> idlePlaySources = new ConcurrentHashMap<>();
-    private final IMusicApiService musicApiService;
     private final CurrentVoteInfo currentVoteInfo = new CurrentVoteInfo();
     private final Logger logger = MusicHud.getLogger(MusicPlayerServerService.class);
     private final IServerNetworkService serverNetworkService;
@@ -44,14 +43,13 @@ public class MusicPlayerServerService {
     private final java.util.concurrent.Executor workerExecutor;
 
     private MusicPlayerServerService() {
-        this(ServerConfig.getInstance(), IMusicApiService.getInstance(),
+        this(ServerConfig.getInstance(),
                 IServerNetworkService.getInstance(), MusicHud.EXECUTOR);
     }
 
-    MusicPlayerServerService(ServerConfig config, IMusicApiService musicApi,
+    MusicPlayerServerService(ServerConfig config,
                              IServerNetworkService network, java.util.concurrent.Executor executor) {
         serverConfig = Objects.requireNonNull(config);
-        musicApiService = Objects.requireNonNull(musicApi);
         serverNetworkService = Objects.requireNonNull(network);
         workerExecutor = Objects.requireNonNull(executor);
         playbackResolveCoordinator = new PlaybackResolveCoordinator(

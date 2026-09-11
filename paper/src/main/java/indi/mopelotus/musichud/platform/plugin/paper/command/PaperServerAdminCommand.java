@@ -4,7 +4,6 @@ import indi.mopelotus.musichud.MusicHud;
 import indi.mopelotus.musichud.Version;
 import indi.mopelotus.musichud.beans.music.MusicDetail;
 import indi.mopelotus.musichud.beans.music.PlaybackSession;
-import indi.mopelotus.musichud.server.api.ApiServerManager;
 import indi.mopelotus.musichud.server.api.MusicPlayerServerService;
 import org.bukkit.ChatColor;
 import org.bukkit.command.CommandSender;
@@ -81,11 +80,6 @@ public final class PaperServerAdminCommand implements CommandExecutor, TabComple
         }
         MusicPlayerServerService.getInstance().forceSkipCurrent();
         success(sender, "已请求管理员强制切歌。");
-    }
-
-    private String apiStatus() {
-        ApiServerManager manager = ApiServerManager.getInstance();
-        return manager == null ? "不可用" : manager.getBinaryApiServerStatus().name();
     }
 
     private void header(CommandSender sender, String title) { raw(sender, ChatColor.GOLD + "━━━━━━━━ " + title + " ━━━━━━━━"); }

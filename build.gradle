@@ -21,7 +21,11 @@ subprojects {
                                             'indi/mopelotus/musichud/beans/music/PlaybackSession.class']) {
                             if (zip.getEntry(path) == null) throw new GradleException("Missing shared protocol entry ${path}")
                         }
-                        if (zip.entries().toList().any { it.name.contains('/impl/ncm/') || it.name.contains('CookieLoginRequest')
+                        if (zip.entries().toList().any { it.name.contains('/impl/ncm/') || it.name.contains('/impl/tuneweave/')
+                                || it.name.endsWith('/IMusicApiService.class') || it.name.endsWith('/TuneWeaveApiClient.class')
+                                || it.name.endsWith('/ApiServerManager.class') || it.name.endsWith('/ApiServerFetcher.class')
+                                || it.name.endsWith('/ApiBinaryUpdateService.class') || it.name.endsWith('/UrlMeta.class')
+                                || it.name.endsWith('/ApiClient.class') || it.name.contains('CookieLoginRequest')
                                 || it.name.contains('PhonePasswordLoginRequest') || it.name.contains('EmailPasswordLoginRequest') }) {
                             throw new GradleException('Legacy provider/auth protocol remains in plugin artifact')
                         }

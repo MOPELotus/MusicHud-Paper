@@ -132,7 +132,7 @@ class PublicPlaybackServiceTest {
 
         Harness() {
             service = new MusicPlayerServerService(forbidden(ServerConfig.class),
-                    forbidden(IMusicApiService.class), this, tasks::add);
+                    this, tasks::add);
             ServerPlayerRegistry.getInstance().join(owner);
             ServerPlayerRegistry.getInstance().join(listener);
         }

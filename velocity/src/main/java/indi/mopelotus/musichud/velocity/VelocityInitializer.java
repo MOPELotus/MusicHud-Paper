@@ -15,7 +15,6 @@ import indi.mopelotus.musichud.platform.Environment;
 import indi.mopelotus.musichud.platform.plugin.velocity.config.VelocityServerConfig;
 import indi.mopelotus.musichud.platform.plugin.velocity.event.VelocityEventService;
 import indi.mopelotus.musichud.platform.plugin.velocity.network.VelocityNetworkManager;
-import indi.mopelotus.musichud.server.api.ApiServerManager;
 import org.slf4j.Logger;
 
 import java.io.IOException;
@@ -102,10 +101,6 @@ public final class VelocityInitializer {
             networkManager = null;
         }
         VelocityEventService.getInstance().fireProxyStopping();
-        ApiServerManager apiServerManager = ApiServerManager.getInstance();
-        if (apiServerManager != null) {
-            apiServerManager.stopApiServer();
-        }
     }
 
 }
