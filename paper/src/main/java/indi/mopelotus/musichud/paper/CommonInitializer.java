@@ -7,6 +7,7 @@ import indi.mopelotus.musichud.platform.plugin.paper.event.PaperEventService;
 import indi.mopelotus.musichud.platform.plugin.paper.network.PaperNetworkManager;
 import indi.mopelotus.musichud.server.api.ApiServerManager;
 import org.bukkit.plugin.java.JavaPlugin;
+import indi.mopelotus.musichud.platform.plugin.paper.command.PaperServerAdminCommand;
 
 @SuppressWarnings("unused")
 public final class CommonInitializer extends JavaPlugin {
@@ -22,6 +23,7 @@ public final class CommonInitializer extends JavaPlugin {
 
         eventService = PaperEventService.getInstance();
         eventService.initialize(this);
+        new PaperServerAdminCommand().register(this);
         networkManager = PaperNetworkManager.getInstance();
         networkManager.initialize(this);
 

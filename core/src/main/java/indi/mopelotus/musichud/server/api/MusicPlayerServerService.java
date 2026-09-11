@@ -266,6 +266,14 @@ public class MusicPlayerServerService {
         }
     }
 
+    public synchronized PlaybackSession getCurrentPlaybackSession() { return currentPlaybackSession; }
+    public synchronized MusicDetail getNextIdleMusicDetail() { return nextIdleMusicDetail; }
+    public java.util.Queue<QueueItem> getMusicQueue() { return musicQueue; }
+    /** Administrator-only server control; never resolves provider media itself. */
+    public synchronized void forceSkipCurrent() {
+        if (pusherThread != null) pusherThread.interrupt();
+    }
+
     private void startMusicPusher() {
         synchronized (MusicPlayerServerService.class) {
             if (pusherThreadRunning && runningPusherGeneration == pusherGeneration.get()) {
