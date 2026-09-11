@@ -16,8 +16,6 @@ import net.neoforged.fml.common.Mod;
 import net.neoforged.fml.loading.FMLEnvironment;
 import net.neoforged.fml.loading.FMLPaths;
 import net.neoforged.neoforge.client.event.RenderGuiEvent;
-import net.neoforged.neoforge.client.event.RegisterClientCommandsEvent;
-import indi.mopelotus.musichud.client.commands.TuneWeaveClientCommands;
 import net.neoforged.neoforge.client.gui.IConfigScreenFactory;
 import net.neoforged.neoforge.common.NeoForge;
 import net.neoforged.neoforge.network.event.RegisterPayloadHandlersEvent;
@@ -52,8 +50,6 @@ public final class CommonInitializer {
             NeoForgeClientEventService.getInstance();
             hudRendererManager = HudRendererManager.getInstance();
             NeoForge.EVENT_BUS.addListener(CommonInitializer::onRenderGui);
-            NeoForge.EVENT_BUS.addListener((RegisterClientCommandsEvent event) ->
-                    TuneWeaveClientCommands.register(event.getDispatcher()));
             modEventBus.register(NeoForgeKeyRegistryService.getInstance());
         }
         MusicHud.onConfigLoaded();
