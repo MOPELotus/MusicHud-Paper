@@ -963,12 +963,14 @@ public class ConfigView extends LinearLayout {
                 ApiBinaryUpdateService updateService = ApiBinaryUpdateService.getInstance();
 
                 ApiServerFetcher.DownloadProxy selectedProxy = ApiServerFetcher.DownloadProxy.values()[proxySpinner.getSelectedItemPosition()];
+                long sessionGeneration = downloadSession.generation();
 
                 CompletableFuture<ApiBinaryUpdateService.DownloadedRelease> future = updateService.downloadToTemp(targetDir[0], selectedProxy,
-                        downloadSession::reportProgress, downloadSession.cancelFlag());
+                        (downloaded, total) -> downloadSession.reportProgress(downloaded, total, sessionGeneration),
+                        downloadSession.cancelFlag());
                 downloadSession.setFuture(future);
                 future.thenAccept(downloaded -> {
-                    downloadSession.complete(downloaded);
+                    if (!downloadSession.complete(sessionGeneration, downloaded)) return;
                     MuiModApi.postToUiThread(() -> {
                         downloaded.tempFile().toFile().deleteOnExit();
                         ToastUtil.show(I18n.get(MusicHud.MOD_ID + ".modal.downloadApiServer.done"));
@@ -984,7 +986,7 @@ public class ConfigView extends LinearLayout {
                         downloadApiServerButton.setText(I18n.get(MusicHud.MOD_ID + ".button.downloadApiServerDone"));
                     });
                 }).exceptionally(ex -> {
-                    downloadSession.fail();
+                    if (!downloadSession.fail(sessionGeneration)) return null;
                     MuiModApi.postToUiThread(() -> {
                         if (ex instanceof CancellationException || ex.getCause() instanceof CancellationException) {
                             ToastUtil.show(I18n.get(MusicHud.MOD_ID + ".modal.downloadApiServer.cancelled"));

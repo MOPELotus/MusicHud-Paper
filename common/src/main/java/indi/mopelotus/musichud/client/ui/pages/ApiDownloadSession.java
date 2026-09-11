@@ -23,6 +23,7 @@ public final class ApiDownloadSession {
     private ApiBinaryUpdateService.DownloadedRelease release;
     private CompletableFuture<?> future;
     private AtomicBoolean cancelled = new AtomicBoolean(false);
+    private long generation;
 
     private ApiDownloadSession() {}
 
@@ -41,9 +42,12 @@ public final class ApiDownloadSession {
         this.total = -1;
         this.future = null;
         this.cancelled = new AtomicBoolean(false);
+        generation++;
         fire();
         return true;
     }
+
+    public synchronized long generation() { return generation; }
 
     public synchronized AtomicBoolean cancelFlag() { return cancelled; }
 
@@ -58,6 +62,13 @@ public final class ApiDownloadSession {
         fire();
     }
 
+    public void reportProgress(long downloaded, long total, long expectedGeneration) {
+        synchronized (this) {
+            if (generation != expectedGeneration) return;
+        }
+        reportProgress(downloaded, total);
+    }
+
     public void complete(ApiBinaryUpdateService.DownloadedRelease release) {
         synchronized (this) {
             this.release = release;
@@ -65,6 +76,14 @@ public final class ApiDownloadSession {
             this.future = null;
         }
         fire();
+    }
+
+    public boolean complete(long expectedGeneration, ApiBinaryUpdateService.DownloadedRelease release) {
+        synchronized (this) {
+            if (generation != expectedGeneration || page != Page.DOWNLOADING) return false;
+        }
+        complete(release);
+        return true;
     }
 
     public void fail() {
@@ -78,11 +97,20 @@ public final class ApiDownloadSession {
         fire();
     }
 
+    public boolean fail(long expectedGeneration) {
+        synchronized (this) {
+            if (generation != expectedGeneration || page != Page.DOWNLOADING) return false;
+        }
+        fail();
+        return true;
+    }
+
     public void cancel() {
         CompletableFuture<?> running;
         synchronized (this) {
             cancelled.set(true);
             running = future;
+            generation++;
             page = Page.IDLE;
             future = null;
             release = null;
@@ -100,6 +128,7 @@ public final class ApiDownloadSession {
             release = null;
             future = null;
             cancelled = new AtomicBoolean(false);
+            generation++;
         }
         fire();
     }

@@ -39,4 +39,19 @@ class ApiDownloadSessionTest {
         assertTrue(future.isCancelled());
         assertEquals(1, notifications.get());
     }
+
+    @Test
+    void staleCompletionCannotReplaceAnewerDownload() {
+        ApiDownloadSession session = ApiDownloadSession.getInstance();
+        session.reset();
+        assertTrue(session.tryStart(Path.of("build", "first")));
+        long oldGeneration = session.generation();
+        session.cancel();
+        assertTrue(session.tryStart(Path.of("build", "second")));
+        assertFalse(session.complete(oldGeneration,
+                new indi.mopelotus.musichud.server.api.ApiBinaryUpdateService.DownloadedRelease(
+                        "old", "old", Path.of("build", "first"))));
+        assertEquals(Path.of("build", "second"), session.snapshot().targetDir());
+        assertEquals(ApiDownloadSession.Page.DOWNLOADING, session.snapshot().page());
+    }
 }
