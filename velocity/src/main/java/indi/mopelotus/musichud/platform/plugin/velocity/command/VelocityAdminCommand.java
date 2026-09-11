@@ -54,6 +54,10 @@ public final class VelocityAdminCommand implements SimpleCommand {
     }
 
     private void sendPlayback(Invocation invocation, String[] args) {
+        if (!invocation.source().hasPermission("musichud.admin")) {
+            send(invocation, Component.text("你没有权限执行这个命令，需要权限: musichud.admin", NamedTextColor.RED));
+            return;
+        }
         if (args.length < 2 || !args[1].equalsIgnoreCase("skip")) {
             send(invocation, Component.text("用法: /mt playback skip", NamedTextColor.GRAY)); return;
         }

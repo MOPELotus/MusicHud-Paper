@@ -24,10 +24,10 @@ import java.nio.file.Path;
 
 @Plugin(
         id = "musichud_tuneweave",
-        name = "MusicHud-TuneWeave",
+        name = "MusicHud TuneWeave",
         version = "1.2.15",
         description = "TuneWeave public playback coordination for Velocity",
-        authors = {"Etern", "Lotus"}
+        authors = {"Etern", "MOPELotus"}
 )
 public final class VelocityInitializer {
     private final ProxyServer proxy;

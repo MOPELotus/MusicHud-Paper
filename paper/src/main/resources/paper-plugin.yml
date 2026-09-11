@@ -1,4 +1,4 @@
-name: MusicHud-TuneWeave
+name: MusicHud TuneWeave
 version: '${version}'
 main: indi.mopelotus.musichud.paper.CommonInitializer
 api-version: '${apiVersion}'
