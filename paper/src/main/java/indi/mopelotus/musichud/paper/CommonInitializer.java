@@ -29,6 +29,9 @@ public final class CommonInitializer extends JavaPlugin {
 
         ServerConfigDefinition serverConfig = ServerConfigDefinition.getInstance();
         serverConfig.initialize(this);
+        // TuneWeave is client-owned in distributed mode; the plugin only coordinates
+        // public sessions and must never launch an embedded provider API server.
+        serverConfig.setStartupBinaryApiServerWhenLaunch(false);
 
         try {
             MusicHud.init();

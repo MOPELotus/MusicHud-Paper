@@ -119,3 +119,6 @@ runs/
 !gradle-wrapper.jar
 
 bin/
+# Local planning and audit notes; never publish roadmap or responsibility docs
+docs/roadmap/
+docs/server-responsibility-audit-*.md

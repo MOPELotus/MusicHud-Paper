@@ -47,6 +47,9 @@ public final class VelocityInitializer {
         MusicHud.setCurrentEnvironment(Environment.of(Environment.Side.SERVER, Environment.Platform.VELOCITY));
         MusicHud.setConfigDirectory(dataDirectory);
         VelocityServerConfig.getInstance().initialize(dataDirectory);
+        // TuneWeave is client-owned in distributed mode; Velocity only forwards
+        // public playback state and must not launch a provider API process.
+        VelocityServerConfig.getInstance().setStartupBinaryApiServerWhenLaunch(false);
 
         networkManager = VelocityNetworkManager.getInstance();
         networkManager.initialize(proxy);

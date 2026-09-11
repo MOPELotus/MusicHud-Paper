@@ -60,7 +60,7 @@ public final class PaperServerAdminCommand implements CommandExecutor, TabComple
         MusicDetail detail = session == null ? MusicDetail.NONE : session.musicDetail();
         header(sender, "服务端状态");
         field(sender, "版本", Version.CURRENT);
-        field(sender, "API 状态", apiStatus());
+        field(sender, "API 状态", "服务端不托管（客户端分布式）");
         field(sender, "在线公共会话", session != null && session.isActive() ? "运行中" : "空闲");
         field(sender, "当前播放", detail == null || detail == MusicDetail.NONE ? "无" : detail.getName());
         field(sender, "队列数量", service.getMusicQueue().size());
@@ -72,7 +72,7 @@ public final class PaperServerAdminCommand implements CommandExecutor, TabComple
             hint(sender, "用法: /musichud api status"); return;
         }
         header(sender, "API 管理");
-        field(sender, "状态", apiStatus());
+        field(sender, "状态", "服务端不托管（客户端分布式）");
     }
 
     private void playback(CommandSender sender, String[] args) {

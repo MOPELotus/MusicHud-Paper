@@ -4,12 +4,12 @@ This worktree is the dedicated Paper/Velocity branch. It contains processor, cor
 
 - Java 25 and Groovy Gradle scripts.
 - Core protocol and public playback logic are synchronized with the 26.2 client worktree. Keep channel IDs, codecs, capabilities and tests identical when changing that boundary.
-- TuneWeave and music credentials are client-owned. Plugins only coordinate public playback; never restore legacy provider endpoints, passwords, Cookies or server-side music-account storage.
+- TuneWeave and music credentials are client-owned. Plugins only coordinate public playback; never restore provider endpoints, passwords, Cookies or server-side music-account storage. The server must not start or host a TuneWeave API process.
 - Paper compiles against the existing 1.21.1 API baseline. Runtime support must be validated separately; a successful build is not a version-matrix claim.
 - Velocity owns public state across backend switches and does not forward backend packets in the fork namespace. Actual network disconnect invalidates membership.
 - Preserve stable session identity, connection identity, stale-result rejection and bounded fragment reassembly.
 - Paper uses the player scheduler; pending sends must be invalidated on plugin shutdown or player disconnect.
-- Do not remove LGPL licensing or upstream attribution.
+- Do not remove LGPL licensing or upstream attribution. See `docs/server-responsibility-audit-2026-09-11.md` before adding commands or service calls.
 
 ## Verification
 

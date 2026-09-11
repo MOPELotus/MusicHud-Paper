@@ -11,4 +11,4 @@ commands:
   musichud:
     description: MusicHud TuneWeave administration
     usage: /musichud help
-    aliases: [musichud-tuneweave]
+    aliases: [musichud-tuneweave, mt]
